@@ -19,6 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Byte logs recorded on real devices (regression tests) -->
+    <None Include="Logs\**\*.csv" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\FreeVelo.Devices\FreeVelo.Devices.csproj" />
   </ItemGroup>
 

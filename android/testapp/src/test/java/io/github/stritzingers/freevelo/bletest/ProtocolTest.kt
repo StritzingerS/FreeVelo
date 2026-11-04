@@ -108,4 +108,35 @@ class ProtocolTest {
         stop.update(11, 683, 700)
         assertEquals(0.0, stop.update(11, 683, 3700)!!, 0.0)
     }
+
+    @Test
+    fun tacxFecCommands() {
+        val erg = TacxFec.setTargetPower(250)
+        assertArrayEquals(bytes(0xA4, 0x09, 0x4F, 0x05, 0x31, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xE8, 0x03), erg.copyOf(12))
+        var x = 0
+        for (i in 0 until 12) x = x xor (erg[i].toInt() and 0xFF)
+        assertEquals(x, erg[12].toInt() and 0xFF)
+
+        assertArrayEquals(bytes(0x33, 0xFF, 0xFF, 0xFF, 0xFF, 0x14, 0x50, 0x50), TacxFec.setTrackResistance(5.0).copyOfRange(4, 12))
+        assertArrayEquals(bytes(0x37, 0x4C, 0x1D, 0xFF, 0x40, 0x0B, 0x46, 0x00), TacxFec.setUserConfiguration(75.0).copyOfRange(4, 12))
+    }
+
+    @Test
+    fun tacxFecParsing() {
+        fun broadcast(vararg page: Int): ByteArray {
+            val msg = bytes(0xA4, 0x09, 0x4E, 0x05, *page, 0)
+            var x = 0
+            for (i in 0 until 12) x = x xor (msg[i].toInt() and 0xFF)
+            msg[12] = x.toByte()
+            return msg
+        }
+        val trainer = TacxFec.parse(broadcast(0x19, 0x01, 0x55, 0x00, 0x00, 0x0F, 0x31, 0x20))!!
+        assertEquals(271, trainer.powerW)
+        assertEquals(85, trainer.cadenceRpm)
+        assertEquals(36.0, TacxFec.parse(broadcast(0x10, 0x19, 0x00, 0x00, 0x10, 0x27, 0xFF, 0x24))!!.speedKmh!!, 0.001)
+
+        val bad = broadcast(0x19, 0, 0, 0, 0, 0, 0, 0)
+        bad[12] = (bad[12].toInt() xor 0xFF).toByte()
+        assertNull(TacxFec.parse(bad))
+    }
 }

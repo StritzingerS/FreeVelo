@@ -188,6 +188,7 @@ internal class GattConnection(
     private fun setUp(g: BluetoothGatt) {
         val characteristics = g.services.flatMap { it.characteristics }
         services = g.services.map { it.uuid }.toSet()
+        byteLog?.comment(describeGatt(g))
 
         for (uuid in GattUuids.SUBSCRIBE) {
             val ch = characteristics.firstOrNull { it.uuid == uuid } ?: continue
@@ -205,6 +206,25 @@ internal class GattConnection(
         }
         queue.addLast(Op.Ready)
         if (current == null) next()
+    }
+
+    /** Human readable list of services and characteristics, written to the byte log for diagnostics. */
+    private fun describeGatt(g: BluetoothGatt): String = buildString {
+        append("GATT ").append(address).append(" (").append(device.name ?: "?").append(")")
+        for (service in g.services) {
+            append("\n  service ").append(GattUuids.shortName(service.uuid))
+            for (ch in service.characteristics) {
+                val p = ch.properties
+                val props = listOfNotNull(
+                    "R".takeIf { (p and BluetoothGattCharacteristic.PROPERTY_READ) != 0 },
+                    "W".takeIf { (p and BluetoothGattCharacteristic.PROPERTY_WRITE) != 0 },
+                    "WnR".takeIf { (p and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0 },
+                    "N".takeIf { (p and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0 },
+                    "I".takeIf { (p and BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0 },
+                ).joinToString("/")
+                append("\n    char ").append(GattUuids.shortName(ch.uuid)).append(" [").append(props).append("]")
+            }
+        }
     }
 
     private fun handleDisconnect(g: BluetoothGatt, status: Int) {

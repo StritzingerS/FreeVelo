@@ -20,6 +20,17 @@ class ByteLog(val file: File) {
         w.flush()
     }
 
+    /** Adds a `# comment` line (ignored by log readers), e.g. discovered services. */
+    @Synchronized
+    fun comment(text: String) {
+        val w = writer ?: open()
+        for (line in text.lines()) {
+            w.write("# $line")
+            w.newLine()
+        }
+        w.flush()
+    }
+
     @Synchronized
     fun close() {
         writer?.close()

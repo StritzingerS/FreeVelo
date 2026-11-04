@@ -47,8 +47,12 @@ class MainActivity : Activity(), BleListener {
     private val cadenceByDevice = mutableMapOf<String, CrankCadence>()
     private val logLines = ArrayDeque<String>()
 
+    private enum class TrainerProtocol { FTMS, TACX_FEC }
+
     private var trainerAddress: String? = null
+    private var trainerProtocol: TrainerProtocol? = null
     private var hasControl = false
+    private var fecSpeedKmh: Double? = null
     private var ergTargetW = 150
     private var gradePercent = 0.0
 
@@ -107,13 +111,13 @@ class MainActivity : Activity(), BleListener {
         deviceList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(deviceList)
 
-        root.addView(section("Trainer (FTMS)"))
+        root.addView(section("Trainer control (FTMS or Tacx FE-C)"))
         trainerText = text("No trainer connected", 14f)
         root.addView(trainerText)
         root.addView(row(
-            button("Request control") { writeControlPoint(Protocol.requestControl(), "Request control") },
-            button("Start") { writeControlPoint(Protocol.start(), "Start") },
-            button("Stop") { writeControlPoint(Protocol.stop(), "Stop") },
+            button("Request control") { ftmsOnly { writeTrainer(Protocol.requestControl(), "Request control") } },
+            button("Start") { ftmsOnly { writeTrainer(Protocol.start(), "Start") } },
+            button("Stop") { ftmsOnly { writeTrainer(Protocol.stop(), "Stop") } },
         ))
 
         ergText = text("", 18f, mono = true)
@@ -240,7 +244,10 @@ class MainActivity : Activity(), BleListener {
         trainerText.text = if (t == null) {
             "No trainer connected"
         } else {
-            "Trainer: ${devices[t]?.name ?: t} – control: ${if (hasControl) "yes" else "no"}"
+            when (trainerProtocol) {
+                TrainerProtocol.TACX_FEC -> "Trainer: ${devices[t]?.name ?: t} – Tacx FE-C (no FTMS)"
+                else -> "Trainer: ${devices[t]?.name ?: t} – FTMS, control: ${if (hasControl) "yes" else "no"}"
+            }
         }
     }
 
@@ -293,6 +300,7 @@ class MainActivity : Activity(), BleListener {
         connectedServices.clear()
         liveByDevice.clear()
         trainerAddress = null
+        trainerProtocol = null
         hasControl = false
         refreshDevices()
         refreshTrainer()
@@ -310,33 +318,52 @@ class MainActivity : Activity(), BleListener {
     }
 
     private fun sendErg() {
-        ensureControl()
-        writeControlPoint(Protocol.setTargetPower(ergTargetW), "ERG $ergTargetW W")
+        val label = "ERG $ergTargetW W"
+        when (trainerProtocol) {
+            TrainerProtocol.TACX_FEC -> writeTrainer(TacxFec.setTargetPower(ergTargetW), label)
+            else -> {
+                ensureControl()
+                writeTrainer(Protocol.setTargetPower(ergTargetW), label)
+            }
+        }
     }
 
     private fun sendGrade() {
-        ensureControl()
-        writeControlPoint(
-            Protocol.setSimulation(gradePercent),
-            String.format(Locale.ROOT, "SIM grade %+.1f %%", gradePercent),
-        )
+        val label = String.format(Locale.ROOT, "SIM grade %+.1f %%", gradePercent)
+        when (trainerProtocol) {
+            TrainerProtocol.TACX_FEC -> writeTrainer(TacxFec.setTrackResistance(gradePercent), label)
+            else -> {
+                ensureControl()
+                writeTrainer(Protocol.setSimulation(gradePercent), label)
+            }
+        }
+    }
+
+    private fun ftmsOnly(action: () -> Unit) {
+        if (trainerProtocol == TrainerProtocol.TACX_FEC) log("Not needed for Tacx FE-C") else action()
     }
 
     /** FTMS needs "request control" (and often "start") before target commands; writes are queued in order. */
     private fun ensureControl() {
         if (!hasControl) {
-            writeControlPoint(Protocol.requestControl(), "Request control")
-            writeControlPoint(Protocol.start(), "Start")
+            writeTrainer(Protocol.requestControl(), "Request control")
+            writeTrainer(Protocol.start(), "Start")
         }
     }
 
-    private fun writeControlPoint(data: ByteArray, label: String) {
+    /** Writes to the FTMS control point or the Tacx FE-C TX characteristic. */
+    private fun writeTrainer(data: ByteArray, label: String) {
         val trainer = trainerAddress
         if (trainer == null) {
-            log("No FTMS trainer connected")
+            log("No controllable trainer connected (neither FTMS nor Tacx FE-C found)")
             return
         }
-        if (ble.write(trainer, GattUuids.FITNESS_MACHINE_CONTROL_POINT, data)) {
+        val characteristic = if (trainerProtocol == TrainerProtocol.TACX_FEC) {
+            GattUuids.TACX_FEC_TX
+        } else {
+            GattUuids.FITNESS_MACHINE_CONTROL_POINT
+        }
+        if (ble.write(trainer, characteristic, data)) {
             log("→ $label (${ByteLog.toHex(data)})")
         } else {
             log("✗ $label: control point not available")
@@ -381,10 +408,14 @@ class MainActivity : Activity(), BleListener {
         }
         if (state != ConnectionState.READY) {
             liveByDevice.remove(address)
+            liveByDevice.remove("$address-fec")
             cadenceByDevice.remove(address)
             if (address == trainerAddress) {
                 hasControl = false
-                if (state == ConnectionState.DISCONNECTED) trainerAddress = null
+                if (state == ConnectionState.DISCONNECTED) {
+                    trainerAddress = null
+                    trainerProtocol = null
+                }
             }
         }
         log("${name(address)}: $state")
@@ -395,14 +426,21 @@ class MainActivity : Activity(), BleListener {
 
     override fun onReady(address: String, services: Set<UUID>) {
         connectedServices[address] = services
-        if (GattUuids.FITNESS_MACHINE_SERVICE in services) {
-            trainerAddress = address
-            log("${name(address)} is an FTMS trainer")
-        } else if (GattUuids.FITNESS_MACHINE_SERVICE !in services &&
-            GattUuids.CYCLING_POWER_SERVICE in services &&
-            trainerAddress == null
-        ) {
-            log("${name(address)}: no FTMS – power only, no trainer control")
+        log("${name(address)} services: ${services.joinToString(" ") { GattUuids.shortName(it).take(8) }}")
+        when {
+            GattUuids.FITNESS_MACHINE_SERVICE in services -> {
+                trainerAddress = address
+                trainerProtocol = TrainerProtocol.FTMS
+                log("${name(address)} is an FTMS trainer")
+            }
+            GattUuids.TACX_FEC_SERVICE in services -> {
+                trainerAddress = address
+                trainerProtocol = TrainerProtocol.TACX_FEC
+                log("${name(address)}: no FTMS, using Tacx FE-C")
+                writeTrainer(TacxFec.setUserConfiguration(75.0), "User config 75 kg")
+            }
+            GattUuids.CYCLING_POWER_SERVICE in services && trainerAddress == null ->
+                log("${name(address)}: power only, no trainer control")
         }
         refreshDevices()
         refreshTrainer()
@@ -427,13 +465,14 @@ class MainActivity : Activity(), BleListener {
             }
 
             GattUuids.CYCLING_POWER_MEASUREMENT -> Protocol.parseCyclingPower(data)?.let { p ->
-                // Prefer FTMS data for the trainer itself.
-                if (address == trainerAddress) return@let
+                // Prefer FTMS data for an FTMS trainer itself.
+                if (address == trainerAddress && trainerProtocol == TrainerProtocol.FTMS) return@let
+                val calc = cadenceByDevice.getOrPut(address) { CrankCadence() }
+                // Some devices (e.g. Tacx Neo) send crank data only in every few packets: keep the last cadence.
                 val cadence = if (p.crankRevolutions != null && p.crankEventTime != null) {
-                    cadenceByDevice.getOrPut(address) { CrankCadence() }
-                        .update(p.crankRevolutions, p.crankEventTime, SystemClock.elapsedRealtime())
+                    calc.update(p.crankRevolutions, p.crankEventTime, SystemClock.elapsedRealtime())
                 } else {
-                    null
+                    calc.cadenceRpm
                 }
                 liveByDevice[address] = String.format(
                     Locale.ROOT,
@@ -455,6 +494,21 @@ class MainActivity : Activity(), BleListener {
                 if (Protocol.isSuccessResponseTo(data, Protocol.OP_REQUEST_CONTROL)) {
                     hasControl = true
                     refreshTrainer()
+                }
+            }
+
+            GattUuids.TACX_FEC_RX -> TacxFec.parse(data)?.let { f ->
+                if (f.page == 0x10) fecSpeedKmh = f.speedKmh
+                if (f.page == 0x19) {
+                    liveByDevice["$address-fec"] = String.format(
+                        Locale.ROOT,
+                        "%s (FE-C)\n  %s W  %s rpm  %s km/h",
+                        n,
+                        f.powerW?.toString() ?: "–",
+                        f.cadenceRpm?.toString() ?: "–",
+                        fecSpeedKmh?.let { "%.1f".format(Locale.ROOT, it) } ?: "–",
+                    )
+                    refreshLive()
                 }
             }
 

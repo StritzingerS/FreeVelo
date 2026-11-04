@@ -30,6 +30,12 @@ object GattUuids {
     /** Tacx proprietary ANT+ FE-C over BLE service (Tacx trainers). */
     val TACX_FEC_SERVICE: UUID = UUID.fromString("6e40fec1-b5a3-f393-e0a9-e50e24dcca9e")
 
+    /** Tacx FE-C: notifications from the trainer (ANT broadcast messages). */
+    val TACX_FEC_RX: UUID = UUID.fromString("6e40fec2-b5a3-f393-e0a9-e50e24dcca9e")
+
+    /** Tacx FE-C: commands to the trainer (ANT acknowledged messages). */
+    val TACX_FEC_TX: UUID = UUID.fromString("6e40fec3-b5a3-f393-e0a9-e50e24dcca9e")
+
     // FTMS
     val FITNESS_MACHINE_FEATURE: UUID = fromShort(0x2ACC)
     val INDOOR_BIKE_DATA: UUID = fromShort(0x2AD2)
@@ -65,6 +71,7 @@ object GattUuids {
         INDOOR_BIKE_DATA,
         FITNESS_MACHINE_STATUS,
         TRAINING_STATUS,
+        TACX_FEC_RX,
         CYCLING_POWER_MEASUREMENT,
         HEART_RATE_MEASUREMENT,
         BATTERY_LEVEL,

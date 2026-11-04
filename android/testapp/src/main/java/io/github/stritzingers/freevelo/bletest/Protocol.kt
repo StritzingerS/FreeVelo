@@ -132,6 +132,62 @@ object Protocol {
     }
 }
 
+/** Tacx "ANT+ FE-C over BLE" (same as C# FreeVelo.Devices.Tacx.TacxFec). */
+object TacxFec {
+    data class FecData(val page: Int, val powerW: Int?, val cadenceRpm: Int?, val speedKmh: Double?)
+
+    private fun wrap(page: IntArray): ByteArray {
+        val msg = ByteArray(13)
+        msg[0] = 0xA4.toByte(); msg[1] = 0x09; msg[2] = 0x4F; msg[3] = 0x05
+        for (i in 0 until 8) msg[4 + i] = page[i].toByte()
+        var checksum = 0
+        for (i in 0 until 12) checksum = checksum xor (msg[i].toInt() and 0xFF)
+        msg[12] = checksum.toByte()
+        return msg
+    }
+
+    /** ERG – page 0x31, 0.25 W resolution. */
+    fun setTargetPower(watts: Int): ByteArray {
+        val raw = watts.coerceIn(0, 4000) * 4
+        return wrap(intArrayOf(0x31, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, raw and 0xFF, raw shr 8))
+    }
+
+    /** SIM – page 0x33, grade 0.01 % with −200 % offset, Crr in 5e-5. */
+    fun setTrackResistance(gradePercent: Double, crr: Double = 0.004): ByteArray {
+        val grade = ((gradePercent.coerceIn(-200.0, 200.0) + 200.0) * 100.0).roundToInt()
+        val crrRaw = (crr / 0.00005).roundToInt().coerceIn(0, 254)
+        return wrap(intArrayOf(0x33, 0xFF, 0xFF, 0xFF, 0xFF, grade and 0xFF, grade shr 8, crrRaw))
+    }
+
+    /** User configuration – page 0x37 (rider/bike weight, wheel diameter). */
+    fun setUserConfiguration(riderKg: Double, bikeKg: Double = 9.0, wheelM: Double = 0.70): ByteArray {
+        val rider = (riderKg.coerceIn(0.0, 655.34) * 100).roundToInt()
+        val bike = (bikeKg.coerceIn(0.0, 50.0) / 0.05).roundToInt()
+        val wheel = (wheelM.coerceIn(0.0, 2.54) * 100).roundToInt()
+        return wrap(intArrayOf(0x37, rider and 0xFF, rider shr 8, 0xFF, (bike and 0x0F) shl 4, bike shr 4, wheel, 0x00))
+    }
+
+    /** Parses pages 0x10 (speed) and 0x19 (power, cadence) from an RX notification. */
+    fun parse(msg: ByteArray): FecData? {
+        if (msg.size < 13 || (msg[0].toInt() and 0xFF) != 0xA4) return null
+        var checksum = 0
+        for (i in 0 until 12) checksum = checksum xor (msg[i].toInt() and 0xFF)
+        if (checksum != (msg[12].toInt() and 0xFF)) return null
+        val p = IntArray(8) { msg[4 + it].toInt() and 0xFF }
+        return when (p[0]) {
+            0x10 -> {
+                val speed = p[4] or (p[5] shl 8)
+                FecData(0x10, null, null, if (speed == 0xFFFF) null else speed * 0.0036)
+            }
+            0x19 -> {
+                val power = p[5] or ((p[6] and 0x0F) shl 8)
+                FecData(0x19, if (power == 0xFFF) null else power, if (p[2] == 0xFF) null else p[2], null)
+            }
+            else -> FecData(p[0], null, null, null)
+        }
+    }
+}
+
 /** Cadence from cumulative crank revolutions (same algorithm as C# CrankCadenceCalculator). */
 class CrankCadence(private val stopTimeoutMs: Long = 3000) {
     private var lastRevs: Int? = null
