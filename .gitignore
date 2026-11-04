@@ -46,3 +46,12 @@ appsettings.*.local.json
 
 # Shared debug key for test builds (see android/testapp/build.gradle.kts)
 !android/testapp/debug.keystore
+
+# Unity (generated)
+unity/**/*.csproj
+unity/**/*.sln
+unity/**/*.slnx
+unity/**/.utmp/
+unity/**/.vsconfig
+unity/**/[Aa]ssets/[Pp]lugins/[Ff]ree[Vv]elo/*.dll
+unity/**/[Aa]ssets/[Pp]lugins/[Ff]ree[Vv]elo/*.pdb
