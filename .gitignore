@@ -43,3 +43,6 @@ Thumbs.db
 # Secrets
 .env
 appsettings.*.local.json
+
+# Shared debug key for test builds (see android/testapp/build.gradle.kts)
+!android/testapp/debug.keystore
