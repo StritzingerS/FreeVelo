@@ -1,0 +1,18 @@
+// Gradle dependencies of the FreeVelo BLE plugin (freevelo-ble.aar).
+// Unity already ships kotlin-stdlib 1.7.10; declaring 2.2.20 here lets Gradle resolve the
+// version conflict to the newer library (the AAR is compiled with Kotlin 2.2) instead of
+// adding a second copy (which fails with "Duplicate class kotlin.*").
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'io.github.stritzingers.freevelo.dependencies'
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 29
+    }
+}
+
+dependencies {
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.2.20'
+}

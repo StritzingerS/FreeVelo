@@ -75,7 +75,7 @@ To run builds directly from Unity on your phone (faster than via GitHub):
 
 ### In the editor (simulated trainer – no phone needed)
 1. Pull the latest changes in GitHub Desktop and open the project in Unity Hub.
-2. On first open, FreeVelo downloads two Android plugins into `Assets/Plugins/Android` automatically
+2. On first open, FreeVelo downloads the Android Bluetooth plugin (`freevelo-ble.aar`) into `Assets/Plugins/Android` automatically
    (see the Console). Manually: menu **FreeVelo → Update Android plugins**.
 3. Open `Assets/Scenes/SampleScene` and press **Play** ▶.
 4. **Devices → Scan** → connect *FreeVelo Sim Trainer* and *FreeVelo Sim HRM*.

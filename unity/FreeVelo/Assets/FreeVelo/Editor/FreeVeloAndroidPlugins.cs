@@ -8,9 +8,9 @@ using UnityEngine;
 namespace FreeVelo.EditorTools
 {
     /// <summary>
-    /// Downloads the Android plugins that are not stored in Git:
-    /// the FreeVelo BLE library (built by GitHub Actions) and the Kotlin standard library it needs.
-    /// Runs automatically when the files are missing; menu: FreeVelo → Update Android plugins.
+    /// Downloads the FreeVelo BLE library (built by GitHub Actions; not stored in Git).
+    /// Runs automatically when the file is missing; menu: FreeVelo → Update Android plugins.
+    /// Its Kotlin dependency is declared in Plugins/Android/FreeVeloDependencies.androidlib.
     /// </summary>
     [InitializeOnLoad]
     public static class FreeVeloAndroidPlugins
@@ -20,13 +20,19 @@ namespace FreeVelo.EditorTools
         private static readonly (string Url, string File)[] Files =
         {
             ("https://github.com/StritzingerS/FreeVelo/releases/download/ble-android-latest/freevelo-ble.aar", "freevelo-ble.aar"),
-            ("https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.20/kotlin-stdlib-2.2.20.jar", "kotlin-stdlib-2.2.20.jar"),
         };
 
         static FreeVeloAndroidPlugins()
         {
             EditorApplication.delayCall += () =>
             {
+                // Earlier versions downloaded kotlin-stdlib as a jar, which duplicates Unity's own copy.
+                foreach (var old in Directory.Exists(Folder) ? Directory.GetFiles(Folder, "kotlin-stdlib-*.jar") : new string[0])
+                {
+                    AssetDatabase.DeleteAsset(old.Replace('\\', '/'));
+                    Debug.Log("FreeVelo: removed " + old + " (Kotlin is now a Gradle dependency)");
+                }
+
                 if (Files.Any(f => !File.Exists(Path.Combine(Folder, f.File)))) Download(onlyMissing: true);
             };
         }
