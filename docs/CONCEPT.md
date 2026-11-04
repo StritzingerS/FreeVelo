@@ -1,6 +1,6 @@
 # FreeVelo – Concept & Implementation Plan
 
-> Open-source (MIT) indoor cycling training app for small groups of friends.
+> Source-available indoor cycling training app for small groups of friends (PolyForm Noncommercial 1.0.0).
 > Focus: structured ERG workouts & adaptive training plans, riding together with "Keep Together".
 > Status: concept v1.0 (2026-11-04)
 
@@ -18,6 +18,7 @@
 - Strava auto upload (→ Garmin Connect via Strava sync). FIT export.
 - German & English, metric units.
 - Zero budget: free assets, free cloud tier, no paid services. No AI required at runtime.
+- Source-available under PolyForm Noncommercial 1.0.0 (free noncommercial forks allowed, no commercial use by others).
 
 ### Non-Goals (for now)
 - Gamification (XP, levels, unlocks), races, leaderboards.
@@ -39,7 +40,7 @@
 | Auth | Email + password (**Argon2id**), email verification + password reset (Brevo free SMTP), JWT access + refresh tokens. Login mandatory |
 | Client data | SQLite on device + FIT files; manual backup export/import (ZIP) |
 | Strava | Server only proxies OAuth token exchange/refresh (keeps client secret). Upload goes device → Strava directly |
-| License | MIT; only CC0 / redistributable assets in the repo |
+| License | **PolyForm Noncommercial 1.0.0** (source-available, no commercial use by others); contributor agreement in `CONTRIBUTING.md`; only CC0 / redistributable assets in the repo |
 
 ---
 
@@ -321,7 +322,7 @@ ESA WorldCover (fallback land cover)                    │
 - Generation happens **on device** at import time (online), then works **offline**.
 - Respect free API fair-use limits (Overpass, Valhalla public instance): one batched query per route, caching.
 
-### 10.2 Assets (all free, preferably CC0 so they can live in the open-source repo)
+### 10.2 Assets (all free, preferably CC0 so they can live in the public repo)
 - Kenney (CC0), Quaternius (CC0 low-poly nature, buildings, characters), Poly Haven (CC0 textures).
 - Cyclist avatar: low-poly rider + bike, cadence-synced pedaling animation (simple rig). Mixamo is not
   redistributable in a public repo, so avoid it or keep it out of the repo.
@@ -360,7 +361,7 @@ ESA WorldCover (fallback land cover)                    │
 | **5 – More platforms** | iOS (Swift BLE plugin), Windows (WinRT BLE + ANT+ USB), avatar customization | |
 
 ### Phase 0 backlog (first steps)
-1. Create repo structure (section 3), MIT license, `.gitignore` (Unity + .NET), GitHub Actions for `dotnet test`.
+1. Create repo structure (section 3), PolyForm Noncommercial license + CONTRIBUTING.md, `.gitignore` (Unity + .NET), GitHub Actions for `dotnet test`.
 2. `FreeVelo.Devices`: FTMS Indoor Bike Data parser, Control Point encoder/response parser, CPS parser, HRM parser + unit tests with byte samples.
 3. Kotlin plugin: scan (filter 0x1826/0x1818/0x180D), connect, subscribe, write, foreground service, events to Unity.
 4. Unity 6 project (URP, Android target, min API 29 / Android 10), C# bridge (`AndroidJavaObject` + callbacks).
