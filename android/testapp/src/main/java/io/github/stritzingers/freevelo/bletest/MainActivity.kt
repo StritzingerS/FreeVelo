@@ -2,14 +2,17 @@ package io.github.stritzingers.freevelo.bletest
 
 import android.Manifest
 import android.app.Activity
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.MediaStore
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
@@ -26,6 +29,7 @@ import io.github.stritzingers.freevelo.ble.ConnectionState
 import io.github.stritzingers.freevelo.ble.GattUuids
 import io.github.stritzingers.freevelo.ble.ScannedDevice
 import java.io.File
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -141,7 +145,10 @@ class MainActivity : Activity(), BleListener {
         root.addView(row(button("Set grade (SIM)") { sendGrade() }))
 
         root.addView(section("Log"))
-        root.addView(row(button("Share byte log") { shareLog() }))
+        root.addView(row(
+            button("Share byte log") { shareLog() },
+            button("Save to Downloads") { saveLogToDownloads() },
+        ))
         logText = text("", 12f, mono = true)
         root.addView(logText)
 
@@ -384,6 +391,30 @@ class MainActivity : Activity(), BleListener {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivity(Intent.createChooser(intent, "Share BLE log"))
+    }
+
+    /** Copies the current byte log to Downloads/FreeVelo (no storage permission needed on Android 10+). */
+    private fun saveLogToDownloads() {
+        val file = byteLog.file
+        if (!file.exists()) {
+            log("Log is empty")
+            return
+        }
+        val name = "FreeVelo-${file.name}"
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/FreeVelo")
+        }
+        try {
+            val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: throw IOException("could not create file")
+            val out = contentResolver.openOutputStream(uri) ?: throw IOException("could not open file")
+            out.use { o -> file.inputStream().use { it.copyTo(o) } }
+            log("Saved: Downloads/FreeVelo/$name")
+        } catch (e: Exception) {
+            log("✗ Saving failed: ${e.message}")
+        }
     }
 
     // ---------------------------------------------------------------- BleListener

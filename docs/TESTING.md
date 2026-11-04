@@ -49,5 +49,7 @@ Please check and report:
 - [ ] Reconnect after switching the trainer off and on (or walking away with the phone)
 - [ ] Log lines starting with `⚠` or `✗`
 
-Then tap **Share byte log** and send the CSV file (e.g. attach it to a GitHub issue).
+Then tap **Share byte log** (send it directly, e.g. by email or messenger) or **Save to Downloads**
+(the file appears in `Downloads/FreeVelo/` in your file manager) and send the CSV file
+(e.g. attach it to a GitHub issue).
 Byte logs from real devices become regression tests (`FreeVelo.Devices.Logging.BleLogEntry`).
