@@ -239,7 +239,8 @@ class CrankCadence(private val stopTimeoutMs: Long = 3000) {
             if (nowMs - lastChangeMs >= stopTimeoutMs) cadenceRpm = 0.0
             return cadenceRpm
         }
-        if (dRevs <= 20) cadenceRpm = dRevs * 60.0 * 1024.0 / dTicks
+        // > 6 s per revolution: cranks stood still in between (first stroke after a stop), not a cadence.
+        if (dRevs <= 20 && dTicks <= dRevs * 6 * 1024) cadenceRpm = dRevs * 60.0 * 1024.0 / dTicks
         remember(revolutions, eventTime, nowMs)
         return cadenceRpm
     }

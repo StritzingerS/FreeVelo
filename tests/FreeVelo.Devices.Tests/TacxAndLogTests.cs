@@ -163,4 +163,33 @@ public class RecordedLogTests
         Assert.Contains(parsed, p => p.TimestampMs > writes[3].TimestampMs
             && p.Data.TrainerStatus.HasFlag(FecTrainerStatus.UserConfigurationRequired));
     }
+
+    [Fact]
+    public void HeartRateStrapAndPowerPedalsLog()
+    {
+        var entries = Load("hrmpro-assioma-2026-11-04.csv");
+        var hrUuid = GattUuids.FromShort(GattUuids.HeartRateMeasurement);
+        var cpsUuid = GattUuids.FromShort(GattUuids.CyclingPowerMeasurement);
+
+        var hr = entries.Where(e => e.Characteristic == hrUuid).Select(e => HeartRate.HeartRateMeasurement.Parse(e.Payload)).ToList();
+        Assert.True(hr.Count > 300);
+        Assert.All(hr, m => Assert.InRange(m.Bpm, 70, 105));
+        Assert.Contains(hr, m => m.RrIntervalsMs.Count > 0);
+        Assert.All(hr.SelectMany(m => m.RrIntervalsMs), rr => Assert.InRange(rr, 300, 2000));
+
+        var calc = new CrankCadenceCalculator();
+        var cadences = new List<double>();
+        var powers = new List<int>();
+        foreach (var e in entries.Where(e => e.Characteristic == cpsUuid))
+        {
+            var m = CyclingPowerMeasurement.Parse(e.Payload);
+            powers.Add(m.PowerW);
+            double? c = calc.Update(m.CumulativeCrankRevolutions!.Value, m.LastCrankEventTime!.Value, e.TimestampMs);
+            if (c is > 0) cadences.Add(c.Value);
+        }
+
+        Assert.Equal(238, powers.Max());
+        Assert.NotEmpty(cadences);
+        Assert.All(cadences, c => Assert.InRange(c, 20, 45)); // slow pedaling, no 4 rpm start artefact
+    }
 }

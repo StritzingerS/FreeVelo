@@ -103,6 +103,11 @@ class ProtocolTest {
         rollover.update(65535, 65000, 0)
         assertEquals(90.0, rollover.update(1, 829, 1333)!!, 0.1)
 
+        val firstStroke = CrankCadence()
+        firstStroke.update(0, 0, 0)
+        assertNull(firstStroke.update(1, 15700, 1000))
+        assertEquals(26.0, firstStroke.update(2, 18045, 4000)!!, 0.5)
+
         val stop = CrankCadence(stopTimeoutMs = 3000)
         stop.update(10, 0, 0)
         stop.update(11, 683, 700)

@@ -35,6 +35,9 @@ internal class GattConnection(
 
     val address: String = device.address
 
+    /** Android may return no name after a reconnect, so remember the last known one. */
+    private var name: String? = device.name
+
     private var gatt: BluetoothGatt? = null
     private val queue = ArrayDeque<Op>()
     private var current: Op? = null
@@ -210,7 +213,8 @@ internal class GattConnection(
 
     /** Human readable list of services and characteristics, written to the byte log for diagnostics. */
     private fun describeGatt(g: BluetoothGatt): String = buildString {
-        append("GATT ").append(address).append(" (").append(device.name ?: "?").append(")")
+        device.name?.let { name = it }
+        append("GATT ").append(address).append(" (").append(name ?: "?").append(")")
         for (service in g.services) {
             append("\n  service ").append(GattUuids.shortName(service.uuid))
             for (ch in service.characteristics) {

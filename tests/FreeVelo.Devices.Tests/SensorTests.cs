@@ -120,6 +120,17 @@ public class CrankCadenceCalculatorTests
     }
 
     [Fact]
+    public void FirstStrokeAfterStandstillIsNotACadence()
+    {
+        // Assioma log: revs 0 → 1 after 15.33 s (first stroke), then 1 rev per ~1.7 s
+        var calc = new CrankCadenceCalculator();
+        calc.Update(0, 0, 0);
+
+        Assert.Null(calc.Update(1, 15700, 1000));
+        Assert.Equal(26.0, calc.Update(2, 18045, 4000)!.Value, 0);
+    }
+
+    [Fact]
     public void IgnoresImplausibleJumps()
     {
         var calc = new CrankCadenceCalculator();

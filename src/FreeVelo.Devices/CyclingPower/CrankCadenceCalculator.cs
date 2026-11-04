@@ -10,6 +10,10 @@ namespace FreeVelo.Devices.CyclingPower
         private const double TicksPerSecond = 1024.0;
         private const int MaxPlausibleRevolutionsPerEvent = 20;
 
+        // Longer than 6 s per revolution (< 10 rpm) means the cranks stood still in between,
+        // e.g. the first pedal stroke after a stop – not a real cadence.
+        private const int MaxTicksPerRevolution = 6 * 1024;
+
         private readonly long _stopTimeoutMs;
         private ushort? _lastRevolutions;
         private ushort _lastEventTime;
@@ -49,7 +53,8 @@ namespace FreeVelo.Devices.CyclingPower
                 return CadenceRpm;
             }
 
-            if (deltaRevolutions <= MaxPlausibleRevolutionsPerEvent)
+            if (deltaRevolutions <= MaxPlausibleRevolutionsPerEvent
+                && deltaTicks <= deltaRevolutions * MaxTicksPerRevolution)
             {
                 CadenceRpm = deltaRevolutions * 60.0 * TicksPerSecond / deltaTicks;
             }
