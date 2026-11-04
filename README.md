@@ -9,7 +9,16 @@ Source-available indoor cycling training app for small groups of friends – fre
 - Strava auto upload, FIT export
 - Android first, later iOS & Windows · German & English
 
-**Status:** concept phase – see [docs/CONCEPT.md](docs/CONCEPT.md).
+**Status:** phase 0 (Bluetooth trainer prototype) – see [docs/CONCEPT.md](docs/CONCEPT.md) and [docs/TESTING.md](docs/TESTING.md).
+
+## Repository layout
+| Path | Content |
+|---|---|
+| `src/FreeVelo.Devices` | C# protocol library: FTMS (ERG/SIM), Cycling Power, Heart Rate, BLE byte logs (.NET Standard 2.1, shared with Unity) |
+| `tests/` | xUnit tests |
+| `android/ble` | Kotlin Bluetooth LE library (scan, connect, GATT queue, byte log) – later the Unity plugin |
+| `android/testapp` | Native Android test app for trainers and sensors |
+| `docs/` | Concept and testing guide |
 
 ## Tech
 Unity 6 (C#) client · pure C# core libraries · Kotlin BLE plugin for Android · ASP.NET Core server

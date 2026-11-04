@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    name: C# libraries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build and test
+        run: dotnet test FreeVelo.slnx --configuration Release
+
+  android:
+    name: Android BLE test app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Unit tests and APK
+        run: ./gradlew --no-daemon :ble:testDebugUnitTest :testapp:testDebugUnitTest :testapp:assembleDebug
+
+      # The APK is only uploaded inside a password-protected ZIP (AES-256), because
+      # artifacts of a public repository can be downloaded by any GitHub user.
+      - name: Encrypt APK
+        env:
+          APK_ZIP_PASSWORD: ${{ secrets.APK_ZIP_PASSWORD }}
+        run: |
+          if [ -z "$APK_ZIP_PASSWORD" ]; then
+            echo "::warning::Secret APK_ZIP_PASSWORD is not set – the APK is not uploaded. See docs/TESTING.md."
+            exit 0
+          fi
+          name="FreeVelo-BleTest-${GITHUB_RUN_NUMBER}"
+          mkdir -p out
+          cp testapp/build/outputs/apk/debug/testapp-debug.apk "out/${name}.apk"
+          (cd out && 7z a -tzip -mem=AES256 -p"$APK_ZIP_PASSWORD" "${name}.zip" "${name}.apk" > /dev/null)
+          rm "out/${name}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FreeVelo-BleTest-${{ github.run_number }}
+          path: android/out/*.zip
+          retention-days: 30
+          if-no-files-found: ignore
