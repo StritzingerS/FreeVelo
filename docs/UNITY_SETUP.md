@@ -70,3 +70,24 @@ To run builds directly from Unity on your phone (faster than via GitHub):
 2. **Settings → System → Developer options** → enable **USB debugging**.
 3. Connect via USB, allow the PC on the phone.
 4. Unity: **File → Build Profiles → Android → Run Device** → your phone → **Build and Run**.
+
+## 8. Running FreeVelo
+
+### In the editor (simulated trainer – no phone needed)
+1. Pull the latest changes in GitHub Desktop and open the project in Unity Hub.
+2. On first open, FreeVelo downloads two Android plugins into `Assets/Plugins/Android` automatically
+   (see the Console). Manually: menu **FreeVelo → Update Android plugins**.
+3. Open `Assets/Scenes/SampleScene` and press **Play** ▶.
+4. **Devices → Scan** → connect *FreeVelo Sim Trainer* and *FreeVelo Sim HRM*.
+5. **Workouts** → e.g. *4×4 VO2max*. The simulated trainer follows the ERG targets.
+   In free ride mode, set the simulated rider power under **Settings**.
+6. Unity creates `.meta` files for the new scripts – please commit them.
+
+### On the phone
+1. Connect the phone via USB (see step 7).
+2. **File → Build Profiles → Android → Build and Run**.
+   Or **Build** an APK, copy it to the phone and install it.
+3. In the app: allow *Nearby devices*, **Devices → Scan**, connect the Neo, HRM, pedals.
+   Remembered devices reconnect automatically at the next start.
+
+If something does not compile or work, send me the error from the Unity **Console** (or a screenshot).

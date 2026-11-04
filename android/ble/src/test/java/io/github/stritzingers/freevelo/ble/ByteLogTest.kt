@@ -54,4 +54,11 @@ class ByteLogTest {
         val custom = UUID.fromString("6e40fec1-b5a3-f393-e0a9-e50e24dcca9e")
         assertEquals(custom.toString(), GattUuids.shortName(custom))
     }
+
+    @Test
+    fun hexRoundTrip() {
+        val data = byteArrayOf(0x00, 0x7F, 0x80.toByte(), 0xFF.toByte(), 0x4E)
+        assertEquals("007f80ff4e", ByteLog.toHex(UnityBleBridge.fromHex("007F80ff4e")))
+        assertEquals(ByteLog.toHex(data), ByteLog.toHex(UnityBleBridge.fromHex(ByteLog.toHex(data))))
+    }
 }

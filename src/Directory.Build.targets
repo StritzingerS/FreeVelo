@@ -1,0 +1,6 @@
+<Project>
+  <!-- Release builds of the shared libraries are copied into the Unity project (committed, so Unity works after a pull). -->
+  <Target Name="CopyToUnity" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and '$(TargetFramework)' == 'netstandard2.1'">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MSBuildThisFileDirectory)../unity/FreeVelo/Assets/Plugins/FreeVelo" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
