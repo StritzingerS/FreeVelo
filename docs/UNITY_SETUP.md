@@ -91,3 +91,20 @@ To run builds directly from Unity on your phone (faster than via GitHub):
    Remembered devices reconnect automatically at the next start.
 
 If something does not compile or work, send me the error from the Unity **Console** (or a screenshot).
+
+## 9. Custom bicycle model (local only)
+
+Asset Store models (Unity Asset Store EULA) may be used in your app and builds, but **must not be pushed** to this
+public repository. FreeVelo therefore keeps them local:
+
+1. **Window → Package Manager → My Assets** → the bicycle (e.g. *Low Poly Bicycle 5*) → **Download** → **Import**.
+2. If the model looks pink: **Window → Rendering → Render Pipeline Converter** → *Built-in to URP* →
+   tick **Material Upgrade** → **Initialize and Convert**.
+3. In the **Project** window select the bicycle **prefab** (or model) → menu **FreeVelo → Use selected prefab as bicycle**.
+   - The fitted copy is saved to `Assets/FreeVeloLocal/Resources/FreeVeloBicycle.prefab` (ignored by `.gitignore`).
+   - The imported asset folder is added to `.git/info/exclude`, so GitHub Desktop no longer shows it.
+4. Press **Play**. If the bike rides backwards: open the prefab and rotate its child by 180° around Y.
+   Wheels turn automatically if their objects contain "wheel" in the name (cranks: "crank").
+
+Builds made on your PC include the model; anyone else (and CI) gets the placeholder bike.
+Back to the placeholder: **FreeVelo → Remove custom bicycle**.
