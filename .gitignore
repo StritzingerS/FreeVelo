@@ -1,0 +1,45 @@
+# Unity
+unity/**/[Ll]ibrary/
+unity/**/[Tt]emp/
+unity/**/[Oo]bj/
+unity/**/[Bb]uild/
+unity/**/[Bb]uilds/
+unity/**/[Ll]ogs/
+unity/**/[Uu]ser[Ss]ettings/
+unity/**/[Mm]emoryCaptures/
+*.apk
+*.aab
+*.unitypackage
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+sysinfo.txt
+crashlytics-build.properties
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# Android / Gradle
+android/**/.gradle/
+android/**/build/
+android/**/local.properties
+*.keystore
+*.jks
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+appsettings.*.local.json
