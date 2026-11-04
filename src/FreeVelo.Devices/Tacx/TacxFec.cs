@@ -112,6 +112,29 @@ namespace FreeVelo.Devices.Tacx
         }
     }
 
+    /// <summary>Trainer status bits from FE-C page 0x19.</summary>
+    [Flags]
+    public enum FecTrainerStatus
+    {
+        None = 0,
+        PowerCalibrationRequired = 1,
+        ResistanceCalibrationRequired = 2,
+
+        /// <summary>The trainer needs page 0x37 (rider/bike weight) again.</summary>
+        UserConfigurationRequired = 4,
+    }
+
+    /// <summary>Result of the last command, from FE-C page 0x47.</summary>
+    public enum FecCommandResult
+    {
+        Pass = 0,
+        Fail = 1,
+        NotSupported = 2,
+        Rejected = 3,
+        Pending = 4,
+        Unknown = 255,
+    }
+
     /// <summary>Decoded FE-C data pages relevant for FreeVelo.</summary>
     public sealed class FecData
     {
@@ -129,6 +152,18 @@ namespace FreeVelo.Devices.Tacx
 
         /// <summary>Instantaneous cadence in rpm (page 0x19).</summary>
         public int? CadenceRpm { get; private set; }
+
+        /// <summary>Trainer status (page 0x19).</summary>
+        public FecTrainerStatus TrainerStatus { get; private set; }
+
+        /// <summary>Page number of the last command received by the trainer (page 0x47), null if none yet.</summary>
+        public byte? LastCommandPage { get; private set; }
+
+        /// <summary>Sequence number of the last command (page 0x47).</summary>
+        public byte? CommandSequence { get; private set; }
+
+        /// <summary>Result of the last command (page 0x47).</summary>
+        public FecCommandResult? CommandResult { get; private set; }
 
         /// <summary>Parses an ANT message from the Tacx RX characteristic.</summary>
         public static FecData Parse(ReadOnlySpan<byte> message)
@@ -150,6 +185,19 @@ namespace FreeVelo.Devices.Tacx
                     if (page[2] != 0xFF) data.CadenceRpm = page[2];
                     int power = page[5] | ((page[6] & 0x0F) << 8);
                     if (power != 0xFFF) data.PowerW = power;
+                    data.TrainerStatus = (FecTrainerStatus)(page[6] >> 4);
+                    break;
+                }
+
+                case 0x47:
+                {
+                    if (page[1] != 0xFF)
+                    {
+                        data.LastCommandPage = page[1];
+                        data.CommandSequence = page[2];
+                        data.CommandResult = page[3] <= 4 ? (FecCommandResult)page[3] : FecCommandResult.Unknown;
+                    }
+
                     break;
                 }
             }

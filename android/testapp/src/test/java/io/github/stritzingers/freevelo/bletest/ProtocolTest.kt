@@ -135,6 +135,17 @@ class ProtocolTest {
         assertEquals(85, trainer.cadenceRpm)
         assertEquals(36.0, TacxFec.parse(broadcast(0x10, 0x19, 0x00, 0x00, 0x10, 0x27, 0xFF, 0x24))!!.speedKmh!!, 0.001)
 
+        val needsConfig = TacxFec.parse(broadcast(0x19, 0x01, 0x42, 0x00, 0x00, 0x32, 0x40, 0x30))!!
+        assertTrue(needsConfig.userConfigRequired)
+        assertEquals(50, needsConfig.powerW)
+        assertFalse(trainer.userConfigRequired)
+
+        val status = TacxFec.parse(broadcast(0x47, 0x33, 0x02, 0x00, 0xFF, 0xFF, 0xFF, 0xFF))!!
+        assertEquals(0x33, status.lastCommand)
+        assertEquals(2, status.commandSequence)
+        assertEquals("pass", TacxFec.describeCommandResult(status.commandResult!!))
+        assertNull(TacxFec.parse(broadcast(0x47, 0xFF, 0xFF, 0xFF, 0x16, 0x0B, 0xFF, 0x34))!!.lastCommand)
+
         val bad = broadcast(0x19, 0, 0, 0, 0, 0, 0, 0)
         bad[12] = (bad[12].toInt() xor 0xFF).toByte()
         assertNull(TacxFec.parse(bad))

@@ -134,7 +134,27 @@ object Protocol {
 
 /** Tacx "ANT+ FE-C over BLE" (same as C# FreeVelo.Devices.Tacx.TacxFec). */
 object TacxFec {
-    data class FecData(val page: Int, val powerW: Int?, val cadenceRpm: Int?, val speedKmh: Double?)
+    data class FecData(
+        val page: Int,
+        val powerW: Int? = null,
+        val cadenceRpm: Int? = null,
+        val speedKmh: Double? = null,
+        /** Page 0x19, bit 2: trainer wants page 0x37 (user configuration) again. */
+        val userConfigRequired: Boolean = false,
+        /** Page 0x47: page number, sequence and result (0 = pass) of the last command. */
+        val lastCommand: Int? = null,
+        val commandSequence: Int? = null,
+        val commandResult: Int? = null,
+    )
+
+    fun describeCommandResult(result: Int): String = when (result) {
+        0 -> "pass"
+        1 -> "fail"
+        2 -> "not supported"
+        3 -> "rejected"
+        4 -> "pending"
+        else -> "unknown ($result)"
+    }
 
     private fun wrap(page: IntArray): ByteArray {
         val msg = ByteArray(13)
@@ -177,13 +197,23 @@ object TacxFec {
         return when (p[0]) {
             0x10 -> {
                 val speed = p[4] or (p[5] shl 8)
-                FecData(0x10, null, null, if (speed == 0xFFFF) null else speed * 0.0036)
+                FecData(0x10, speedKmh = if (speed == 0xFFFF) null else speed * 0.0036)
             }
             0x19 -> {
                 val power = p[5] or ((p[6] and 0x0F) shl 8)
-                FecData(0x19, if (power == 0xFFF) null else power, if (p[2] == 0xFF) null else p[2], null)
+                FecData(
+                    0x19,
+                    powerW = if (power == 0xFFF) null else power,
+                    cadenceRpm = if (p[2] == 0xFF) null else p[2],
+                    userConfigRequired = ((p[6] shr 4) and 0x04) != 0,
+                )
             }
-            else -> FecData(p[0], null, null, null)
+            0x47 -> if (p[1] == 0xFF) {
+                FecData(0x47)
+            } else {
+                FecData(0x47, lastCommand = p[1], commandSequence = p[2], commandResult = p[3])
+            }
+            else -> FecData(p[0])
         }
     }
 }

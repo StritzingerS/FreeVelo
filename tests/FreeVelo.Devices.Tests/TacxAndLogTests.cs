@@ -59,6 +59,22 @@ public class TacxFecTests
     }
 
     [Fact]
+    public void ParsesTrainerStatusAndCommandStatus()
+    {
+        var trainer = FecData.Parse(Broadcast(new byte[] { 0x19, 0x01, 0x42, 0x00, 0x00, 0x32, 0x40, 0x30 }));
+        Assert.Equal(FecTrainerStatus.UserConfigurationRequired, trainer.TrainerStatus);
+        Assert.Equal(50, trainer.PowerW);
+
+        var status = FecData.Parse(Broadcast(new byte[] { 0x47, 0x33, 0x02, 0x00, 0xFF, 0xFF, 0xFF, 0xFF }));
+        Assert.Equal((byte)0x33, status.LastCommandPage);
+        Assert.Equal((byte)2, status.CommandSequence);
+        Assert.Equal(FecCommandResult.Pass, status.CommandResult);
+
+        var none = FecData.Parse(Broadcast(new byte[] { 0x47, 0xFF, 0xFF, 0xFF, 0x16, 0x0B, 0xFF, 0x34 }));
+        Assert.Null(none.LastCommandPage);
+    }
+
+    [Fact]
     public void RejectsBadChecksum()
     {
         byte[] msg = Broadcast(new byte[] { 0x19, 0, 0, 0, 0, 0, 0, 0 });
@@ -112,5 +128,39 @@ public class RecordedLogTests
         Assert.Equal(0, powers.Last());                                  // stopped pedaling
         Assert.InRange(cadences[0], 60, 70);                             // ~64 rpm
         Assert.Equal(0.0, cadences.Last());                              // cadence drops to 0
+    }
+
+    [Fact]
+    public void TacxNeo2FecErgAndSimLog()
+    {
+        var entries = Load("tacx-neo2-fec-erg-sim-2026-11-04.csv");
+        var writes = entries.Where(e => e.Characteristic == TacxFec.TxCharacteristic).ToList();
+        var notifications = entries.Where(e => e.Characteristic == TacxFec.RxCharacteristic).ToList();
+
+        // The app sent exactly what the encoder produces.
+        Assert.Equal(TacxFec.SetUserConfiguration(75), writes[0].Payload);
+        Assert.Equal(TacxFec.SetTargetPower(160), writes[1].Payload);
+        Assert.Equal(TacxFec.SetTargetPower(210), writes[2].Payload);
+        Assert.Equal(TacxFec.SetTrackResistance(0), writes[3].Payload);
+        Assert.Equal(TacxFec.SetTrackResistance(5), writes[4].Payload);
+        Assert.Equal(TacxFec.SetTrackResistance(10), writes[5].Payload);
+
+        var parsed = notifications.Select(e => (e.TimestampMs, Data: FecData.Parse(e.Payload))).ToList();
+
+        // Every ERG/SIM command was confirmed with "pass" (page 0x47).
+        var confirmed = parsed.Where(p => p.Data.CommandResult == FecCommandResult.Pass)
+            .Select(p => (p.Data.LastCommandPage, p.Data.CommandSequence)).Distinct().ToList();
+        Assert.Equal(new (byte?, byte?)[] { (0x31, 0), (0x31, 1), (0x33, 2), (0x33, 3), (0x33, 4) }, confirmed);
+
+        // ERG 160 W: power settles around the target 10–20 s after the command.
+        long erg160 = writes[1].TimestampMs;
+        var power = parsed.Where(p => p.TimestampMs > erg160 + 10_000 && p.TimestampMs < erg160 + 20_000 && p.Data.PowerW.HasValue)
+            .Select(p => p.Data.PowerW!.Value).ToList();
+        Assert.NotEmpty(power);
+        Assert.InRange(power.Average(), 150, 170);
+
+        // After the SIM commands the trainer asked for the user configuration again.
+        Assert.Contains(parsed, p => p.TimestampMs > writes[3].TimestampMs
+            && p.Data.TrainerStatus.HasFlag(FecTrainerStatus.UserConfigurationRequired));
     }
 }

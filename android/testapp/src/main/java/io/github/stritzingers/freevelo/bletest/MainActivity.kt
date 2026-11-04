@@ -57,6 +57,8 @@ class MainActivity : Activity(), BleListener {
     private var trainerProtocol: TrainerProtocol? = null
     private var hasControl = false
     private var fecSpeedKmh: Double? = null
+    private var fecLastCommandStatus: Triple<Int, Int, Int>? = null
+    private var fecUserConfigSentAt = 0L
     private var ergTargetW = 150
     private var gradePercent = 0.0
 
@@ -346,6 +348,11 @@ class MainActivity : Activity(), BleListener {
         }
     }
 
+    private fun sendFecUserConfig() {
+        fecUserConfigSentAt = SystemClock.elapsedRealtime()
+        writeTrainer(TacxFec.setUserConfiguration(RIDER_WEIGHT_KG), "User config ${RIDER_WEIGHT_KG.toInt()} kg")
+    }
+
     private fun ftmsOnly(action: () -> Unit) {
         if (trainerProtocol == TrainerProtocol.TACX_FEC) log("Not needed for Tacx FE-C") else action()
     }
@@ -468,7 +475,8 @@ class MainActivity : Activity(), BleListener {
                 trainerAddress = address
                 trainerProtocol = TrainerProtocol.TACX_FEC
                 log("${name(address)}: no FTMS, using Tacx FE-C")
-                writeTrainer(TacxFec.setUserConfiguration(75.0), "User config 75 kg")
+                fecLastCommandStatus = null
+                sendFecUserConfig()
             }
             GattUuids.CYCLING_POWER_SERVICE in services && trainerAddress == null ->
                 log("${name(address)}: power only, no trainer control")
@@ -530,6 +538,21 @@ class MainActivity : Activity(), BleListener {
 
             GattUuids.TACX_FEC_RX -> TacxFec.parse(data)?.let { f ->
                 if (f.page == 0x10) fecSpeedKmh = f.speedKmh
+                if (f.page == 0x47 && f.lastCommand != null) {
+                    val status = Triple(f.lastCommand, f.commandSequence ?: 0, f.commandResult ?: 255)
+                    if (status != fecLastCommandStatus) {
+                        fecLastCommandStatus = status
+                        log(String.format(Locale.ROOT, "← FE-C page 0x%02X #%d: %s",
+                            status.first, status.second, TacxFec.describeCommandResult(status.third)))
+                    }
+                }
+                // The trainer asks for rider/bike weight again (seen on the Neo 2 after SIM commands).
+                if (f.userConfigRequired && address == trainerAddress &&
+                    SystemClock.elapsedRealtime() - fecUserConfigSentAt > 10_000
+                ) {
+                    log("Trainer requests user configuration")
+                    sendFecUserConfig()
+                }
                 if (f.page == 0x19) {
                     liveByDevice["$address-fec"] = String.format(
                         Locale.ROOT,
@@ -569,5 +592,6 @@ class MainActivity : Activity(), BleListener {
 
     private companion object {
         const val REQUEST_PERMISSIONS = 1
+        const val RIDER_WEIGHT_KG = 75.0
     }
 }
