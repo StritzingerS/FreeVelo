@@ -10,6 +10,27 @@ data class ScannedDevice(
     val services: Set<UUID>,
 ) {
     val isKnownDevice: Boolean get() = services.any { it in GattUuids.KNOWN_SERVICES }
+
+    /**
+     * True for trainers, power meters, heart rate and speed/cadence sensors.
+     * Uses the advertised services; the name is only a fallback for devices
+     * that do not advertise their services (headphones, phones, watches etc. are excluded).
+     */
+    val isFitnessDevice: Boolean
+        get() = services.any { it in GattUuids.FITNESS_SERVICES } || matchesFitnessName(name)
+
+    companion object {
+        private val FITNESS_NAME_PATTERNS = listOf(
+            "tacx", "neo ", "kickr", "wahoo", "elite", "direto", "suito", "saris", "hammer",
+            "wattbike", "zwift", "hrm", "polar h", "tickr", "assioma", "favero", "stages",
+            "4iiii", "quarq", "powertap", "rally", "vector",
+        )
+
+        fun matchesFitnessName(name: String?): Boolean {
+            val n = name?.lowercase() ?: return false
+            return FITNESS_NAME_PATTERNS.any { n.contains(it) }
+        }
+    }
 }
 
 enum class ConnectionState {

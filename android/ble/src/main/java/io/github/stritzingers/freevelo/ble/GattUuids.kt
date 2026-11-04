@@ -25,6 +25,10 @@ object GattUuids {
     val CYCLING_POWER_SERVICE: UUID = fromShort(0x1818)
     val HEART_RATE_SERVICE: UUID = fromShort(0x180D)
     val BATTERY_SERVICE: UUID = fromShort(0x180F)
+    val CYCLING_SPEED_CADENCE_SERVICE: UUID = fromShort(0x1816)
+
+    /** Tacx proprietary ANT+ FE-C over BLE service (Tacx trainers). */
+    val TACX_FEC_SERVICE: UUID = UUID.fromString("6e40fec1-b5a3-f393-e0a9-e50e24dcca9e")
 
     // FTMS
     val FITNESS_MACHINE_FEATURE: UUID = fromShort(0x2ACC)
@@ -48,6 +52,9 @@ object GattUuids {
 
     /** Services FreeVelo can use; scan results advertising one of them are shown first. */
     val KNOWN_SERVICES: Set<UUID> = setOf(FITNESS_MACHINE_SERVICE, CYCLING_POWER_SERVICE, HEART_RATE_SERVICE)
+
+    /** Advertised services that identify a cycling/fitness device. */
+    val FITNESS_SERVICES: Set<UUID> = KNOWN_SERVICES + setOf(CYCLING_SPEED_CADENCE_SERVICE, TACX_FEC_SERVICE)
 
     /**
      * Characteristics FreeVelo subscribes to, in subscription order.

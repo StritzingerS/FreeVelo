@@ -219,6 +219,8 @@ class MainActivity : Activity(), BleListener {
                 if (GattUuids.FITNESS_MACHINE_SERVICE in services) add("FTMS")
                 if (GattUuids.CYCLING_POWER_SERVICE in services) add("Power")
                 if (GattUuids.HEART_RATE_SERVICE in services) add("HR")
+                if (GattUuids.CYCLING_SPEED_CADENCE_SERVICE in services) add("Speed/Cad")
+                if (GattUuids.TACX_FEC_SERVICE in services) add("Tacx")
             }.joinToString(" ")
             val label = "${d.name ?: d.address}  [$tags]  ${d.rssi} dBm\n${state ?: "tap to connect"}"
             deviceList.addView(button(label) {
@@ -360,7 +362,6 @@ class MainActivity : Activity(), BleListener {
     // ---------------------------------------------------------------- BleListener
 
     override fun onScanResult(device: ScannedDevice) {
-        if (device.name == null && !device.isKnownDevice) return
         val previous = devices[device.address]
         val merged = if (previous != null) {
             device.copy(name = device.name ?: previous.name, services = previous.services + device.services)

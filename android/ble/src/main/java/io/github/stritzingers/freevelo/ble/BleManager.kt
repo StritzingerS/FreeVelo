@@ -31,12 +31,16 @@ class BleManager(
     private val connections = mutableMapOf<String, GattConnection>()
     private var scanning = false
 
+    /** When true (default), scan results that are not fitness devices are dropped. */
+    var fitnessDevicesOnly: Boolean = true
+
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val record = result.scanRecord
             val services = record?.serviceUuids?.map { it.uuid }?.toSet() ?: emptySet()
             val name = result.device.name ?: record?.deviceName
             val device = ScannedDevice(result.device.address, name, result.rssi, services)
+            if (fitnessDevicesOnly && !device.isFitnessDevice) return
             handler.post { listener.onScanResult(device) }
         }
 

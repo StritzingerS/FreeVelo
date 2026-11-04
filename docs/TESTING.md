@@ -12,32 +12,24 @@ both are tested with the **same byte vectors**.
 
 ## Getting the test app (APK) on your phone
 
-Every push builds the Android test app in GitHub Actions. Because the repository is public,
-anyone signed in to GitHub could download build artifacts, so the APK is uploaded **only inside a
-password-protected ZIP (AES-256)**.
+Every push builds the Android test app in GitHub Actions and publishes it as the pre-release
+**"ble-test-latest"**. The download link always points to the newest build:
 
-### One-time setup
+**<https://github.com/StritzingerS/FreeVelo/releases/download/ble-test-latest/FreeVelo-BleTest.apk>**
 
-1. Open the repository on GitHub → **Settings → Secrets and variables → Actions → New repository secret**.
-2. Name: `APK_ZIP_PASSWORD`, value: a long password of your choice (store it in your password manager).
-3. On your phone, install a ZIP app that supports AES encryption, e.g. **ZArchiver** (Play Store).
-4. Allow your file app / ZArchiver to install apps: Android asks automatically on the first install
-   ("Install unknown apps").
+1. Open the link on your phone (bookmark it) – no GitHub login needed.
+2. Open the downloaded `FreeVelo-BleTest.apk` → **Install**. The first time, Android asks you to allow
+   installing apps from your browser.
+3. Later builds install as updates (same signing key). The build number is shown on the
+   [release page](https://github.com/StritzingerS/FreeVelo/releases/tag/ble-test-latest).
 
-### Installing a build
-
-1. On your phone, open <https://github.com/StritzingerS/FreeVelo/actions> (signed in to GitHub, "Desktop site" in the browser if needed).
-2. Open the latest green **CI** run → section **Artifacts** → download `FreeVelo-BleTest-<number>`.
-3. GitHub wraps the artifact in a ZIP: open it with ZArchiver, then open the inner `FreeVelo-BleTest-<number>.zip`
-   and enter your password.
-4. Tap the extracted `.apk` → **Install**. Later builds install as updates (same signing key).
-
-Artifacts are kept for 30 days.
+> The APK is public – anyone can download it. It is a debug build for testing only.
+> Each CI run also keeps the APK as an artifact for 30 days.
 
 ## Using the BLE test app
 
 1. Start the app and allow **Nearby devices** (Bluetooth) permission.
-2. **Scan** → tap your trainer (shown with `[FTMS]`), heart rate strap (`[HR]`) or power meter (`[Power]`).
+2. **Scan** → only fitness devices are listed (headphones etc. are hidden). Tap your trainer (shown with `[FTMS]`), heart rate strap (`[HR]`) or power meter (`[Power]`).
    Wait until the state shows `READY`. Several devices can be connected at the same time.
 3. Live values appear at the top (power, cadence, speed, heart rate).
 4. **ERG test:** choose a target with the ±buttons → **Set ERG power**. The trainer should hold the wattage

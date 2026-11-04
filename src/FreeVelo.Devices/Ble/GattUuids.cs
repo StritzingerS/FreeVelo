@@ -11,6 +11,10 @@ namespace FreeVelo.Devices.Ble
         public const ushort CyclingPowerService = 0x1818;
         public const ushort HeartRateService = 0x180D;
         public const ushort BatteryService = 0x180F;
+        public const ushort CyclingSpeedCadenceService = 0x1816;
+
+        /// <summary>Tacx proprietary ANT+ FE-C over BLE service (Tacx trainers).</summary>
+        public static readonly Guid TacxFecService = Guid.Parse("6e40fec1-b5a3-f393-e0a9-e50e24dcca9e");
 
         // Fitness Machine Service (FTMS) characteristics
         public const ushort FitnessMachineFeature = 0x2ACC;

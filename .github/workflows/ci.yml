@@ -23,6 +23,10 @@ jobs:
   android:
     name: Android BLE test app
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # publish the test APK as a pre-release
+    concurrency:
+      group: ble-test-release
     defaults:
       run:
         working-directory: android
@@ -36,25 +40,27 @@ jobs:
       - name: Unit tests and APK
         run: ./gradlew --no-daemon :ble:testDebugUnitTest :testapp:testDebugUnitTest :testapp:assembleDebug
 
-      # The APK is only uploaded inside a password-protected ZIP (AES-256), because
-      # artifacts of a public repository can be downloaded by any GitHub user.
-      - name: Encrypt APK
-        env:
-          APK_ZIP_PASSWORD: ${{ secrets.APK_ZIP_PASSWORD }}
+      - name: Prepare APK
         run: |
-          if [ -z "$APK_ZIP_PASSWORD" ]; then
-            echo "::warning::Secret APK_ZIP_PASSWORD is not set – the APK is not uploaded. See docs/TESTING.md."
-            exit 0
-          fi
-          name="FreeVelo-BleTest-${GITHUB_RUN_NUMBER}"
           mkdir -p out
-          cp testapp/build/outputs/apk/debug/testapp-debug.apk "out/${name}.apk"
-          (cd out && 7z a -tzip -mem=AES256 -p"$APK_ZIP_PASSWORD" "${name}.zip" "${name}.apk" > /dev/null)
-          rm "out/${name}.apk"
+          cp testapp/build/outputs/apk/debug/testapp-debug.apk out/FreeVelo-BleTest.apk
 
       - uses: actions/upload-artifact@v7
         with:
           name: FreeVelo-BleTest-${{ github.run_number }}
-          path: android/out/*.zip
+          path: android/out/FreeVelo-BleTest.apk
           retention-days: 30
-          if-no-files-found: ignore
+
+      # Rolling pre-release with a fixed download link:
+      # https://github.com/StritzingerS/FreeVelo/releases/download/ble-test-latest/FreeVelo-BleTest.apk
+      - name: Publish pre-release "ble-test-latest"
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ble-test-latest --yes --cleanup-tag || true
+          gh release create ble-test-latest out/FreeVelo-BleTest.apk \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "BLE Test App – build ${GITHUB_RUN_NUMBER}" \
+            --notes "Debug build ${GITHUB_RUN_NUMBER} of the FreeVelo BLE test app from \`${GITHUB_REF_NAME}\` (${GITHUB_SHA::7}). Not for general use. Install guide: docs/TESTING.md"
