@@ -66,28 +66,39 @@ namespace FreeVelo.Core.Avatar
 
             // Column from the head tube to the stem: same aero footprint as the head tube at the bottom (seamless
             // transition), D-shaped steerer section on top, spacer line and top cap.
-            float colBottom = HeadTop.Y + 0.004f, colTop = steerer.Y + 0.021f;
-            Sdf column = p =>
+            // Head tube footprint continued upwards: two 10 mm spacers (separate parts, crisp edges), then the
+            // stem's steerer section with the same footprint narrowing slightly into the stem.
+            float spacerBottom = HeadTubeTop + 0.0008f, colBottom = spacerBottom + 0.0205f, colTop = steerer.Y + 0.021f;
+            float Footprint(Vector3 p, float t, float inset)
             {
-                float t = Math.Clamp((p.Y - colBottom) / (colTop - colBottom), 0f, 1f);
-                float hx = 0.0178f + (0.0007f * t), hz = 0.0245f - (0.0025f * t);
-                var c = new Vector2(p.X, p.Z - (0.386f - (0.002f * t)));
+                float hx = 0.0178f + (0.0007f * t) - inset, hz = 0.0245f - (0.0025f * t) - inset;
+                var c = new Vector2(p.X, p.Z - (0.3925f - (0.3f * (p.Y - HeadTubeTop))));
                 var d = new Vector2(MathF.Abs(c.X), MathF.Abs(c.Y)) - new Vector2(hx - 0.012f, hz - 0.012f);
-                float d2 = new Vector2(MathF.Max(d.X, 0f), MathF.Max(d.Y, 0f)).Length() + MathF.Min(MathF.Max(d.X, d.Y), 0f) - 0.012f;
-                float dy = MathF.Abs(p.Y - ((colBottom + colTop) / 2f)) - ((colTop - colBottom) / 2f);
-                float shape = new Vector2(MathF.Max(d2, 0f), MathF.Max(dy, 0f)).Length() + MathF.Min(MathF.Max(d2, dy), 0f);
-                float groove = MathF.Max(MathF.Abs(p.Y - (colBottom + 0.011f)) - 0.0006f, -d2 - 0.0008f); // spacer seam
-                return MathF.Max(shape, -groove);
+                return new Vector2(MathF.Max(d.X, 0f), MathF.Max(d.Y, 0f)).Length() + MathF.Min(MathF.Max(d.X, d.Y), 0f) - 0.012f;
+            }
+
+            float Slab(float d2, float y, float y0, float y1)
+            {
+                float dy = MathF.Abs(y - ((y0 + y1) / 2f)) - ((y1 - y0) / 2f);
+                return new Vector2(MathF.Max(d2, 0f), MathF.Max(dy, 0f)).Length() + MathF.Min(MathF.Max(d2, dy), 0f);
+            }
+
+            Sdf column = p => Slab(Footprint(p, Math.Clamp((p.Y - colBottom) / (colTop - colBottom), 0f, 1f), 0f), p.Y, colBottom, colTop);
+            Sdf spacers = p =>
+            {
+                float d2 = Footprint(p, 0f, 0.0004f);
+                return MathF.Min(Slab(d2, p.Y, spacerBottom, spacerBottom + 0.0098f), Slab(d2, p.Y, spacerBottom + 0.0105f, colBottom - 0.0006f)) - 0.0004f;
             };
+            Sculpt(AvatarNode.Bike, spacers, V(-0.03f, HeadTubeTop - 0.005f, 0.35f), V(0.03f, colBottom + 0.004f, 0.43f), 0.0007f, 900, carbonMat);
 
             Sdf stem = p =>
             {
                 var l = inv * (p - steerer);
                 float t = Math.Clamp(l.Z / len, 0f, 1f);
-                float body = RoundedBox2(l - new Vector3(0, 0, len / 2f), new Vector3(0.0165f - (0.003f * t), 0.0155f - (0.002f * t), len / 2f), 0.006f);
+                float body = RoundedBox2(l - new Vector3(0, 0, len / 2f), new Vector3(0.0185f - (0.0035f * t), 0.0172f - (0.0025f * t), len / 2f), 0.0065f);
                 var b = p - BarClamp;
                 float barClamp = MathF.Max(new Vector2(b.Y, b.Z).Length() - 0.019f, MathF.Abs(b.X) - 0.02f);
-                float shape = SMin(SMin(column(p), body, 0.008f), barClamp, 0.006f);
+                float shape = SMin(SMin(column(p), body, 0.012f), barClamp, 0.007f);
                 var q = p - steerer;
                 float cap = MathF.Max(new Vector2(q.X, q.Z - 0.001f).Length() - 0.0165f, MathF.Abs(q.Y - 0.0218f) - 0.0016f);
                 return MathF.Min(shape, cap);

@@ -12,6 +12,9 @@ namespace FreeVelo.Core.Avatar
         private static Sdf Aero(Vector3 a, Vector3 b, float ra, float rb, float width, float centerX = 0f) =>
             Squashed(RoundCone(a, b, ra, rb), new Vector3(centerX, 0, 0), Vector3.UnitX, width);
 
+        /// <summary>Height where the head tube ends (flush with the top of the top tube); spacers start here.</summary>
+        internal const float HeadTubeTop = 0.822f;
+
         private void BuildFrame(AvatarMaterial frameMat, AvatarMaterial decalMat, Vector3 seatDir, Vector3 downDir)
         {
             var downStart = HeadBottom + V(0, 0.035f, -0.012f);
@@ -40,6 +43,7 @@ stays.Add(Aero(V(s * 0.042f, 0.655f, 0.452f), FrontAxle + V(s * 0.0565f, 0.012f,
             }
 
             var frame = Blend(0.015f, stays.ToArray());
+            frame = SmoothIntersect(frame, Plane(V(0, HeadTubeTop, 0), Vector3.UnitY), 0.0015f); // head tube ends flush with the top tube
 
             float downLen = Vector3.Distance(downStart, downEnd);
             Sdf AlongDown(float from) => p =>
