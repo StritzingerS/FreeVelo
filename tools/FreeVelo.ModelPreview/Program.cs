@@ -33,8 +33,10 @@ var model = File.Exists(Environment.GetEnvironmentVariable("FREEVELO_BAKED") ?? 
         : AvatarModel.Build(detail: previewDetail);
 var pose = AvatarModel.Pose(crank, 37f);
 var meshes = new List<SceneMesh>();
+bool noRider = Environment.GetEnvironmentVariable("FREEVELO_NORIDER") == "1";
 foreach (var part in model.Parts)
 {
+    if (noRider && !AvatarModel.IsBikeNode(part.Node)) continue;
     var p = pose[part.Node];
     var normals = part.Mesh.ComputeNormals();
     meshes.Add(new SceneMesh
@@ -94,6 +96,15 @@ var cameras = new Dictionary<string, Camera>
     ["fbback"] = new() { Name = "fbback", Position = new Vector3(-0.07f, 0.42f, 0.2f), Target = new Vector3(-0.05f, 0.38f, 0.55f), FieldOfView = 20 },
     ["fbin"] = new() { Name = "fbin", Position = new Vector3(0.2f, 0.42f, 0.52f), Target = new Vector3(-0.05f, 0.38f, 0.56f), FieldOfView = 30 },
     ["forktip"] = new() { Name = "forktip", Position = new Vector3(-0.3f, 0.42f, 0.66f), Target = new Vector3(-0.055f, 0.35f, 0.6f), FieldOfView = 26 },
+    ["bar1"] = new() { Name = "bar1", Position = new Vector3(-0.45f, 1.0f, 0.82f), Target = new Vector3(0.03f, 0.84f, 0.5f), FieldOfView = 34 },
+    ["bar2"] = new() { Name = "bar2", Position = new Vector3(0.35f, 0.95f, 0.95f), Target = new Vector3(0.05f, 0.84f, 0.53f), FieldOfView = 34 },
+    ["bar3"] = new() { Name = "bar3", Position = new Vector3(-0.55f, 0.85f, 0.55f), Target = new Vector3(0, 0.83f, 0.5f), FieldOfView = 30 },
+    ["ph1"] = new() { Name = "ph1", Position = new Vector3(-0.32f, 0.98f, 0.72f), Target = new Vector3(0.06f, 0.85f, 0.5f), FieldOfView = 40 },
+    ["ph2"] = new() { Name = "ph2", Position = new Vector3(-0.12f, 0.93f, 1.0f), Target = new Vector3(0.02f, 0.84f, 0.55f), FieldOfView = 34 },
+    ["ph3"] = new() { Name = "ph3", Position = new Vector3(-0.42f, 0.86f, 0.56f), Target = new Vector3(-0.2f, 0.83f, 0.56f), FieldOfView = 40 },
+    ["shside"] = new() { Name = "shside", Position = new Vector3(-1.2f, 0.83f, 0.58f), Target = new Vector3(-0.21f, 0.83f, 0.58f), FieldOfView = 12 },
+    ["shfront"] = new() { Name = "shfront", Position = new Vector3(-0.21f, 0.86f, 1.6f), Target = new Vector3(-0.21f, 0.83f, 0.58f), FieldOfView = 12 },
+    ["sh34"] = new() { Name = "sh34", Position = new Vector3(-0.75f, 0.98f, 1.2f), Target = new Vector3(-0.21f, 0.83f, 0.58f), FieldOfView = 14 },
     ["back"] = new() { Name = "back", Position = new Vector3(0, 1.25f, -2.4f), Target = new Vector3(0, 1.0f, 0), FieldOfView = 34 },
 };
 
