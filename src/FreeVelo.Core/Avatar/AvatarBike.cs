@@ -103,8 +103,25 @@ namespace FreeVelo.Core.Avatar
             Sculpt(AvatarNode.Bike, cage, bmin, bmax, 0.0016f, 700, blackMat);
 
             // Thru-axle ends
-            metal.Tube(FrontAxle + V(-0.068f, 0, 0), FrontAxle + V(0.068f, 0, 0), 0.008f, 0.008f, 8);
-            metal.Tube(RearAxle + V(-0.075f, 0, 0), RearAxle + V(0.075f, 0, 0), 0.008f, 0.008f, 8);
+            metal.Tube(FrontAxle + V(-0.062f, 0, 0), FrontAxle + V(0.062f, 0, 0), 0.0065f, 0.0065f, 10);
+            var capMat = Mat("axlecap", V(0.05f, 0.05f, 0.055f), 0.55f);
+            foreach (var (axle, half) in new[] { (FrontAxle, 0.0625f), (RearAxle, 0.0795f) })
+            {
+                for (int s = -1; s <= 1; s += 2)
+                {
+                    // Round thru-axle end cap with a hex socket (dark) instead of a bolt head.
+                    var c = axle + V(s * half, 0, 0);
+                    Sculpt(
+                        AvatarNode.Bike,
+                        p => MathF.Max(MathF.Max(new Vector2(p.Y - c.Y, p.Z - c.Z).Length() - 0.0105f, MathF.Abs(p.X - c.X) - 0.0028f), -MathF.Max(HexDistance(p.Y - c.Y, p.Z - c.Z) - 0.0035f, (s * (c.X - p.X)) + 0.0015f)),
+                        c - V(0.006f, 0.014f, 0.014f),
+                        c + V(0.006f, 0.014f, 0.014f),
+                        0.0006f,
+                        260,
+                        capMat);
+                }
+            }
+            metal.Tube(RearAxle + V(-0.078f, 0, 0), RearAxle + V(0.078f, 0, 0), 0.0065f, 0.0065f, 10);
 
             BuildDrivetrain(blackMat, metalMat, chainMat, crankMat, seatDir);
             BuildWheel(AvatarNode.RearWheel, rear: true);
@@ -158,6 +175,14 @@ namespace FreeVelo.Core.Avatar
             }
 
             BuildRotor(node, rear ? RearRotorX : FrontRotorX, metalMat);
+        }
+
+        /// <summary>Distance-like value of a regular hexagon (across-flats = 2 × result + 2r).</summary>
+        private static float HexDistance(float x, float y)
+        {
+            x = MathF.Abs(x);
+            y = MathF.Abs(y);
+            return MathF.Max((x * 0.866025f) + (y * 0.5f), y);
         }
     }
 }
