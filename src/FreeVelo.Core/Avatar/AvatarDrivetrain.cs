@@ -74,8 +74,8 @@ namespace FreeVelo.Core.Avatar
             BuildDerailleurs(blackMat, metalMat, seatDir);
 
             // Flat-mount calipers straddling the rotors: front behind the fork leg, rear on top of the chain stay.
-            BuildCaliper(FrontAxle, FrontRotorX, -62f, FrontAxle + V(-0.0565f, 0.05f, -0.018f), blackMat, metalMat);
-            BuildCaliper(RearAxle, RearRotorX, 72f, RearAxle + V(-0.0735f, 0.004f, 0.07f), blackMat, metalMat);
+            BuildCaliper(front: true, blackMat, metalMat);
+            BuildCaliper(front: false, blackMat, metalMat);
 
             // Pedals (local to the pedal axle): road pedal body, steel spindle towards the crank.
             for (int side = 0; side < 2; side++)
@@ -310,53 +310,101 @@ namespace FreeVelo.Core.Avatar
                 return r - 0.0612f;
             };
 
-            Sculpt(node, rotor, V(x - 0.008f, -0.085f, -0.085f), V(x + 0.008f, 0.085f, 0.085f), 0.0008f, 3200, metalMat, (carrier, carrierMat));
+            Sculpt(node, rotor, V(x - 0.008f, -0.085f, -0.085f), V(x + 0.008f, 0.085f, 0.085f), 0.0007f, 4800, metalMat, (carrier, carrierMat));
         }
 
         /// <summary>
-        /// Flat-mount two-piston caliper. <paramref name="angle"/> is the position around the axle in degrees
-        /// (0 = above, 90 = forward); the body straddles the rotor and a bracket reaches the frame at <paramref name="frameAttach"/>.
+        /// Shimano-style flat-mount caliper: two rounded halves around the rotor (outboard half with the piston dome),
+        /// a bridge over the rotor, finned pads, hose fitting. Rear: on a flat-mount pad on top of the chain stay,
+        /// bolted from below. Front: right behind the fork leg on an adapter bolted through the leg.
         /// </summary>
-        private void BuildCaliper(Vector3 axle, float rotorX, float angle, Vector3 frameAttach, AvatarMaterial blackMat, AvatarMaterial metalMat)
+        private void BuildCaliper(bool front, AvatarMaterial blackMat, AvatarMaterial metalMat)
         {
+            var frameMat = Mat("frame", Style.Frame, 0.75f);
+            var axle = front ? FrontAxle : RearAxle;
+            float rotorX = front ? FrontRotorX : RearRotorX;
+            float angle = front ? -50f : 38f; // around the axle: 0 = up, 90 = forward
             float rad = angle * MathF.PI / 180f;
             var radial = new Vector3(0, MathF.Cos(rad), MathF.Sin(rad));
             var tangent = new Vector3(0, -MathF.Sin(rad), MathF.Cos(rad));
-            var rot = Rot.LookRotation(tangent, radial); // local: x across, y radial outwards, z along the rotor
-            var center = axle + new Vector3(rotorX, 0, 0) + (radial * 0.074f);
+            if (tangent.Z < 0) tangent = -tangent; // local +z towards the front of the bike
+            var rot = Rot.LookRotation(tangent, radial);
             var inv = rot.Transposed;
-            float outward = MathF.Sign(rotorX); // towards the outside of the bike
+            var center = axle + new Vector3(rotorX, 0, 0) + (radial * 0.073f);
+            Vector3 L(float x, float y, float z) => center + (rot * new Vector3(x, y, z));
+            float o = MathF.Sign(rotorX); // outboard direction in x (left side: −1)
 
             Sdf body = p =>
             {
                 var q = inv * (p - center);
-                // Two halves around the rotor, joined over its outer edge (bridge).
-                float halves = Box(q - new Vector3(0, 0.002f, 0), new Vector3(0.0125f, 0.0115f, 0.024f), 0.005f);
-                float slot = MathF.Max(MathF.Abs(q.X) - 0.0024f, q.Y - 0.0085f); // rotor gap, open towards the hub
-                float shape = MathF.Max(halves, -slot);
+                float lx = q.X * o; // > 0 outboard
 
-                // Cooling fins on the pads (sticking out radially), outboard piston bulge, banjo/hose stub.
+                // Halves: outboard 14 mm thick, inboard 9 mm; tapered ends.
+                float taper = 0.0045f * MathF.Abs(q.Z) / 0.03f;
+                float outer = Box(q - new Vector3(o * 0.0095f, 0.0005f, 0), new Vector3(0.0072f, 0.0125f - taper, 0.03f), 0.0055f);
+                float inner = Box(q - new Vector3(-o * 0.0068f, 0.0005f, 0), new Vector3(0.0045f, 0.0115f - taper, 0.027f), 0.004f);
+                float bridge = Box(q - new Vector3(0, 0.0105f, 0), new Vector3(0.012f, 0.0035f, 0.022f), 0.002f);
+                float shape = MathF.Min(MathF.Min(outer, inner), bridge);
+                shape = MathF.Max(shape, -MathF.Max(MathF.Abs(q.X) - 0.0022f, q.Y - 0.0085f)); // rotor slot
+
+                float dome = MathF.Max(new Vector2(q.Y + 0.001f, q.Z).Length() - 0.0115f, MathF.Abs(lx - 0.0165f) - 0.0025f); // piston dome
+                shape = SmoothMin(shape, dome, 0.003f);
+
+                // Pad fins above the bridge (plates across the rotor).
                 float fins = float.MaxValue;
                 for (int i = -3; i <= 3; i++)
                 {
-                    fins = MathF.Min(fins, Box(q - new Vector3(0, 0.016f, i * 0.0055f), new Vector3(0.006f, 0.0045f, 0.0011f), 0.0005f));
+                    fins = MathF.Min(fins, Box(q - new Vector3(0, 0.0165f, i * 0.0048f), new Vector3(0.0075f, 0.0035f, 0.0009f), 0.0004f));
                 }
 
-                float piston = Cyl(q - new Vector3(outward * 0.011f, 0.0f, 0), 0.009f, 0.004f);
-                float hose = Cyl2(q - new Vector3(outward * -0.004f, 0.006f, -0.026f), 0.0035f, 0.008f);
-                return MathF.Min(MathF.Min(shape, fins), MathF.Min(piston, hose));
+                // Hose fitting on the inboard half, bleed nipple at the top of the outboard half.
+                float banjo = Cyl(q - new Vector3(-o * 0.013f, 0.004f, 0.02f), 0.0042f, 0.003f);
+                float nipple = Cyl2(q - new Vector3(o * 0.011f, 0.012f, -0.022f), 0.0022f, 0.004f);
+                return MathF.Min(MathF.Min(shape, fins), MathF.Min(banjo, nipple));
             };
 
-            // Mounting bracket from the inboard half to the frame member.
-            var bracketEnd = frameAttach;
-            var bracketStart = center + (inv.Transposed * new Vector3(-outward * 0.009f, -0.006f, 0));
-            Sdf bracket = SdfShapes.Squashed(SdfShapes.RoundCone(bracketStart, bracketEnd, 0.007f, 0.008f), bracketStart, radial, 0.45f);
-            var bolt = SdfShapes.RoundCone(center + (inv.Transposed * new Vector3(outward * 0.017f, -0.004f, 0.012f)), center + (inv.Transposed * new Vector3(outward * 0.017f, -0.004f, -0.012f)), 0.0028f, 0.0028f);
+            Sdf mount;
+            var bolts = new List<Sdf>();
+            float memberX = front ? -0.0565f : -0.0735f;
+            if (front)
+            {
+                // Fork leg centre (z) at a height above the axle: straight between axle end and the bend.
+                float ForkZ(float h) => -0.002f + ((h - 0.012f) / 0.108f * -0.022f);
+                float h0 = center.Y - axle.Y;
+                var legBack = new Vector3(memberX, axle.Y + h0, axle.Z + ForkZ(h0) - 0.0105f);
+                var plateEnd = L(o * 0.0095f, -0.006f, 0.024f);
+                mount = SdfShapes.Blend(
+                    0.004f,
+                    SdfShapes.RoundBox((legBack + plateEnd) / 2f, new Vector3(0.0045f, 0.018f, (Vector3.Distance(legBack, plateEnd) / 2f) + 0.004f), 0.003f, Rot.LookRotation(Vector3.Normalize(plateEnd - legBack), Vector3.UnitY)));
+                for (int i = -1; i <= 1; i += 2)
+                {
+                    var b = new Vector3(memberX, legBack.Y + (i * 0.011f), axle.Z + ForkZ(h0 + (i * 0.011f)) + 0.009f);
+                    bolts.Add(SdfShapes.RoundCone(b, b + new Vector3(0, 0, 0.0055f), 0.0034f, 0.0034f)); // bolt heads on the front of the leg
+                }
+            }
+            else
+            {
+                // Flat-mount pad rising from the chain stay under the outboard half.
+                var under = L(o * 0.0095f, -0.0115f, 0);
+                var stay = new Vector3(memberX, axle.Y + 0.004f, under.Z);
+                mount = SdfShapes.Blend(
+                    0.006f,
+                    SdfShapes.Squashed(SdfShapes.RoundCone(stay, under, 0.012f, 0.0105f), stay, Vector3.UnitX, 0.62f));
+                for (int i = -1; i <= 1; i += 2)
+                {
+                    var b = new Vector3(memberX, axle.Y - 0.009f, under.Z + (i * 0.013f));
+                    bolts.Add(SdfShapes.RoundCone(b, b - new Vector3(0, 0.006f, 0), 0.0032f, 0.0032f)); // bolts from below the stay
+                }
+            }
 
-            var min = Vector3.Min(center, bracketEnd) - new Vector3(0.04f);
-            var max = Vector3.Max(center, bracketEnd) + new Vector3(0.04f);
-            Sculpt(AvatarNode.Bike, SdfShapes.Union(SdfShapes.Blend(0.004f, body, bracket), bolt), min, max, 0.0011f, 1400, blackMat, (bolt, metalMat));
+            var min = center - new Vector3(0.05f);
+            var max = center + new Vector3(0.05f);
+            Sculpt(AvatarNode.Bike, body, min, max, 0.0009f, 2200, blackMat);
+            Sculpt(AvatarNode.Bike, mount, min - new Vector3(0, 0.02f, 0), max, 0.0014f, 700, front ? blackMat : frameMat);
+            Sculpt(AvatarNode.Bike, SdfShapes.Union(bolts.ToArray()), min - new Vector3(0, 0.03f, 0), max, 0.0008f, 300, metalMat);
         }
+
+        private static float SmoothMin(float a, float b, float k) => SdfShapes.SMin(a, b, k);
 
         private static float Box(Vector3 q, Vector3 half, float radius)
         {

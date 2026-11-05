@@ -88,6 +88,8 @@ var cameras = new Dictionary<string, Camera>
     ["brakerear"] = new() { Name = "brakerear", Position = new Vector3(-0.42f, 0.55f, -0.18f), Target = new Vector3(-0.06f, 0.36f, -0.38f), FieldOfView = 34 },
     ["braketop"] = new() { Name = "braketop", Position = new Vector3(-0.12f, 0.75f, -0.3f), Target = new Vector3(-0.06f, 0.34f, -0.4f), FieldOfView = 34 },
     ["forktop"] = new() { Name = "forktop", Position = new Vector3(-0.12f, 0.8f, 0.68f), Target = new Vector3(-0.045f, 0.34f, 0.56f), FieldOfView = 34 },
+    ["calf"] = new() { Name = "calf", Position = new Vector3(-0.26f, 0.45f, 0.42f), Target = new Vector3(-0.05f, 0.39f, 0.51f), FieldOfView = 30 },
+    ["calr"] = new() { Name = "calr", Position = new Vector3(-0.27f, 0.47f, -0.24f), Target = new Vector3(-0.065f, 0.39f, -0.355f), FieldOfView = 30 },
     ["back"] = new() { Name = "back", Position = new Vector3(0, 1.25f, -2.4f), Target = new Vector3(0, 1.0f, 0), FieldOfView = 34 },
 };
 
