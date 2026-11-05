@@ -368,25 +368,20 @@ namespace FreeVelo.Core.Avatar
             float memberX = front ? -0.0565f : -0.0735f;
             if (front)
             {
-                // Flat adapter plate on the outboard side: from the caliper forward onto the side of the fork leg,
-                // bolted there (two bolt heads on the plate).
+                // Flat-mount boss on the back of the fork leg; the caliper sits on it, bolts from the front of the leg.
                 float ForkZ(float h) => -0.002f + ((h - 0.012f) / (0.655f - FrontAxle.Y - 0.012f) * (0.452f - FrontAxle.Z + 0.002f));
                 var leg = Vector3.Normalize(new Vector3(0, 0.655f - FrontAxle.Y - 0.012f, 0.452f - FrontAxle.Z + 0.002f));
-                float h0 = center.Y - axle.Y;
-                var legPoint = new Vector3(axle.X, axle.Y + h0, axle.Z + ForkZ(h0));
-                float plateX = memberX - 0.0055f; // against the outboard face of the leg
-                var from = new Vector3(plateX, center.Y, legPoint.Z - 0.004f);
-                var to = new Vector3(plateX, center.Y, center.Z + 0.006f); // ends under the front edge of the caliper
-                var plateCenter = (from + to) / 2f;
-                var plateRot = Rot.LookRotation(Vector3.UnitX, leg);
-                mount = SdfShapes.Blend(
-                    0.003f,
-                    SdfShapes.RoundBox(plateCenter, new Vector3(0.0022f, 0.017f, (MathF.Abs(to.Z - from.Z) / 2f) + 0.006f), 0.002f, Rot.LookRotation(Vector3.UnitZ, leg)),
-                    SdfShapes.RoundBox(new Vector3(memberX - 0.0015f, center.Y, center.Z + 0.012f), new Vector3(0.007f, 0.02f, 0.008f), 0.003f, Rot.LookRotation(Vector3.UnitZ, leg))); // spacer to the caliper
+                var seat = L(o * 0.0095f, -0.0105f, 0); // front face of the outboard half
+                float h0 = seat.Y - axle.Y;
+                var legPoint = new Vector3(memberX, seat.Y, axle.Z + ForkZ(h0));
+                var seatOnPlane = new Vector3(memberX, seat.Y, seat.Z);
+                var tabCenter = (legPoint + seatOnPlane) / 2f;
+                float tabHalf = (Vector3.Distance(legPoint, seatOnPlane) / 2f) + 0.004f;
+                mount = SdfShapes.RoundBox(tabCenter, new Vector3(0.0048f, 0.019f, tabHalf), 0.0045f, Rot.LookRotation(Vector3.Normalize(seatOnPlane - legPoint), leg)); // mounting tab
                 for (int i = -1; i <= 1; i += 2)
                 {
-                    var b = legPoint + (leg * (i * 0.013f)) + new Vector3(plateX - axle.X - 0.0025f, 0, 0);
-                    bolts.Add(SdfShapes.RoundCone(b, b - new Vector3(0.003f, 0, 0), 0.0034f, 0.0034f)); // bolt heads into the fork leg
+                    var b = legPoint + (leg * (i * 0.011f)) + new Vector3(0, 0, 0.0085f);
+                    bolts.Add(SdfShapes.RoundCone(b, b + new Vector3(0, 0, 0.0045f), 0.003f, 0.003f)); // bolt heads on the front of the leg
                 }
             }
             else
@@ -407,7 +402,7 @@ namespace FreeVelo.Core.Avatar
             var min = center - new Vector3(0.05f);
             var max = center + new Vector3(0.05f);
             Sculpt(AvatarNode.Bike, body, min, max, 0.0009f, 2200, blackMat);
-            Sculpt(AvatarNode.Bike, mount, min - new Vector3(0, 0.02f, 0), max, 0.0014f, 700, front ? blackMat : frameMat);
+            Sculpt(AvatarNode.Bike, mount, min - new Vector3(0, 0.02f, 0), max + new Vector3(0, 0, 0.03f), 0.0012f, 700, frameMat);
             Sculpt(AvatarNode.Bike, SdfShapes.Union(bolts.ToArray()), min - new Vector3(0, 0.03f, 0), max, 0.0008f, 300, metalMat);
         }
 
