@@ -43,6 +43,7 @@ namespace FreeVelo.UI
         private WorkoutTab _workoutTab;
         private float _w;
         private float _h;
+        private Rect _full;
         private readonly PowerZoneModel _zones = PowerZoneModel.Coggan();
         private readonly Dictionary<Workout, (int Ftp, double Tss, IReadOnlyList<WorkoutSegment> Segments)> _workoutInfo =
             new Dictionary<Workout, (int, double, IReadOnlyList<WorkoutSegment>)>();
@@ -63,11 +64,15 @@ namespace FreeVelo.UI
             if (_ble == null || _ride == null) return;
             Theme.Ensure();
 
-            // Height-based scale; narrow (4:3) tablets get at least 1152 units width.
-            float scale = Mathf.Min(Screen.height / RefH, Screen.width / 1152f);
-            _w = Screen.width / scale;
-            _h = Screen.height / scale;
-            GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(scale, scale, 1));
+            // Layout inside the safe area (camera hole, rounded corners); height-based scale, narrow (4:3)
+            // tablets get at least 1152 units width. _full covers the whole screen for backgrounds.
+            var safe = Screen.safeArea;
+            float scale = Mathf.Min(safe.height / RefH, safe.width / 1152f);
+            _w = safe.width / scale;
+            _h = safe.height / scale;
+            float offsetX = safe.x, offsetY = Screen.height - safe.yMax;
+            _full = new Rect(-offsetX / scale, -offsetY / scale, Screen.width / scale, Screen.height / scale);
+            GUI.matrix = Matrix4x4.TRS(new Vector3(offsetX, offsetY, 0), Quaternion.identity, new Vector3(scale, scale, 1));
 
             if (!string.IsNullOrEmpty(WorkoutStore.LastMessage))
             {
@@ -114,8 +119,8 @@ namespace FreeVelo.UI
         {
             // Content background (the home screen leaves the right side to the 3D rider).
             float contentRight = _page == Page.Home ? Mathf.Min(RailW + 660, _w * 0.58f) : _w;
-            Ui.Rect(new Rect(0, 0, contentRight, _h), Theme.Alpha(Theme.Background, 0.9f), 0);
-            if (_page == Page.Home) Ui.Fade(new Rect(contentRight, 0, 160, _h), Theme.Alpha(Theme.Background, 0.9f), 0);
+            Ui.Rect(new Rect(_full.x, _full.y, contentRight - _full.x, _full.height), Theme.Alpha(Theme.Background, 0.9f), 0);
+            if (_page == Page.Home) Ui.Fade(new Rect(contentRight, _full.y, 160, _full.height), Theme.Alpha(Theme.Background, 0.9f), 0);
 
             DrawRail();
             var content = new Rect(RailW + 32, 28, contentRight - RailW - 64, _h - 56);
@@ -130,8 +135,8 @@ namespace FreeVelo.UI
 
         private void DrawRail()
         {
-            Ui.Rect(new Rect(0, 0, RailW, _h), Theme.Background, 0);
-            Ui.Rect(new Rect(RailW - 1, 0, 1, _h), Theme.Stroke, 0);
+            Ui.Rect(new Rect(_full.x, _full.y, RailW - _full.x, _full.height), Theme.Background, 0);
+            Ui.Rect(new Rect(RailW - 1, _full.y, 1, _full.height), Theme.Stroke, 0);
 
             // Logo
             var logo = new Rect((RailW - 56) / 2f, 24, 56, 56);
@@ -743,7 +748,7 @@ namespace FreeVelo.UI
 
         private void DrawEndConfirm()
         {
-            Ui.Rect(new Rect(0, 0, _w, _h), new Color(0, 0, 0, 0.5f), 0);
+            Ui.Rect(_full, new Color(0, 0, 0, 0.5f), 0);
             var r = new Rect((_w - 520) / 2f, (_h - 230) / 2f, 520, 230);
             Ui.Card(r, Theme.Surface, 24);
             GUI.Label(new Rect(r.x + 32, r.y + 28, r.width - 64, 40), L.Get("end_ride_q"), Theme.H2);
@@ -833,7 +838,7 @@ namespace FreeVelo.UI
         private void DrawSummary()
         {
             var s = _ride.Summary;
-            Ui.Rect(new Rect(0, 0, _w, _h), new Color(0, 0, 0, 0.45f), 0);
+            Ui.Rect(_full, new Color(0, 0, 0, 0.45f), 0);
             float cw = Mathf.Min(900, _w - 80);
             int tileCount = s.AvgHeartRate.HasValue ? 7 : 6;
             float contentH = 108 + (((tileCount + 3) / 4) * 92) + 8 + (s.PowerCurve != null && s.PowerCurve.Count > 0 ? 124 : 0) + (s.EstimatedFtpW.HasValue ? 88 : 0) + 104;

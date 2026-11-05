@@ -29,6 +29,13 @@ namespace FreeVelo.App
         private void Awake()
         {
             Application.targetFrameRate = 60;
+
+            // Landscape only (both directions): the interface is laid out for a wide screen.
+            Screen.autorotateToPortrait = false;
+            Screen.autorotateToPortraitUpsideDown = false;
+            Screen.autorotateToLandscapeLeft = true;
+            Screen.autorotateToLandscapeRight = true;
+            Screen.orientation = ScreenOrientation.AutoRotation;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Screen.autorotateToPortrait = false;
             Screen.autorotateToPortraitUpsideDown = false;

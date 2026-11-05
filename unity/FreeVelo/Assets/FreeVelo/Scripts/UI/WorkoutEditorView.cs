@@ -78,7 +78,7 @@ namespace FreeVelo.UI
         {
             var ed = _editor;
             ed.FtpW = AppSettings.FtpW;
-            Ui.Rect(new Rect(0, 0, _w, _h), Theme.Alpha(Theme.Background, 0.94f), 0);
+            Ui.Rect(_full, Theme.Alpha(Theme.Background, 0.94f), 0);
             var area = new Rect(28, 20, _w - 56, _h - 40);
 
             // ---- top bar: close, name, undo/redo, unit, save
@@ -274,7 +274,7 @@ namespace FreeVelo.UI
 
             // 100 % FTP line
             var old = GUI.color;
-            GUI.color = new Color(1, 1, 1, 0.25f);
+            GUI.color = Theme.Out(new Color(1, 1, 1, 0.25f));
             float ftpY = PercentToY(t, 100);
             GUI.DrawTexture(new Rect(t.x + 4, ftpY, t.width - 8, 1), Texture2D.whiteTexture);
             GUI.color = old;
@@ -322,7 +322,7 @@ namespace FreeVelo.UI
                 case FreeRideBlock f:
                 {
                     float top = PercentToY(t, 75);
-                    GUI.color = new Color(0.55f, 0.58f, 0.62f, 0.75f * tint.a);
+                    GUI.color = Theme.Out(new Color(0.55f, 0.58f, 0.62f, 0.75f * tint.a));
                     GUI.DrawTexture(new Rect(rect.x + 1, top, rect.width - 2, t.yMax - 8 - top), Texture2D.whiteTexture);
                     GUI.color = tint;
                     GUI.Label(new Rect(rect.x, top - 26, rect.width, 24), f.IsMaxEffort ? "MAX" : L.Get("free"), TinyCenter);
@@ -341,7 +341,7 @@ namespace FreeVelo.UI
                             case SteadyBlock s: Bar(cx, w, s.Target.ToPercent(ftp), s.Target.ToPercent(ftp)); break;
                             case RampBlock r: Bar(cx, w, r.From.ToPercent(ftp), r.To.ToPercent(ftp)); break;
                             default:
-                                GUI.color = new Color(0.55f, 0.58f, 0.62f, 0.75f * tint.a);
+                                GUI.color = Theme.Out(new Color(0.55f, 0.58f, 0.62f, 0.75f * tint.a));
                                 GUI.DrawTexture(new Rect(cx, PercentToY(t, 75), w - 1, t.yMax - 8 - PercentToY(t, 75)), Texture2D.whiteTexture);
                                 break;
                         }
@@ -349,7 +349,7 @@ namespace FreeVelo.UI
                         cx += w;
                     }
 
-                    GUI.color = new Color(1, 1, 1, 0.8f * tint.a);
+                    GUI.color = Theme.Out(new Color(1, 1, 1, 0.8f * tint.a));
                     GUI.DrawTexture(new Rect(rect.x + 2, t.y + 8, rect.width - 4, 3), Texture2D.whiteTexture);
                     GUI.color = tint;
                     GUI.Label(new Rect(rect.x, t.y + 12, rect.width, 26), $"×{rep.Count}", TinyCenter);
@@ -368,7 +368,7 @@ namespace FreeVelo.UI
                     double pct = fromPct + ((toPct - fromPct) * (i + 0.5) / steps);
                     float top = PercentToY(t, pct);
                     var c = ZoneColor(pct / 100.0 * ftp, ftp);
-                    GUI.color = new Color(c.r, c.g, c.b, tint.a);
+                    GUI.color = Theme.Out(new Color(c.r, c.g, c.b, tint.a));
                     GUI.DrawTexture(new Rect(bx + (i * bw / steps), top, Mathf.Max(1, (bw / steps) - (steps == 1 ? 1 : 0)), t.yMax - 8 - top), Texture2D.whiteTexture);
                 }
 

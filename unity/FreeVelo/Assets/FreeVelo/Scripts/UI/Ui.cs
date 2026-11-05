@@ -67,9 +67,9 @@ namespace FreeVelo.UI
             Field = Style(_medium, 21, Text, TextAnchor.MiddleLeft);
             Field.padding = new RectOffset(16, 16, 0, 0);
             Field.clipping = TextClipping.Clip;
-            Field.focused.textColor = Text;
-            Field.hover.textColor = Text;
-            Field.active.textColor = Text;
+            Field.focused.textColor = Out(Text);
+            Field.hover.textColor = Out(Text);
+            Field.active.textColor = Out(Text);
         }
 
         private static GUIStyle Style(Font font, int size, Color color, TextAnchor anchor, bool wrap = false)
@@ -83,18 +83,29 @@ namespace FreeVelo.UI
                 richText = true,
                 clipping = TextClipping.Overflow,
             };
-            s.normal.textColor = color;
+            s.normal.textColor = Out(color);
             return s;
         }
 
         public static GUIStyle With(GUIStyle style, Color? color = null, int? size = null, TextAnchor? anchor = null)
         {
             var s = new GUIStyle(style);
-            if (color.HasValue) s.normal.textColor = color.Value;
+            if (color.HasValue) s.normal.textColor = Out(color.Value);
             if (size.HasValue) s.fontSize = size.Value;
             if (anchor.HasValue) s.alignment = anchor.Value;
             return s;
         }
+
+        /// <summary>
+        /// On phones with the linear colour space the IMGUI colours end up treated as linear values (the UI looks
+        /// washed out, unlike in the editor), so they are converted there before drawing.
+        /// </summary>
+        public static bool CorrectGamma => _correct ??= Application.isMobilePlatform && !Application.isEditor && QualitySettings.activeColorSpace == ColorSpace.Linear;
+
+        private static bool? _correct;
+
+        /// <summary>Colour as it must be passed to IMGUI on this platform.</summary>
+        public static Color Out(Color c) => CorrectGamma ? new Color(Mathf.GammaToLinearSpace(c.r), Mathf.GammaToLinearSpace(c.g), Mathf.GammaToLinearSpace(c.b), c.a) : c;
 
         public static Color Hex(int rgb, float alpha = 1f) => new Color(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f, alpha);
 
@@ -123,14 +134,14 @@ namespace FreeVelo.UI
         public static void Rect(Rect r, Color color, float radius = Theme.Radius)
         {
             if (Event.current.type != EventType.Repaint) return;
-            GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, color, 0, Mathf.Min(radius, Mathf.Min(r.width, r.height) / 2f));
+            GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, Theme.Out(color), 0, Mathf.Min(radius, Mathf.Min(r.width, r.height) / 2f));
         }
 
         /// <summary>Rounded outline.</summary>
         public static void Outline(Rect r, Color color, float width, float radius = Theme.Radius)
         {
             if (Event.current.type != EventType.Repaint) return;
-            GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, color, width, Mathf.Min(radius, Mathf.Min(r.width, r.height) / 2f));
+            GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0, Theme.Out(color), width, Mathf.Min(radius, Mathf.Min(r.width, r.height) / 2f));
         }
 
         /// <summary>Soft drop shadow under a rounded rectangle.</summary>
@@ -157,7 +168,7 @@ namespace FreeVelo.UI
         {
             if (Event.current.type != EventType.Repaint) return;
             var old = GUI.color;
-            GUI.color = color;
+            GUI.color = Theme.Out(color) * new Color(1, 1, 1, old.a);
             GUI.DrawTexture(r, IconTexture(icon), ScaleMode.ScaleToFit, true);
             GUI.color = old;
         }
@@ -208,7 +219,7 @@ namespace FreeVelo.UI
             }
 
             var old = GUI.color;
-            GUI.color = color;
+            GUI.color = Theme.Out(color);
             if (direction == 0)
             {
                 GUI.DrawTexture(r, _gradient, ScaleMode.StretchToFill, true);
