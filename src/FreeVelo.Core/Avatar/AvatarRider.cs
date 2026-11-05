@@ -59,14 +59,15 @@ namespace FreeVelo.Core.Avatar
 
             var parts = new List<Sdf>
             {
-                Ellipsoid(V(0, 1.085f, -0.2f), V(0.158f, 0.08f, 0.115f), Rot.Euler(-25, 0, 0)), // pelvis
+                Ellipsoid(V(0, 1.08f, -0.195f), V(0.145f, 0.072f, 0.1f), Rot.Euler(-30, 0, 0)), // pelvis
                 Ellipsoid(T(0, -0.005f, 0.17f), V(0.14f, 0.1f, 0.15f), TorsoRot), // abdomen / lower back
+                Ellipsoid(T(0, 0.02f, 0.05f), V(0.145f, 0.092f, 0.11f), TorsoRot), // lumbar: fills the waist above the pelvis
                 Ellipsoid(T(0, 0.005f, 0.35f), V(0.152f, 0.112f, 0.19f), TorsoRot), // ribcage
                 Ellipsoid(T(0, 0.025f, 0.5f), V(0.185f, 0.08f, 0.08f), TorsoRot), // shoulder girdle
             };
             for (int s = -1; s <= 1; s += 2)
             {
-                parts.Add(Ellipsoid(V(s * 0.066f, 1.078f, -0.25f), V(0.074f, 0.068f, 0.07f))); // gluteus
+                parts.Add(Ellipsoid(V(s * 0.06f, 1.055f, -0.235f), V(0.062f, 0.048f, 0.056f), Rot.Euler(-30, 0, 0))); // gluteus (seated: flattened on the saddle)
                 parts.Add(Ellipsoid(T(s * 0.1f, 0.03f, 0.37f), V(0.065f, 0.075f, 0.14f), TorsoRot)); // latissimus
                 parts.Add(Ellipsoid(T(s * 0.065f, -0.07f, 0.45f), V(0.07f, 0.045f, 0.065f), TorsoRot)); // pectoral
             }
@@ -83,19 +84,17 @@ namespace FreeVelo.Core.Avatar
                 upper.Add(RoundCone(T(s * 0.14f, 0.035f, 0.54f), T(0, 0.03f, 0.63f), 0.035f, 0.05f)); // trapezius
                 upper.Add(Ellipsoid(shoulder + (dir * 0.035f) + V(s * 0.012f, 0.012f, 0), V(0.058f, 0.08f, 0.06f), Rot.FromTo(Vector3.UnitY, dir))); // deltoid
                 var hem = shoulder + (arm * 0.55f);
-                sleeves.Add(SmoothIntersect(RoundCone(shoulder, shoulder + (arm * 0.62f), 0.056f, 0.048f), Plane(hem, dir), 0.008f));
+                sleeves.Add(SmoothIntersect(RoundCone(shoulder, shoulder + (arm * 0.62f), 0.057f, 0.053f), Plane(hem, dir), 0.008f));
             }
 
             Sdf body = Blend(0.035f, upper.ToArray());
             foreach (var sleeve in sleeves) body = Blend(0.03f, body, sleeve);
 
-            // Jersey worn over the shorts: a 3 mm lip at the hem, three rear pockets, collar.
-            float hemAlong = 0.08f;
+            // Jersey worn over the shorts: a lip at the hem, collar.
+            float hemAlong = 0.015f;
             var jerseyShell = SmoothIntersect(Grow(body, 0.0025f), Plane(T(0, 0, hemAlong), -SpineDir), 0.006f);
-            var pockets = new List<Sdf>();
-            for (int i = -1; i <= 1; i++) pockets.Add(RoundBox(T(i * 0.066f, 0.08f, 0.14f), V(0.036f, 0.018f, 0.05f), 0.012f, TorsoRot));
             var collar = Torus(T(0, 0.004f, 0.625f), SpineDir, 0.054f, 0.009f);
-            var shape = Union(Blend(0.008f, Union(body, jerseyShell), Union(pockets.ToArray())), collar);
+            var shape = Union(body, jerseyShell, collar);
 
             var regions = new List<(Sdf, AvatarMaterial)>
             {
@@ -140,9 +139,9 @@ namespace FreeVelo.Core.Avatar
 
             var shape = Blend(
                 0.025f,
-                RoundCone(shoulder + (arm * 0.3f), elbow, 0.047f, 0.036f),
-                Ellipsoid(shoulder + (arm * 0.56f) + (inside * 0.014f), V(0.034f, 0.085f, 0.034f), armRot), // biceps
-                Ellipsoid(shoulder + (arm * 0.5f) - (inside * 0.014f), V(0.036f, 0.1f, 0.036f), armRot), // triceps
+                RoundCone(shoulder + (arm * 0.3f), elbow, 0.043f, 0.036f),
+                Ellipsoid(shoulder + (arm * 0.64f) + (inside * 0.012f), V(0.033f, 0.075f, 0.033f), armRot), // biceps
+                Ellipsoid(shoulder + (arm * 0.62f) - (inside * 0.012f), V(0.034f, 0.085f, 0.034f), armRot), // triceps
                 Sphere(elbow - (inside * 0.018f), 0.03f), // olecranon
                 RoundCone(elbow, wrist, 0.037f, 0.025f),
                 Ellipsoid(elbow + (fore * 0.27f) + (lateralUp * 0.01f), V(0.042f, 0.085f, 0.038f), foreRot)); // forearm muscles
@@ -367,11 +366,11 @@ namespace FreeVelo.Core.Avatar
                 float l = ThighLength;
                 var muscles = Blend(
                     0.04f,
-                    RoundCone(V(0, 0, 0), V(0, l, 0), 0.07f, 0.046f),
-                    Sphere(V(0, -0.005f, -0.005f), 0.078f), // hip
+                    RoundCone(V(0, 0, 0), V(0, l, 0), 0.063f, 0.046f),
+                    Sphere(V(0, 0.01f, 0.008f), 0.062f), // hip
                     Ellipsoid(V(0, 0.55f * l, 0.026f), V(0.058f, 0.2f, 0.045f)), // rectus femoris
                     Ellipsoid(V(s * 0.032f, 0.5f * l, 0f), V(0.045f, 0.17f, 0.048f)), // vastus lateralis
-                    Ellipsoid(V(0, 0.45f * l, -0.03f), V(0.055f, 0.17f, 0.042f)), // hamstrings
+                    Ellipsoid(V(0, 0.5f * l, -0.028f), V(0.052f, 0.16f, 0.04f)), // hamstrings
                     Ellipsoid(V(-s * 0.03f, 0.25f * l, 0f), V(0.045f, 0.12f, 0.05f))); // adductors
                 var thigh = Blend(
                     0.02f,

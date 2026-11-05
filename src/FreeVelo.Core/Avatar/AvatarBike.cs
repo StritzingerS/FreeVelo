@@ -17,40 +17,18 @@ namespace FreeVelo.Core.Avatar
             var leverMat = Mat("lever", V(0.24f, 0.25f, 0.27f), 0.7f);
             var bottleMat = Mat("bottle", V(0.92f, 0.92f, 0.9f), 0.4f);
 
-            var frame = B(AvatarNode.Bike, frameMat);
             var seatDir = Vector3.Normalize(SeatCluster - BottomBracket);
+            var downDir = Vector3.Normalize(BottomBracket - HeadBottom);
+            BuildFrame(frameMat, decalMat, seatDir, downDir);
 
-            // Aero frame: elliptical tubes (narrow sideways, deeper in the direction of travel).
-            frame.EllipticTube(HeadTop + V(0, -0.025f, -0.005f), SeatCluster + V(0, -0.015f, 0), R(0.016f, 0.02f), R(0.014f, 0.017f), Side); // top tube
-            frame.EllipticTube(HeadBottom + V(0, 0.03f, -0.01f), BottomBracket + V(0, 0.02f, 0.03f), R(0.022f, 0.032f), R(0.03f, 0.03f), Side); // down tube
-            frame.EllipticTube(BottomBracket + (seatDir * 0.02f), SeatCluster, R(0.018f, 0.024f), R(0.015f, 0.022f), Side); // seat tube
-            frame.EllipticTube(HeadBottom - V(0, 0.01f, -0.003f), HeadTop + V(0, 0.015f, -0.004f), R(0.024f, 0.03f), R(0.02f, 0.025f), Side); // head tube
-            frame.Tube(BottomBracket + V(-0.04f, 0, 0), BottomBracket + V(0.04f, 0, 0), 0.026f, 0.026f, 14); // BB shell
-            var stayTop = BottomBracket + (seatDir * 0.45f);
-            for (int s = -1; s <= 1; s += 2)
-            {
-                frame.EllipticTube(stayTop + V(s * 0.018f, 0, -0.01f), RearAxle + V(s * 0.058f, 0.01f, 0), R(0.008f, 0.012f), R(0.006f, 0.009f), Side); // dropped seat stay
-                frame.EllipticTube(BottomBracket + V(s * 0.035f, 0, -0.03f), RearAxle + V(s * 0.062f, 0, 0), R(0.01f, 0.017f), R(0.007f, 0.011f), Side); // chain stay
-                frame.EllipticTube(V(s * 0.034f, 0.665f, 0.442f), FrontAxle + V(s * 0.052f, 0.01f, 0), R(0.011f, 0.022f), R(0.007f, 0.012f), Side); // fork blade
-                frame.Box(RearAxle + V(s * 0.06f, 0, 0), V(0.012f, 0.05f, 0.04f), Rot.Identity); // dropout
-                frame.Box(FrontAxle + V(s * 0.053f, 0, 0), V(0.01f, 0.04f, 0.035f), Rot.Identity);
-            }
-
-            frame.Sweep(new[] { V(0, 0.655f, 0.448f), V(0, 0.68f, 0.44f) }, new[] { R(0.045f, 0.028f), R(0.035f, 0.025f) }, Side, 14); // fork crown
-
-            // Decal band on the down tube
-            B(AvatarNode.Bike, decalMat).EllipticTube(
-                Vector3.Lerp(HeadBottom, BottomBracket, 0.35f), Vector3.Lerp(HeadBottom, BottomBracket, 0.55f), R(0.0245f, 0.0335f), R(0.0255f, 0.0335f), Side);
-
-            // Seatpost, saddle with rails
+            // Aero seatpost, saddle with rails
             var black = B(AvatarNode.Bike, blackMat);
             var postTop = SeatCluster + (seatDir * 0.16f);
-            black.EllipticTube(SeatCluster - (seatDir * 0.02f), postTop, R(0.012f, 0.019f), R(0.012f, 0.019f), Side);
-            black.Box(postTop + V(0, 0.012f, 0), V(0.04f, 0.02f, 0.06f), Rot.Identity);
-            black.Sweep(
-                new[] { V(0, 0.982f, -0.06f), V(0, 0.986f, -0.11f), V(0, 0.99f, -0.18f), V(0, 0.993f, -0.25f), V(0, 0.99f, -0.3f) },
-                new[] { R(0.015f, 0.01f), R(0.026f, 0.014f), R(0.05f, 0.017f), R(0.07f, 0.019f), R(0.06f, 0.016f) },
-                Side, 14);
+            var saddleMat = Mat("saddle", V(0.05f, 0.05f, 0.055f), 0.45f);
+            var post = SdfShapes.Squashed(SdfShapes.RoundCone(SeatCluster - (seatDir * 0.03f), postTop, 0.019f, 0.019f), Vector3.Zero, Vector3.UnitX, 0.6f);
+            var clamp = SdfShapes.RoundBox(postTop + V(0, 0.012f, 0), V(0.022f, 0.012f, 0.03f), 0.006f);
+            Sculpt(AvatarNode.Bike, SdfShapes.Blend(0.01f, post, clamp), V(-0.04f, 0.74f, -0.24f), V(0.04f, 0.98f, -0.1f), 0.003f, 700, blackMat);
+            BuildSaddle(saddleMat, blackMat);
             var metal = B(AvatarNode.Bike, metalMat);
             for (int s = -1; s <= 1; s += 2)
             {
@@ -78,7 +56,6 @@ namespace FreeVelo.Core.Avatar
             }
 
             // Bottle cage and bottle on the down tube
-            var downDir = Vector3.Normalize(BottomBracket - HeadBottom);
             var normal = Vector3.Normalize(Vector3.Cross(downDir, Vector3.UnitX));
             if (normal.Y < 0) normal = -normal;
             var b0 = Vector3.Lerp(HeadBottom, BottomBracket, 0.62f) + (normal * 0.068f);

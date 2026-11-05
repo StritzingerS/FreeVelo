@@ -21,15 +21,32 @@ namespace FreeVelo.Core.Avatar
             int Idx(int x, int y, int z) => (((z * ny) + y) * nx) + x;
             Vector3 P(int x, int y, int z) => origin + new Vector3(x * cell, y * cell, z * cell);
 
-            for (int z = 0; z < nz; z++)
+            // Coarse pass: blocks far from the surface are filled with one value (only the sign matters there).
+            const int block = 4;
+            float reach = cell * block * 0.87f * 1.6f; // half block diagonal with a safety factor for approximate distances
+            for (int bz = 0; bz < nz; bz += block)
             {
-                for (int y = 0; y < ny; y++)
+                for (int by = 0; by < ny; by += block)
                 {
-                    for (int x = 0; x < nx; x++)
+                    for (int bx = 0; bx < nx; bx += block)
                     {
-                        // Closed surface: force "outside" on the border.
-                        bool border = x == 0 || y == 0 || z == 0 || x == nx - 1 || y == ny - 1 || z == nz - 1;
-                        values[Idx(x, y, z)] = border ? MathF.Max(cell, f(P(x, y, z))) : f(P(x, y, z));
+                        int ex = Math.Min(nx, bx + block), ey = Math.Min(ny, by + block), ez = Math.Min(nz, bz + block);
+                        var center = origin + (new Vector3(bx + ex - 1, by + ey - 1, bz + ez - 1) * (cell / 2f));
+                        float dc = f(center);
+                        bool far = MathF.Abs(dc) > reach;
+                        for (int z = bz; z < ez; z++)
+                        {
+                            for (int y = by; y < ey; y++)
+                            {
+                                for (int x = bx; x < ex; x++)
+                                {
+                                    // Closed surface: force "outside" on the border.
+                                    bool border = x == 0 || y == 0 || z == 0 || x == nx - 1 || y == ny - 1 || z == nz - 1;
+                                    float v = far ? dc : f(P(x, y, z));
+                                    values[Idx(x, y, z)] = border ? MathF.Max(cell, v) : v;
+                                }
+                            }
+                        }
                     }
                 }
             }
