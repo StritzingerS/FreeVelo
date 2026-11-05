@@ -1,3 +1,4 @@
+using System.Linq;
 using FreeVelo.Ble;
 using FreeVelo.Core.World;
 using FreeVelo.Ride;
@@ -52,8 +53,40 @@ namespace FreeVelo.App
                 _camera.tag = "MainCamera";
             }
 
-            _camera.farClipPlane = 2500f;
+            _camera.nearClipPlane = 0.4f;
+            _camera.farClipPlane = 6000f;
             _camera.fieldOfView = 60f;
+
+            SetUpAtmosphere();
+        }
+
+        /// <summary>Sun, ambient light and distance fog (hazy horizon, depth).</summary>
+        private static void SetUpAtmosphere()
+        {
+            var sun = FindObjectsByType<Light>(FindObjectsSortMode.None).FirstOrDefault(l => l.type == LightType.Directional);
+            if (sun == null)
+            {
+                sun = new GameObject("Sun").AddComponent<Light>();
+                sun.type = LightType.Directional;
+            }
+
+            sun.transform.rotation = Quaternion.Euler(36f, 125f, 0f);
+            sun.color = new Color(1f, 0.95f, 0.86f);
+            sun.intensity = 1.3f;
+            sun.shadows = LightShadows.Soft;
+            sun.shadowStrength = 0.75f;
+            RenderSettings.sun = sun;
+
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(0.62f, 0.7f, 0.82f);
+            RenderSettings.ambientEquatorColor = new Color(0.55f, 0.6f, 0.58f);
+            RenderSettings.ambientGroundColor = new Color(0.3f, 0.32f, 0.25f);
+
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogColor = new Color(0.73f, 0.8f, 0.87f);
+            RenderSettings.fogStartDistance = 180f;
+            RenderSettings.fogEndDistance = 3600f;
         }
 
         private void LateUpdate()
@@ -77,7 +110,7 @@ namespace FreeVelo.App
             if (riding)
             {
                 var flatForward = Quaternion.Euler(0, heading, 0) * Vector3.forward;
-                target = position - (flatForward * 6.5f) + (Vector3.up * 2.6f);
+                target = position - (flatForward * 4.6f) + (Vector3.up * 1.9f);
             }
             else
             {
@@ -87,7 +120,7 @@ namespace FreeVelo.App
             }
 
             _camera.transform.position = Vector3.Lerp(_camera.transform.position, target, 1f - Mathf.Exp(-4f * dt));
-            _camera.transform.LookAt(position + (Vector3.up * 1.1f));
+            _camera.transform.LookAt(position + (Vector3.up * 1.05f));
         }
     }
 }
