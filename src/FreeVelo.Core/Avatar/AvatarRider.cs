@@ -254,12 +254,10 @@ namespace FreeVelo.Core.Avatar
                 head,
                 Capsule(V(-0.026f, 0.026f, 0.086f), V(0.026f, 0.026f, 0.086f), 0.009f));
 
-            // Jaw angle and chin: soft but defined contour.
+            // Chin (the jaw line itself comes from the smooth loft).
             head = Blend(
                 0.014f,
                 head,
-                Capsule(V(0.05f, -0.064f, -0.004f), V(0.034f, -0.09f, 0.045f), 0.006f),
-                Capsule(V(-0.05f, -0.064f, -0.004f), V(-0.034f, -0.09f, 0.045f), 0.006f),
                 Ellipsoid(V(0, -0.098f, 0.086f), V(0.018f, 0.012f, 0.01f)));
 
             // Eyes: socket, eyeball set back, upper lid fold.
