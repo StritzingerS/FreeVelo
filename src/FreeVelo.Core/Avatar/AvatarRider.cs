@@ -17,7 +17,7 @@ namespace FreeVelo.Core.Avatar
         private static readonly Vector3 TorsoOrigin = new Vector3(0, 1.09f, -0.19f);
         private static readonly Rot TorsoRot = Rot.LookRotation(SpineDir, DorsalDir);
         private static readonly Vector3 HeadCenter = new Vector3(0, 1.51f, 0.4f); // forward and low, neck reaching forward
-        private static readonly Rot HeadRot = Rot.Euler(-6, 0, 0); // chin slightly up: riders look ahead
+        private static readonly Rot HeadRot = Rot.Euler(12, 0, 0); // looking down at the road ahead
 
         /// <summary>Point in the torso frame: lateral, dorsal (back) offset, distance along the spine.</summary>
         private static Vector3 T(float lateral, float dorsal, float along) => TorsoOrigin + (Vector3.UnitX * lateral) + (DorsalDir * dorsal) + (SpineDir * along);
@@ -247,7 +247,7 @@ namespace FreeVelo.Core.Avatar
                 Ellipsoid(V(-0.0098f, -0.034f, 0.099f), V(0.0072f, 0.0068f, 0.0082f)),
                 Ellipsoid(V(0, -0.0575f, 0.0925f), V(0.0175f, 0.0062f, 0.0062f)), // upper lip
                 Ellipsoid(V(0, -0.07f, 0.0905f), V(0.0155f, 0.0068f, 0.0065f)), // lower lip
-                Ellipsoid(V(0, -0.102f, 0.083f), V(0.017f, 0.012f, 0.009f))); // chin point
+                Ellipsoid(V(0, -0.104f, 0.085f), V(0.02f, 0.012f, 0.009f))); // chin point
 
             head = SmoothSubtract(head, Capsule(V(-0.019f, -0.065f, 0.103f), V(0.019f, -0.065f, 0.103f), 0.0013f), 0.0025f); // mouth line
                         for (int s = -1; s <= 1; s += 2)
@@ -497,8 +497,8 @@ namespace FreeVelo.Core.Avatar
         {
             // y from forehead to under the chin; half width; front depth (face surface without nose/lips); back depth.
             float[] ys = { 0.07f, 0.04f, 0.012f, -0.012f, -0.035f, -0.058f, -0.08f, -0.1f, -0.114f, -0.124f };
-            float[] w = { 0.068f, 0.07f, 0.069f, 0.066f, 0.06f, 0.053f, 0.045f, 0.034f, 0.023f, 0.011f };
-            float[] front = { 0.084f, 0.088f, 0.082f, 0.087f, 0.089f, 0.087f, 0.085f, 0.083f, 0.075f, 0.06f };
+            float[] w = { 0.068f, 0.07f, 0.07f, 0.07f, 0.061f, 0.058f, 0.054f, 0.042f, 0.028f, 0.012f }; // cheekbones, slight hollow, square jaw
+            float[] front = { 0.084f, 0.088f, 0.082f, 0.087f, 0.088f, 0.087f, 0.085f, 0.085f, 0.08f, 0.064f }; // strong chin
             float[] back = { 0.08f, 0.075f, 0.065f, 0.05f, 0.035f, 0.02f, 0.008f, -0.002f, -0.01f, -0.016f };
 
             float Sample(float[] values, float y)
