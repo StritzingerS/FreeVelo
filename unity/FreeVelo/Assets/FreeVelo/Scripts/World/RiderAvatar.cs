@@ -169,11 +169,16 @@ namespace FreeVelo.World
                     new Vector3(s * 0.212f, 0.735f, 0.575f),
                     new Vector3(s * 0.212f, 0.726f, 0.505f),
                 }, 0.0125f, 10);
+                // Shift/brake lever: hood body with the typical bump on top …
                 black.Sweep(
-                    new[] { new Vector3(s * 0.205f, 0.882f, 0.55f), new Vector3(s * 0.205f, 0.905f, 0.575f), new Vector3(s * 0.205f, 0.91f, 0.598f) },
-                    new[] { new Vector2(0.017f, 0.02f), new Vector2(0.019f, 0.024f), new Vector2(0.012f, 0.015f) },
-                    Side, 10); // hood
-                black.Path(new[] { new Vector3(s * 0.205f, 0.895f, 0.6f), new Vector3(s * 0.207f, 0.84f, 0.625f), new Vector3(s * 0.205f, 0.78f, 0.618f) }, 0.006f, 6); // lever
+                    new[] { new Vector3(s * 0.205f, 0.878f, 0.545f), new Vector3(s * 0.205f, 0.893f, 0.565f), new Vector3(s * 0.205f, 0.905f, 0.588f), new Vector3(s * 0.205f, 0.915f, 0.603f), new Vector3(s * 0.205f, 0.912f, 0.615f) },
+                    new[] { new Vector2(0.016f, 0.016f), new Vector2(0.019f, 0.022f), new Vector2(0.018f, 0.022f), new Vector2(0.013f, 0.016f), new Vector2(0.008f, 0.009f) },
+                    Side, 12);
+                // … and the flat lever blade curving down in front of the drop.
+                p.Builder(p.Lever).Sweep(
+                    new[] { new Vector3(s * 0.206f, 0.9f, 0.612f), new Vector3(s * 0.207f, 0.87f, 0.627f), new Vector3(s * 0.208f, 0.83f, 0.634f), new Vector3(s * 0.208f, 0.79f, 0.632f), new Vector3(s * 0.207f, 0.755f, 0.622f) },
+                    new[] { new Vector2(0.008f, 0.011f), new Vector2(0.008f, 0.013f), new Vector2(0.0075f, 0.012f), new Vector2(0.007f, 0.011f), new Vector2(0.006f, 0.009f) },
+                    Side, 8);
             }
 
             // Bottle cage and bottle on the down tube
@@ -302,9 +307,20 @@ namespace FreeVelo.World
             // Body as one continuous line from the saddle to the neck (checked with an offline preview):
             // the lower part in bib shorts forms the seat on the saddle and flows into the back;
             // the jersey starts slightly wider over the shorts, like a real jersey hem.
-            var shortsPath = new[] { new Vector3(0, 1.035f, -0.235f), new Vector3(0, 1.075f, -0.185f), new Vector3(0, 1.125f, -0.125f), new Vector3(0, 1.165f, -0.075f) };
-            var shortsRadii = new[] { new Vector2(0.12f, 0.06f), new Vector2(0.15f, 0.1f), new Vector2(0.145f, 0.105f), new Vector2(0.14f, 0.104f) };
-            p.Builder(p.Shorts).Sweep(shortsPath, shortsRadii, Side, 18);
+            // Pelvis: a horizontal capsule from hip to hip (rounded seat at the back, round hips at the
+            // sides, no edges); the lower torso grows out of it and the thighs leave it at the sides.
+            float[] pelvisX = { -0.155f, -0.147f, -0.128f, -0.09f, -0.04f, 0f, 0.04f, 0.09f, 0.128f, 0.147f, 0.155f };
+            Vector2[] pelvisR =
+            {
+                new Vector2(0.025f, 0.028f), new Vector2(0.058f, 0.062f), new Vector2(0.076f, 0.086f), new Vector2(0.084f, 0.095f),
+                new Vector2(0.086f, 0.098f), new Vector2(0.086f, 0.098f), new Vector2(0.086f, 0.098f), new Vector2(0.084f, 0.095f),
+                new Vector2(0.076f, 0.086f), new Vector2(0.058f, 0.062f), new Vector2(0.025f, 0.028f),
+            };
+            p.Builder(p.Shorts).Sweep(pelvisX.Select(x => new Vector3(x, 1.068f, -0.18f)).ToList(), pelvisR, Vector3.up, 20);
+            p.Builder(p.Shorts).Sweep(
+                new[] { new Vector3(0, 1.09f, -0.17f), new Vector3(0, 1.125f, -0.125f), new Vector3(0, 1.165f, -0.075f) },
+                new[] { new Vector2(0.14f, 0.1f), new Vector2(0.145f, 0.105f), new Vector2(0.14f, 0.104f) },
+                Side, 18);
 
             // Slightly rounded back, broad shoulder line, narrowing into the neck.
             var jerseyPath = new[] { new Vector3(0, 1.15f, -0.095f), new Vector3(0, 1.25f, -0.005f), new Vector3(0, 1.335f, 0.095f), new Vector3(0, 1.39f, 0.18f), new Vector3(0, 1.41f, 0.24f), new Vector3(0, 1.425f, 0.27f) };
@@ -499,6 +515,7 @@ namespace FreeVelo.World
                 Spokes = world.Mat(new Color(0.12f, 0.12f, 0.13f), null, 0.5f);
                 Chain = world.Mat(new Color(0.42f, 0.43f, 0.45f), null, 0.7f);
                 Crank = world.Mat(new Color(0.1f, 0.1f, 0.11f), null, 0.6f);
+                Lever = world.Mat(new Color(0.24f, 0.25f, 0.27f), null, 0.7f);
                 Bottle = world.Mat(new Color(0.92f, 0.92f, 0.9f), null, 0.4f);
                 Jersey = world.Mat(jersey, null, 0.25f);
                 Accent = world.Mat(new Color(0.95f, 0.95f, 0.95f), null, 0.25f);
@@ -530,6 +547,8 @@ namespace FreeVelo.World
             public Material Chain { get; }
 
             public Material Crank { get; }
+
+            public Material Lever { get; }
 
             public Material Bottle { get; }
 
