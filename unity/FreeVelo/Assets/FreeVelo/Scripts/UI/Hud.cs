@@ -12,7 +12,7 @@ namespace FreeVelo.UI
     /// <summary>
     /// First-version user interface (IMGUI, built in code). Laid out on a virtual 1280×720 canvas that is scaled to the screen.
     /// </summary>
-    public sealed class Hud : MonoBehaviour
+    public sealed partial class Hud : MonoBehaviour
     {
         private enum Page
         {
@@ -21,6 +21,7 @@ namespace FreeVelo.UI
             Workouts,
             FtpTests,
             Settings,
+            Editor,
         }
 
         private const float RefW = 1280f;
@@ -40,6 +41,10 @@ namespace FreeVelo.UI
         private GUIStyle _button;
         private GUIStyle _cue;
         private GUIStyle _panel;
+        private GUIStyle _textField;
+        private GUIStyle _paletteLabel;
+        private GUIStyle _tinyCenter;
+        private GUIStyle _labelCenter;
         private readonly PowerZoneModel _zones = PowerZoneModel.Coggan();
         private string _fileMessage;
 
@@ -76,6 +81,10 @@ namespace FreeVelo.UI
                 case Page.Workouts: DrawWorkoutLibrary(); break;
                 case Page.FtpTests: DrawWorkouts(new[] { FtpTests.Create(FtpTestKind.Ramp), FtpTests.Create(FtpTestKind.TwentyMinute), FtpTests.Create(FtpTestKind.TwoByEight) }, L.Get("ftp_tests")); break;
                 case Page.Settings: DrawSettings(); break;
+                case Page.Editor:
+                    if (_editor != null) DrawEditor();
+                    else _page = Page.Workouts;
+                    break;
             }
         }
 
@@ -218,7 +227,7 @@ namespace FreeVelo.UI
             GUILayout.Space(8);
 
             if (_ownTab) DrawOwnWorkouts();
-            else DrawWorkoutGrid(BuiltInWorkouts.All.ToArray());
+            else DrawTemplates();
 
             if (!string.IsNullOrEmpty(WorkoutStore.LastMessage))
             {
@@ -229,33 +238,66 @@ namespace FreeVelo.UI
             GUILayout.EndArea();
         }
 
-        private void DrawWorkoutGrid(Workout[] workouts)
+        /// <summary>Built-in workouts (in the user's edited version where there is one): start, edit, reset.</summary>
+        private void DrawTemplates()
         {
-            const int columns = 2;
-            for (int i = 0; i < workouts.Length; i += columns)
+            var library = WorkoutStore.Library;
+            var templates = library.Templates;
+            const int perPage = 7;
+            int pages = Mathf.Max(1, Mathf.CeilToInt(templates.Count / (float)perPage));
+            _libraryPage = Mathf.Clamp(_libraryPage, 0, pages - 1);
+            foreach (var w in templates.Skip(_libraryPage * perPage).Take(perPage).ToList())
             {
-                GUILayout.BeginHorizontal();
-                for (int c = 0; c < columns; c++)
+                bool modified = library.IsModified(w.Id);
+                GUILayout.BeginHorizontal(GUILayout.Height(56));
+                string mark = modified ? $"  <size=16><color=#ffd34d>✎ {L.Get("modified")}</color></size>" : string.Empty;
+                GUILayout.Label($"{w.Name.Get(AppSettings.Language)}   <size=17>{w.TotalDurationS / 60} {L.Get("min")} · {w.Category}</size>{mark}", _label, GUILayout.ExpandWidth(true));
+                if (GUILayout.Button("▶ " + L.Get("start"), _button, GUILayout.Width(150), GUILayout.Height(50))) _ride.StartRide(w);
+                if (GUILayout.Button("✎ " + L.Get("edit"), _button, GUILayout.Width(150), GUILayout.Height(50))) OpenEditor(w, true);
+                if (modified)
                 {
-                    if (i + c >= workouts.Length)
+                    bool confirming = _confirmReset == w.Id;
+                    if (GUILayout.Button(confirming ? L.Get("confirm_reset") : L.Get("reset_default"), _button, GUILayout.Width(confirming ? 230 : 190), GUILayout.Height(50)))
                     {
-                        GUILayout.FlexibleSpace();
-                        continue;
+                        if (confirming)
+                        {
+                            library.ResetToDefault(w.Id);
+                            WorkoutStore.LastMessage = "✓ " + L.Get("reset_done") + ": " + w.Name.Get(AppSettings.Language);
+                            _confirmReset = null;
+                        }
+                        else
+                        {
+                            _confirmReset = w.Id;
+                        }
                     }
-
-                    var w = workouts[i + c];
-                    string text = $"{w.Name.Get(AppSettings.Language)}\n<size=17>{w.TotalDurationS / 60} {L.Get("min")} · {w.Category}</size>";
-                    if (GUILayout.Button(text, _button, GUILayout.Height(workouts.Length > 6 ? 70 : 100))) _ride.StartRide(w);
+                }
+                else
+                {
+                    GUILayout.Space(194);
                 }
 
                 GUILayout.EndHorizontal();
             }
+
+            if (pages > 1)
+            {
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("◀", _button, GUILayout.Width(80), GUILayout.Height(50))) _libraryPage--;
+                GUILayout.Label($"{L.Get("page")} {_libraryPage + 1}/{pages}", _label, GUILayout.Width(160));
+                if (GUILayout.Button("▶", _button, GUILayout.Width(80), GUILayout.Height(50))) _libraryPage++;
+                GUILayout.EndHorizontal();
+            }
         }
+
+        private string _confirmReset;
 
         private void DrawOwnWorkouts()
         {
             var library = WorkoutStore.Library;
-            if (GUILayout.Button("＋ " + L.Get("import") + " (.zwo / .erg / .mrc)", _button, GUILayout.Height(56))) WorkoutStore.PickFiles();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("＋ " + L.Get("new_workout"), _button, GUILayout.Height(56))) OpenEditor(null, false);
+            if (GUILayout.Button("⤓ " + L.Get("import") + " (.zwo / .erg / .mrc)", _button, GUILayout.Height(56))) WorkoutStore.PickFiles();
+            GUILayout.EndHorizontal();
             GUILayout.Space(6);
 
             var workouts = library.Workouts;
@@ -272,6 +314,7 @@ namespace FreeVelo.UI
                 GUILayout.BeginHorizontal(GUILayout.Height(58));
                 GUILayout.Label($"{w.Name.Get(AppSettings.Language)}   <size=17>{w.TotalDurationS / 60} {L.Get("min")}</size>", _label, GUILayout.ExpandWidth(true));
                 if (GUILayout.Button("▶ " + L.Get("start"), _button, GUILayout.Width(150), GUILayout.Height(52))) _ride.StartRide(w);
+                if (GUILayout.Button("✎ " + L.Get("edit"), _button, GUILayout.Width(150), GUILayout.Height(52))) OpenEditor(w, false);
                 if (GUILayout.Button(L.Get("share_workout"), _button, GUILayout.Width(150), GUILayout.Height(52))) WorkoutStore.Share(w);
                 bool confirming = _confirmDelete == w.Id;
                 if (GUILayout.Button(confirming ? L.Get("confirm_delete") : L.Get("delete"), _button, GUILayout.Width(confirming ? 230 : 150), GUILayout.Height(52)))
@@ -571,6 +614,10 @@ namespace FreeVelo.UI
             _tileValue = new GUIStyle(_label) { fontSize = 36, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             _button = new GUIStyle(GUI.skin.button) { fontSize = 24, richText = true, wordWrap = true };
             _cue = new GUIStyle(_label) { fontSize = 46, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            _textField = new GUIStyle(GUI.skin.textField) { fontSize = 24, alignment = TextAnchor.MiddleLeft };
+            _paletteLabel = new GUIStyle(_label) { fontSize = 20, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(0.08f, 0.08f, 0.1f) } };
+            _tinyCenter = new GUIStyle(_label) { fontSize = 15, alignment = TextAnchor.MiddleCenter, wordWrap = false };
+            _labelCenter = new GUIStyle(_label) { alignment = TextAnchor.MiddleCenter };
         }
     }
 }

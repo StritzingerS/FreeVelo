@@ -41,6 +41,9 @@ namespace FreeVelo.Core.Workouts
             }
         }
 
+        /// <summary>Independent deep copy (via the lossless FreeVelo format).</summary>
+        public static Workout Clone(Workout workout) => FromZwo(ToZwo(workout), workout.Id);
+
         // ------------------------------------------------------------------ ZWO
 
         public static Workout FromZwo(string xml, string id)
