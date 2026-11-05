@@ -7,10 +7,16 @@ using FreeVelo.ModelPreview;
 // Usage: dotnet run -c Release -- out.png [crankDegrees] [views: game,side,rear34,front34,face,drive,cockpit,top]
 if (args.Length > 1 && args[0] == "--bake")
 {
-    var baked = AvatarModel.Build().Serialize();
-    File.WriteAllBytes(args[1], baked);
-    var check = AvatarModel.Deserialize(baked);
-    Console.WriteLine($"baked {check.TriangleCount} triangles, {baked.Length / 1024} KiB -> {args[1]}");
+    // args[1] = Resources folder: high detail and a low-detail LOD for distant riders.
+    foreach (var (file, detail) in new[] { ("FreeVeloAvatar.bytes", 1f), ("FreeVeloAvatarLow.bytes", 0.3f) })
+    {
+        var baked = AvatarModel.Build(detail: detail).Serialize();
+        var path = Path.Combine(args[1], file);
+        File.WriteAllBytes(path, baked);
+        var check = AvatarModel.Deserialize(baked);
+        Console.WriteLine($"baked {check.TriangleCount} triangles, {baked.Length / 1024} KiB -> {path}");
+    }
+
     return;
 }
 
@@ -19,9 +25,10 @@ float crank = args.Length > 1 ? float.Parse(args[1], System.Globalization.Cultur
 string[] wanted = args.Length > 2 ? args[2].Split(',') : new[] { "game", "side", "rear34", "front34", "face", "drive" };
 
 var sw = Stopwatch.StartNew();
+float previewDetail = float.Parse(Environment.GetEnvironmentVariable("FREEVELO_DETAIL") ?? "1", System.Globalization.CultureInfo.InvariantCulture);
 var model = File.Exists(Environment.GetEnvironmentVariable("FREEVELO_BAKED") ?? "")
     ? AvatarModel.Deserialize(File.ReadAllBytes(Environment.GetEnvironmentVariable("FREEVELO_BAKED")!))
-    : AvatarModel.Build();
+    : AvatarModel.Build(detail: previewDetail);
 var pose = AvatarModel.Pose(crank, 37f);
 var meshes = new List<SceneMesh>();
 foreach (var part in model.Parts)
@@ -55,6 +62,8 @@ var cameras = new Dictionary<string, Camera>
     ["top"] = new() { Name = "top", Position = new Vector3(0.01f, 3.4f, 0.1f), Target = new Vector3(0, 0.8f, 0.05f), FieldOfView = 34 },
     ["hipside"] = new() { Name = "hipside", Position = new Vector3(-1.9f, 1.0f, -0.05f), Target = new Vector3(0, 0.98f, -0.05f), FieldOfView = 30 },
     ["hipback"] = new() { Name = "hipback", Position = new Vector3(-0.9f, 1.25f, -1.5f), Target = new Vector3(0, 1.0f, -0.15f), FieldOfView = 30 },
+    ["chain"] = new() { Name = "chain", Position = new Vector3(0.62f, 0.45f, -0.12f), Target = new Vector3(0.06f, 0.3f, -0.2f), FieldOfView = 45 },
+    ["rd"] = new() { Name = "rd", Position = new Vector3(0.38f, 0.3f, -0.3f), Target = new Vector3(0.07f, 0.28f, -0.39f), FieldOfView = 40 },
     ["back"] = new() { Name = "back", Position = new Vector3(0, 1.25f, -2.4f), Target = new Vector3(0, 1.0f, 0), FieldOfView = 34 },
 };
 

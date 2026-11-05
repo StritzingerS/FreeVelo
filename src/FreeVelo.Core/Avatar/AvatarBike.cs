@@ -68,49 +68,13 @@ namespace FreeVelo.Core.Avatar
             black.Path(new[] { b0 + (bottleDir * 0.02f) - (normal * 0.03f), b0 + (bottleDir * 0.02f) + (normal * 0.005f) }, 0.004f, 5);
             black.Path(new[] { b0 + (bottleDir * 0.16f) - (normal * 0.03f), b0 + (bottleDir * 0.16f) + (normal * 0.005f) }, 0.004f, 5);
 
-            // Brake calipers (flat mount), thru-axle ends
-            black.Box(FrontAxle + V(-0.058f, 0.07f, -0.045f), V(0.022f, 0.045f, 0.06f), Rot.Euler(-35, 0, 0));
-            black.Box(RearAxle + V(-0.058f, 0.045f, 0.06f), V(0.022f, 0.045f, 0.06f), Rot.Euler(25, 0, 0));
+            // Thru-axle ends
             metal.Tube(FrontAxle + V(-0.07f, 0, 0), FrontAxle + V(0.07f, 0, 0), 0.008f, 0.008f, 8);
             metal.Tube(RearAxle + V(-0.075f, 0, 0), RearAxle + V(0.075f, 0, 0), 0.008f, 0.008f, 8);
 
-            // Drivetrain: chain, front and rear derailleur
-            var chain = B(AvatarNode.Bike, chainMat);
-            chain.Tube(BottomBracket + V(0.068f, 0.098f, -0.005f), RearAxle + V(0.068f, 0.048f, 0), 0.0045f, 0.0045f, 5);
-            chain.Tube(BottomBracket + V(0.068f, -0.098f, -0.005f), RearAxle + V(0.07f, -0.095f, 0.03f), 0.0045f, 0.0045f, 5);
-            var fd = BottomBracket + (seatDir * 0.155f) + V(0.035f, 0, -0.005f);
-            black.Box(fd, V(0.025f, 0.03f, 0.06f), Rot.LookRotation(Vector3.Cross(Vector3.UnitX, seatDir), seatDir));
-            black.Box(RearAxle + V(0.072f, -0.035f, 0.005f), V(0.016f, 0.05f, 0.03f), Rot.Euler(10, 0, 0));
-            black.Box(RearAxle + V(0.078f, -0.075f, 0.015f), V(0.008f, 0.075f, 0.024f), Rot.Euler(-12, 0, 0));
-            metal.Torus(RearAxle + V(0.071f, -0.045f, 0.01f), Vector3.UnitX, 0.012f, 0.004f, 0.003f, 12, 5);
-            metal.Torus(RearAxle + V(0.071f, -0.1f, 0.025f), Vector3.UnitX, 0.012f, 0.004f, 0.003f, 12, 5);
-
+            BuildDrivetrain(blackMat, metalMat, chainMat, crankMat, seatDir);
             BuildWheel(AvatarNode.RearWheel, rear: true);
             BuildWheel(AvatarNode.FrontWheel, rear: false);
-
-            // Crankset (local to the bottom bracket): right arm up at angle 0, left arm opposite.
-            var crank = B(AvatarNode.Crankset, crankMat);
-            crank.Tube(V(-0.09f, 0, 0), V(0.09f, 0, 0), 0.012f, 0.012f, 10);
-            crank.Sweep(new[] { V(0.088f, -0.015f, 0), V(0.09f, CrankLength * 0.5f, 0), V(0.09f, CrankLength + 0.012f, 0) }, new[] { R(0.009f, 0.02f), R(0.008f, 0.015f), R(0.008f, 0.012f) }, Side, 8);
-            crank.Sweep(new[] { V(-0.088f, 0.015f, 0), V(-0.09f, -CrankLength * 0.5f, 0), V(-0.09f, -CrankLength - 0.012f, 0) }, new[] { R(0.009f, 0.02f), R(0.008f, 0.015f), R(0.008f, 0.012f) }, Side, 8);
-            for (int i = 0; i < 4; i++)
-            {
-                float a = (i * MathF.PI / 2f) + 0.4f;
-                crank.EllipticTube(V(0.075f, 0, 0), V(0.072f, MathF.Cos(a) * 0.075f, MathF.Sin(a) * 0.075f), R(0.004f, 0.012f), R(0.004f, 0.008f), Side, 6);
-            }
-
-            var rings = B(AvatarNode.Crankset, chainMat);
-            rings.Torus(V(0.07f, 0, 0), Vector3.UnitX, 0.098f, 0.009f, 0.0025f, 48, 6);
-            rings.Torus(V(0.064f, 0, 0), Vector3.UnitX, 0.072f, 0.008f, 0.0025f, 40, 6);
-
-            // Pedals (local to the pedal axle)
-            for (int side = 0; side < 2; side++)
-            {
-                var node = side == 0 ? AvatarNode.PedalRight : AvatarNode.PedalLeft;
-                float sx = side == 0 ? 1f : -1f;
-                B(node, blackMat).Sweep(new[] { V(0, 0, -0.04f), V(0, 0.002f, 0), V(0, 0, 0.045f) }, new[] { R(0.032f, 0.008f), R(0.036f, 0.01f), R(0.03f, 0.007f) }, Side, 8);
-                B(node, metalMat).Tube(V(-sx * 0.045f, 0, 0), Vector3.Zero, 0.006f, 0.006f, 6);
-            }
         }
 
         private void BuildWheel(AvatarNode node, bool rear)
@@ -144,11 +108,6 @@ namespace FreeVelo.Core.Avatar
             {
                 float a = i * MathF.PI / 3f;
                 metal.Tube(V(-0.05f, MathF.Cos(a) * 0.018f, MathF.Sin(a) * 0.018f), V(-0.05f, MathF.Cos(a + 0.3f) * 0.062f, MathF.Sin(a + 0.3f) * 0.062f), 0.003f, 0.003f, 4, false);
-            }
-
-            if (rear)
-            {
-                for (int i = 0; i < 6; i++) metal.Torus(V(0.042f + (i * 0.0045f), 0, 0), Vector3.UnitX, 0.05f - (i * 0.0055f), 0.006f, 0.0015f, 28, 4);
             }
         }
     }

@@ -33,15 +33,32 @@ namespace FreeVelo.World
             if (custom != null) avatar.UseCustomBike(custom);
 
             var style = new AvatarStyle { Jersey = new Num.Vector3(jersey.r, jersey.g, jersey.b) };
-            var model = LoadModel(style, includeBike: custom == null);
-            avatar.BuildMeshes(world, model);
+            var materials = new Dictionary<string, Material>();
+            var high = LoadModel("FreeVeloAvatar", style, includeBike: custom == null) ?? AvatarModel.Build(style, custom == null, detail: 0.6f);
+            var highRenderers = avatar.BuildMeshes(world, high, materials, "LOD0");
+
+            // Low-detail version for riders further away (if baked).
+            var low = LoadModel("FreeVeloAvatarLow", style, includeBike: custom == null);
+            if (low != null)
+            {
+                var lowRenderers = avatar.BuildMeshes(world, low, materials, "LOD1");
+                var group = root.AddComponent<LODGroup>();
+                group.SetLODs(new[]
+                {
+                    new LOD(0.3f, highRenderers.ToArray()),
+                    new LOD(0.004f, lowRenderers.ToArray()),
+                });
+                group.RecalculateBounds();
+            }
+
             avatar.Animate(0, 0, 0);
             return avatar;
         }
 
-        private static AvatarModel LoadModel(AvatarStyle style, bool includeBike)
+        /// <summary>Loads a baked avatar from Resources (null if missing or unreadable).</summary>
+        private static AvatarModel LoadModel(string resource, AvatarStyle style, bool includeBike)
         {
-            var baked = Resources.Load<TextAsset>("FreeVeloAvatar");
+            var baked = Resources.Load<TextAsset>(resource);
             if (baked != null)
             {
                 try
@@ -54,8 +71,8 @@ namespace FreeVelo.World
                 }
             }
 
-            // Fallback: sculpt at runtime (takes a few seconds).
-            return AvatarModel.Build(style, includeBike, detail: 0.6f);
+            // Caller falls back to sculpting at runtime (takes a few seconds).
+            return null;
         }
 
         /// <summary>Turns wheels and cranks and moves the legs. Call every frame.</summary>
@@ -82,9 +99,9 @@ namespace FreeVelo.World
             }
         }
 
-        private void BuildMeshes(WorldBuilder world, AvatarModel model)
+        private List<Renderer> BuildMeshes(WorldBuilder world, AvatarModel model, Dictionary<string, Material> materials, string lodName)
         {
-            var materials = new Dictionary<string, Material>();
+            var renderers = new List<Renderer>();
             foreach (var part in model.Parts)
             {
                 if (!_nodes.TryGetValue(part.Node, out var node))
@@ -107,12 +124,15 @@ namespace FreeVelo.World
                     materials[part.Material.Id] = material;
                 }
 
-                var go = new GameObject(part.Material.Id);
+                var go = new GameObject(lodName + "_" + part.Material.Id);
                 go.transform.SetParent(node, false);
                 go.AddComponent<MeshFilter>().sharedMesh = ToMesh(part.Mesh, part.Node + "_" + part.Material.Id);
                 var renderer = go.AddComponent<MeshRenderer>();
                 renderer.sharedMaterial = material;
+                renderers.Add(renderer);
             }
+
+            return renderers;
         }
 
         private static Mesh ToMesh(MeshData data, string name)
