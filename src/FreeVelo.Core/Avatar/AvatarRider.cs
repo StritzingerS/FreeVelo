@@ -12,11 +12,11 @@ namespace FreeVelo.Core.Avatar
     public sealed partial class AvatarModel
     {
         // Torso frame: along the spine (pelvis → neck), dorsal direction, lateral = x.
-        private static readonly Vector3 SpineDir = Vector3.Normalize(new Vector3(0, 0.33f, 0.43f));
+        private static readonly Vector3 SpineDir = Vector3.Normalize(new Vector3(0, 0.3f, 0.45f)); // ~34° torso angle
         private static readonly Vector3 DorsalDir = new Vector3(0, SpineDir.Z, -SpineDir.Y);
         private static readonly Vector3 TorsoOrigin = new Vector3(0, 1.09f, -0.19f);
         private static readonly Rot TorsoRot = Rot.LookRotation(SpineDir, DorsalDir);
-        private static readonly Vector3 HeadCenter = new Vector3(0, 1.54f, 0.37f);
+        private static readonly Vector3 HeadCenter = new Vector3(0, 1.51f, 0.4f); // forward and low, neck reaching forward
         private static readonly Rot HeadRot = Rot.Euler(8, 0, 0);
 
         /// <summary>Point in the torso frame: lateral, dorsal (back) offset, distance along the spine.</summary>
@@ -275,7 +275,7 @@ namespace FreeVelo.Core.Avatar
                 return MathF.Max(MathF.Min(MathF.Min(backAndTop, nape), above), notEars);
             };
 
-            Sculpt(AvatarNode.Rider, Transformed(head, HeadCenter, HeadRot), V(-0.11f, 1.36f, 0.17f), V(0.11f, 1.67f, 0.5f), 0.003f, 4500, skin, (hairRegion, hair));
+            Sculpt(AvatarNode.Rider, Transformed(head, HeadCenter, HeadRot), V(-0.11f, 1.33f, 0.17f), V(0.11f, 1.65f, 0.56f), 0.003f, 4500, skin, (hairRegion, hair));
         }
 
         private Sdf HelmetOuter()
@@ -346,7 +346,7 @@ namespace FreeVelo.Core.Avatar
                 return MathF.Abs(MathF.Abs(q.X) - 0.083f + (q.Y * 0.25f)) - 0.007f;
             };
 
-            Sculpt(AvatarNode.Rider, Transformed(helmet, HeadCenter, HeadRot), V(-0.13f, 1.44f, 0.18f), V(0.13f, 1.7f, 0.56f), 0.003f, 4500, shell, (stripe, accent), (innerRegion, inner));
+            Sculpt(AvatarNode.Rider, Transformed(helmet, HeadCenter, HeadRot), V(-0.13f, 1.4f, 0.2f), V(0.13f, 1.68f, 0.6f), 0.003f, 4500, shell, (stripe, accent), (innerRegion, inner));
 
             // Straps and retention cradle.
             var straps = new List<Sdf>();
@@ -362,7 +362,7 @@ namespace FreeVelo.Core.Avatar
             // Fit dial at the back of the retention cradle.
             var dial = V(0, -0.05f, -0.112f);
             straps.Add(q => SmoothMax(new Vector2(q.X - dial.X, q.Y - dial.Y).Length() - 0.012f, MathF.Abs(q.Z - dial.Z) - 0.007f, 0.003f));
-            Sculpt(AvatarNode.Rider, Transformed(Union(straps.ToArray()), HeadCenter, HeadRot), V(-0.12f, 1.36f, 0.2f), V(0.12f, 1.62f, 0.52f), 0.0022f, 700, black);
+            Sculpt(AvatarNode.Rider, Transformed(Union(straps.ToArray()), HeadCenter, HeadRot), V(-0.12f, 1.33f, 0.22f), V(0.12f, 1.6f, 0.56f), 0.0022f, 700, black);
         }
 
         private void BuildGlasses()
@@ -384,7 +384,7 @@ namespace FreeVelo.Core.Avatar
                 return MathF.Min(0.0305f - q.Y, 0.033f - q.Z);
             };
 
-            Sculpt(AvatarNode.Rider, Transformed(Union(parts.ToArray()), HeadCenter, HeadRot), V(-0.11f, 1.48f, 0.3f), V(0.11f, 1.62f, 0.52f), 0.0018f, 900, lens, (frameRegion, black));
+            Sculpt(AvatarNode.Rider, Transformed(Union(parts.ToArray()), HeadCenter, HeadRot), V(-0.11f, 1.45f, 0.33f), V(0.11f, 1.6f, 0.56f), 0.0018f, 900, lens, (frameRegion, black));
         }
 
         // ------------------------------------------------------------------ legs and shoes

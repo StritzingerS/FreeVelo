@@ -125,7 +125,7 @@ namespace FreeVelo.Core.Avatar
         public const float ThighLength = 0.46f;
         public const float ShinLength = 0.45f;
         public static readonly Vector3 Hip = new Vector3(0.085f, 1.06f, -0.185f);
-        public static readonly Vector3 Shoulder = new Vector3(0.15f, 1.385f, 0.245f);
+        public static readonly Vector3 Shoulder = new Vector3(0.15f, 1.37f, 0.262f);
         public static readonly Vector3 Hand = new Vector3(0.205f, 0.91f, 0.555f);
 
         /// <summary>Ankle relative to the cleat (pedal axle) in the foot frame.</summary>
