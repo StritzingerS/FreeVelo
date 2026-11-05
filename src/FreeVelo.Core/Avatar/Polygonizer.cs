@@ -212,7 +212,26 @@ namespace FreeVelo.Core.Avatar
                 {
                     long key = u < v ? ((long)u << 32) | (uint)v : ((long)v << 32) | (uint)u;
                     if (cuts.TryGetValue(key, out int k)) return k;
+                    // Root of the region function on the edge: secant start, then bisection on the real
+                    // function (region functions are not linear, e.g. "behind a plane and near a tube").
+                    float lo = 0f, hi = 1f, flo = values[u];
                     float t = values[u] / (values[u] - values[v]);
+                    for (int it = 0; it < 24; it++)
+                    {
+                        float ft = f(Vector3.Lerp(pos[u], pos[v], t));
+                        if ((ft < 0) == (flo < 0))
+                        {
+                            lo = t;
+                        }
+                        else
+                        {
+                            hi = t;
+                        }
+
+                        if (hi - lo < 1e-5f) break;
+                        t = (lo + hi) / 2f;
+                    }
+
                     k = pos.Count;
                     pos.Add(Vector3.Lerp(pos[u], pos[v], t));
                     nrm.Add(Vector3.Normalize(Vector3.Lerp(nrm[u], nrm[v], t)));
