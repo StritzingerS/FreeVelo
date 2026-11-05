@@ -5,12 +5,23 @@ using FreeVelo.ModelPreview;
 
 // Renders the procedural rider/bike (exactly the geometry Unity uses) from several cameras into one PNG.
 // Usage: dotnet run -c Release -- out.png [crankDegrees] [views: game,side,rear34,front34,face,drive,cockpit,top]
+if (args.Length > 1 && args[0] == "--bake")
+{
+    var baked = AvatarModel.Build().Serialize();
+    File.WriteAllBytes(args[1], baked);
+    var check = AvatarModel.Deserialize(baked);
+    Console.WriteLine($"baked {check.TriangleCount} triangles, {baked.Length / 1024} KiB -> {args[1]}");
+    return;
+}
+
 string output = args.Length > 0 ? args[0] : "avatar.png";
 float crank = args.Length > 1 ? float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 110f;
 string[] wanted = args.Length > 2 ? args[2].Split(',') : new[] { "game", "side", "rear34", "front34", "face", "drive" };
 
 var sw = Stopwatch.StartNew();
-var model = AvatarModel.Build();
+var model = File.Exists(Environment.GetEnvironmentVariable("FREEVELO_BAKED") ?? "")
+    ? AvatarModel.Deserialize(File.ReadAllBytes(Environment.GetEnvironmentVariable("FREEVELO_BAKED")!))
+    : AvatarModel.Build();
 var pose = AvatarModel.Pose(crank, 37f);
 var meshes = new List<SceneMesh>();
 foreach (var part in model.Parts)

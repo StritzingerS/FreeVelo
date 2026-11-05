@@ -7,7 +7,7 @@ namespace FreeVelo.Core.Avatar
 {
     /// <summary>
     /// The rider, sculpted from blended signed-distance shapes (muscles, pelvis, ribcage …) and meshed by the
-    /// polygonizer. Static upper body on the Rider node; legs are bones moved by <see cref="Pose"/>.
+    /// polygonizer. Static upper body on the Rider node; legs are bones moved by <see cref="Pose(float, float)"/>.
     /// </summary>
     public sealed partial class AvatarModel
     {

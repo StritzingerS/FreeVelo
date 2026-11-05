@@ -102,7 +102,7 @@ namespace FreeVelo.Core.Avatar
 
     /// <summary>
     /// Procedural rider on a road bike, independent of any engine: Unity converts the parts into meshes and
-    /// applies <see cref="Pose"/> every frame; the preview tool renders the same data.
+    /// applies <see cref="Pose(float, float)"/> every frame; the preview tool renders the same data.
     /// Coordinates: x = right, y = up, z = forward (Unity); origin on the ground below the bottom bracket.
     /// </summary>
     public sealed partial class AvatarModel
@@ -206,16 +206,17 @@ namespace FreeVelo.Core.Avatar
         /// <summary>
         /// Node poses for a crank angle (right crank: 0° = up, 90° = forward) and wheel rotation (degrees).
         /// </summary>
-        public static Dictionary<AvatarNode, NodePose> Pose(float crankDegrees, float wheelDegrees)
+        public static Dictionary<AvatarNode, NodePose> Pose(float crankDegrees, float wheelDegrees) =>
+            Pose(crankDegrees, wheelDegrees, new Dictionary<AvatarNode, NodePose>());
+
+        /// <summary>Same as <see cref="Pose(float, float)"/>, filling an existing dictionary (no allocation per frame).</summary>
+        public static Dictionary<AvatarNode, NodePose> Pose(float crankDegrees, float wheelDegrees, Dictionary<AvatarNode, NodePose> pose)
         {
-            var pose = new Dictionary<AvatarNode, NodePose>
-            {
-                [AvatarNode.Bike] = new NodePose(Vector3.Zero, Rot.Identity),
-                [AvatarNode.Rider] = new NodePose(Vector3.Zero, Rot.Identity),
-                [AvatarNode.FrontWheel] = new NodePose(FrontAxle, Rot.AngleAxis(wheelDegrees, Vector3.UnitX)),
-                [AvatarNode.RearWheel] = new NodePose(RearAxle, Rot.AngleAxis(wheelDegrees, Vector3.UnitX)),
-                [AvatarNode.Crankset] = new NodePose(BottomBracket, Rot.AngleAxis(crankDegrees, Vector3.UnitX)),
-            };
+            pose[AvatarNode.Bike] = new NodePose(Vector3.Zero, Rot.Identity);
+            pose[AvatarNode.Rider] = new NodePose(Vector3.Zero, Rot.Identity);
+            pose[AvatarNode.FrontWheel] = new NodePose(FrontAxle, Rot.AngleAxis(wheelDegrees, Vector3.UnitX));
+            pose[AvatarNode.RearWheel] = new NodePose(RearAxle, Rot.AngleAxis(wheelDegrees, Vector3.UnitX));
+            pose[AvatarNode.Crankset] = new NodePose(BottomBracket, Rot.AngleAxis(crankDegrees, Vector3.UnitX));
 
             for (int side = 0; side < 2; side++)
             {

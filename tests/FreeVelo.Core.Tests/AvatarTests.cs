@@ -59,10 +59,52 @@ public class RotTests
 
 public class AvatarModelTests
 {
+    private static readonly Lazy<AvatarModel> Model = new(() => AvatarModel.Build());
+
+    [Fact]
+    public void BakedModelRoundTripsAndAppliesStyle()
+    {
+        var model = Model.Value;
+        var data = model.Serialize();
+        var style = new AvatarStyle { Jersey = new Vector3(1, 0, 0) };
+        var loaded = AvatarModel.Deserialize(data, style);
+        Assert.Equal(model.TriangleCount, loaded.TriangleCount);
+        Assert.Equal(new Vector3(1, 0, 0), loaded.Parts.First(p => p.Material.Id == "jersey").Material.Color);
+
+        var withoutBike = AvatarModel.Deserialize(data, style, includeBike: false);
+        Assert.DoesNotContain(withoutBike.Parts, p => AvatarModel.IsBikeNode(p.Node));
+        Assert.Contains(withoutBike.Parts, p => p.Node == AvatarNode.ThighLeft);
+
+        // Positions survive the 16-bit quantisation within 0.1 mm.
+        var a = model.Parts.First(p => p.Node == AvatarNode.Rider && p.Material.Id == "skin").Mesh.Vertices;
+        var b = loaded.Parts.First(p => p.Node == AvatarNode.Rider && p.Material.Id == "skin").Mesh.Vertices;
+        for (int i = 0; i < a.Count; i += 97) Assert.True(Vector3.Distance(a[i], b[i]) < 1e-4f);
+    }
+
+    [Fact]
+    public void SculptedMeshesAreClosedAndFaceOutwards()
+    {
+        var mesh = Polygonizer.Mesh(SdfShapes.RoundCone(Vector3.Zero, new Vector3(0.1f, 0.3f, 0.2f), 0.05f, 0.03f), new Vector3(-0.1f), new Vector3(0.2f, 0.4f, 0.3f), 0.01f);
+        mesh = Decimator.Simplify(mesh, 800, 0.003f);
+        var edges = new HashSet<(int, int)>();
+        for (int i = 0; i < mesh.Triangles.Count; i += 3)
+        {
+            int a = mesh.Triangles[i], b = mesh.Triangles[i + 1], c = mesh.Triangles[i + 2];
+            Assert.True(edges.Add((a, b)) && edges.Add((b, c)) && edges.Add((c, a)), "edge used twice in the same direction");
+            var n = Vector3.Cross(mesh.Vertices[b] - mesh.Vertices[a], mesh.Vertices[c] - mesh.Vertices[a]);
+            var centroid = (mesh.Vertices[a] + mesh.Vertices[b] + mesh.Vertices[c]) / 3f;
+            var g = Polygonizer.Gradient(SdfShapes.RoundCone(Vector3.Zero, new Vector3(0.1f, 0.3f, 0.2f), 0.05f, 0.03f), centroid, 0.001f);
+            Assert.True(Vector3.Dot(n, g) > 0, "triangle faces inwards");
+        }
+
+        foreach (var (a, b) in edges) Assert.Contains((b, a), edges); // closed
+        Assert.InRange(mesh.TriangleCount, 700, 900);
+    }
+
     [Fact]
     public void BuildsAllNodesWithOutwardFacingGeometry()
     {
-        var model = AvatarModel.Build();
+        var model = Model.Value;
         var nodes = model.Parts.Select(p => p.Node).Distinct().ToHashSet();
         foreach (AvatarNode n in Enum.GetValues<AvatarNode>()) Assert.Contains(n, nodes);
         Assert.InRange(model.TriangleCount, 10_000, 400_000);
