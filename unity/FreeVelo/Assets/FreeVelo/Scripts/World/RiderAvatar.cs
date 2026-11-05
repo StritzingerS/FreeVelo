@@ -299,62 +299,29 @@ namespace FreeVelo.World
 
         private void BuildRider(Palette p)
         {
-            // Torso along a rounded back: bib shorts (pelvis → waist) and jersey (waist → shoulders).
-            var spine = new[]
-            {
-                new Vector3(0, 1.085f, -0.19f),
-                new Vector3(0, 1.145f, -0.125f),
-                new Vector3(0, 1.225f, -0.03f),
-                new Vector3(0, 1.31f, 0.09f),
-                new Vector3(0, 1.385f, 0.21f),
-                new Vector3(0, 1.43f, 0.27f),
-            };
-            var torsoRadii = new[]
-            {
-                new Vector2(0.148f, 0.11f),
-                new Vector2(0.138f, 0.105f),
-                new Vector2(0.148f, 0.115f),
-                new Vector2(0.168f, 0.12f),
-                new Vector2(0.178f, 0.105f),
-                new Vector2(0.085f, 0.07f),
-            };
-            p.Builder(p.Shorts).Sweep(new[] { spine[0], spine[1] }, new[] { torsoRadii[0], torsoRadii[1] }, Side, 16, true, false);
-            // Pelvis/seat as one smooth shape swept from back to front (bib shorts): wide, flat,
-            // resting on the saddle; the lower torso and the thigh tops start inside it (no seams).
-            p.Builder(p.Shorts).Sweep(
-                new[]
-                {
-                    new Vector3(0, 1.075f, -0.315f),
-                    new Vector3(0, 1.07f, -0.29f),
-                    new Vector3(0, 1.07f, -0.245f),
-                    new Vector3(0, 1.075f, -0.19f),
-                    new Vector3(0, 1.08f, -0.13f),
-                    new Vector3(0, 1.08f, -0.085f),
-                },
-                new[]
-                {
-                    new Vector2(0.07f, 0.035f),
-                    new Vector2(0.115f, 0.06f),
-                    new Vector2(0.145f, 0.078f),
-                    new Vector2(0.152f, 0.082f),
-                    new Vector2(0.14f, 0.075f),
-                    new Vector2(0.1f, 0.05f),
-                },
-                Side, 18);
-            p.Builder(p.Jersey).Sweep(spine.Skip(1).ToList(), torsoRadii.Skip(1).ToList(), Side, 16, false, true);
+            // Body as one continuous line from the saddle to the neck (checked with an offline preview):
+            // the lower part in bib shorts forms the seat on the saddle and flows into the back;
+            // the jersey starts slightly wider over the shorts, like a real jersey hem.
+            var shortsPath = new[] { new Vector3(0, 1.035f, -0.235f), new Vector3(0, 1.075f, -0.185f), new Vector3(0, 1.125f, -0.125f), new Vector3(0, 1.165f, -0.075f) };
+            var shortsRadii = new[] { new Vector2(0.12f, 0.06f), new Vector2(0.15f, 0.1f), new Vector2(0.145f, 0.105f), new Vector2(0.14f, 0.104f) };
+            p.Builder(p.Shorts).Sweep(shortsPath, shortsRadii, Side, 18);
+
+            var jerseyPath = new[] { new Vector3(0, 1.15f, -0.095f), new Vector3(0, 1.23f, 0f), new Vector3(0, 1.31f, 0.1f), new Vector3(0, 1.375f, 0.2f), new Vector3(0, 1.425f, 0.265f) };
+            var jerseyRadii = new[] { new Vector2(0.146f, 0.11f), new Vector2(0.15f, 0.113f), new Vector2(0.165f, 0.112f), new Vector2(0.172f, 0.1f), new Vector2(0.09f, 0.07f) };
+            p.Builder(p.Jersey).Sweep(jerseyPath, jerseyRadii, Side, 18);
             p.Builder(p.Accent).Sweep(
-                new[] { Vector3.Lerp(spine[2], spine[3], 0.45f), Vector3.Lerp(spine[2], spine[3], 0.7f) },
-                new[] { Vector2.Lerp(torsoRadii[2], torsoRadii[3], 0.45f) * 1.025f, Vector2.Lerp(torsoRadii[2], torsoRadii[3], 0.7f) * 1.025f },
-                Side, 16, false, false); // chest band
+                new[] { Vector3.Lerp(jerseyPath[1], jerseyPath[2], 0.45f), Vector3.Lerp(jerseyPath[1], jerseyPath[2], 0.7f) },
+                new[] { Vector2.Lerp(jerseyRadii[1], jerseyRadii[2], 0.45f) * 1.025f, Vector2.Lerp(jerseyRadii[1], jerseyRadii[2], 0.7f) * 1.025f },
+                Side, 18, false, false); // chest band
             for (int s = -1; s <= 1; s += 2)
             {
-                p.Builder(p.Jersey).Ellipsoid(new Vector3(s * 0.16f, 1.385f, 0.235f), new Vector3(0.065f, 0.06f, 0.07f), Quaternion.identity, 12, 8); // shoulder
+                p.Builder(p.Jersey).Ellipsoid(new Vector3(s * 0.15f, 1.372f, 0.232f), new Vector3(0.055f, 0.05f, 0.062f), Quaternion.identity, 12, 8); // shoulder
             }
 
             // Neck and head
             var skin = p.Builder(p.Skin);
-            skin.Sweep(new[] { new Vector3(0, 1.4f, 0.25f), new Vector3(0, 1.46f, 0.31f), new Vector3(0, 1.505f, 0.345f) }, new[] { new Vector2(0.055f, 0.05f), new Vector2(0.047f, 0.045f), new Vector2(0.045f, 0.042f) }, Side, 12, false, false);
-            var headCenter = new Vector3(0, 1.555f, 0.375f);
+            skin.Sweep(new[] { new Vector3(0, 1.395f, 0.245f), new Vector3(0, 1.45f, 0.3f), new Vector3(0, 1.49f, 0.335f) }, new[] { new Vector2(0.065f, 0.058f), new Vector2(0.056f, 0.052f), new Vector2(0.05f, 0.047f) }, Side, 12, false, false);
+            var headCenter = new Vector3(0, 1.54f, 0.37f);
             skin.Ellipsoid(headCenter, new Vector3(0.08f, 0.098f, 0.104f), Quaternion.Euler(15, 0, 0), 16, 10);
             skin.Ellipsoid(headCenter + new Vector3(0, -0.05f, 0.045f), new Vector3(0.058f, 0.045f, 0.058f), Quaternion.Euler(10, 0, 0), 12, 8); // jaw
             skin.Ellipsoid(headCenter + new Vector3(0, -0.01f, 0.103f), new Vector3(0.012f, 0.02f, 0.016f), Quaternion.Euler(-20, 0, 0), 8, 6); // nose
