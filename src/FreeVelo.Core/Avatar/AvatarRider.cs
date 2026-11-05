@@ -45,7 +45,7 @@ namespace FreeVelo.Core.Avatar
         {
             shoulder = V(s * Shoulder.X, Shoulder.Y, Shoulder.Z);
             var hand = V(s * Hand.X, Hand.Y, Hand.Z);
-            elbow = SolveJoint(shoulder, hand, 0.3f, 0.31f, V(s * 0.6f, -1f, 0f));
+            elbow = SolveJoint(shoulder, hand, 0.3f, 0.31f, V(s * 0.3f, -1f, 0f)); // elbows only slightly out
             wrist = elbow + ((hand - elbow) * 0.84f);
         }
 
@@ -83,9 +83,9 @@ namespace FreeVelo.Core.Avatar
                 var arm = elbow - shoulder;
                 var dir = Vector3.Normalize(arm);
                 upper.Add(RoundCone(T(s * 0.14f, 0.035f, 0.54f), T(0, 0.03f, 0.63f), 0.035f, 0.05f)); // trapezius
-                upper.Add(Ellipsoid(shoulder + (dir * 0.035f) + V(s * 0.012f, 0.012f, 0), V(0.058f, 0.08f, 0.06f), Rot.FromTo(Vector3.UnitY, dir))); // deltoid
+                upper.Add(Ellipsoid(shoulder + (dir * 0.035f) + V(s * 0.012f, 0.012f, 0), V(0.054f, 0.078f, 0.056f), Rot.FromTo(Vector3.UnitY, dir))); // deltoid
                 var hem = shoulder + (arm * 0.55f);
-                sleeves.Add(SmoothIntersect(RoundCone(shoulder, shoulder + (arm * 0.62f), 0.057f, 0.053f), Plane(hem, dir), 0.008f));
+                sleeves.Add(SmoothIntersect(RoundCone(shoulder, shoulder + (arm * 0.62f), 0.052f, 0.047f), Plane(hem, dir), 0.008f));
             }
 
             Sdf body = Blend(0.035f, upper.ToArray());
@@ -167,12 +167,12 @@ namespace FreeVelo.Core.Avatar
 
             var shape = Blend(
                 0.025f,
-                RoundCone(shoulder + (arm * 0.3f), elbow, 0.043f, 0.036f),
-                Ellipsoid(shoulder + (arm * 0.64f) + (inside * 0.012f), V(0.033f, 0.075f, 0.033f), armRot), // biceps
-                Ellipsoid(shoulder + (arm * 0.62f) - (inside * 0.012f), V(0.034f, 0.085f, 0.034f), armRot), // triceps
+                RoundCone(shoulder + (arm * 0.3f), elbow, 0.039f, 0.034f),
+                Ellipsoid(shoulder + (arm * 0.64f) + (inside * 0.01f), V(0.029f, 0.07f, 0.029f), armRot), // biceps
+                Ellipsoid(shoulder + (arm * 0.62f) - (inside * 0.01f), V(0.03f, 0.08f, 0.03f), armRot), // triceps
                 Sphere(elbow - (inside * 0.018f), 0.03f), // olecranon
-                RoundCone(elbow, wrist, 0.037f, 0.025f),
-                Ellipsoid(elbow + (fore * 0.27f) + (lateralUp * 0.01f), V(0.042f, 0.085f, 0.038f), foreRot)); // forearm muscles
+                RoundCone(elbow, wrist, 0.034f, 0.024f),
+                Ellipsoid(elbow + (fore * 0.27f) + (lateralUp * 0.008f), V(0.037f, 0.08f, 0.033f), foreRot)); // forearm muscles
 
             var min = Vector3.Min(Vector3.Min(shoulder, elbow), wrist) - new Vector3(0.08f);
             var max = Vector3.Max(Vector3.Max(shoulder, elbow), wrist) + new Vector3(0.08f);
@@ -325,6 +325,18 @@ namespace FreeVelo.Core.Avatar
                     float y = p.Y - 0.065f;
                     return MathF.Sqrt((x * x) + (y * y)) - 0.009f + (p.Z < 0.06f ? 1f : 0f);
                 }, 0.004f);
+            }
+
+            // Rear vents: slots across the back of the shell.
+            for (int i = -1; i <= 1; i++)
+            {
+                float xc = i * 0.03f;
+                helmet = SmoothSubtract(helmet, p =>
+                {
+                    float x = MathF.Max(MathF.Abs(p.X - xc) - 0.008f, 0f);
+                    float y = p.Y - 0.035f + (MathF.Abs(i) * 0.008f);
+                    return MathF.Sqrt((x * x) + (y * y)) - 0.0065f + (p.Z > -0.09f ? 1f : 0f);
+                }, 0.003f);
             }
 
             Sdf innerRegion = p => outer(HeadRot.Transposed * (p - HeadCenter)) + 0.0035f;
