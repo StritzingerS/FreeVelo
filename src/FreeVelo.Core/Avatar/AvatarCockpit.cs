@@ -112,16 +112,31 @@ namespace FreeVelo.Core.Avatar
             {
                 for (int k = -1; k <= 1; k += 2)
                 {
-                    var bolt = steerer + new Vector3(s * 0.009f, k * 0.0085f, -0.0225f);
-                    bolts.Add(RoundCone(bolt, bolt - new Vector3(0, 0, 0.003f), 0.0028f, 0.0028f)); // clamp bolts at the back
-                    var face = BarClamp + new Vector3(s * 0.012f, k * 0.011f, 0.018f);
-                    bolts.Add(RoundCone(face, face + new Vector3(0, 0, 0.003f), 0.003f, 0.003f));
+                    var bolt = steerer + new Vector3(s * 0.009f, k * 0.0085f, -0.0262f);
+                    bolts.Add(HexBolt(bolt, -Vector3.UnitZ, 0.004f, 0.0016f)); // clamp bolts at the back
+                    var face = BarClamp + new Vector3(s * 0.012f, k * 0.011f, 0.015f);
+                    bolts.Add(HexBolt(face, Vector3.UnitZ, 0.004f, 0.0018f)); // faceplate
                 }
             }
 
             var top = steerer + new Vector3(0, 0.0236f, 0.001f);
-            bolts.Add(RoundCone(top, top + new Vector3(0, 0.002f, 0), 0.0045f, 0.0045f));
-            Sculpt(AvatarNode.Bike, Union(bolts.ToArray()), V(-0.035f, 0.84f, 0.36f), V(0.035f, 0.9f, 0.51f), 0.0007f, 700, metalMat);
+            bolts.Add(HexBolt(top - new Vector3(0, 0.0006f, 0), Vector3.UnitY, 0.005f, 0.0012f)); // top cap
+            Sculpt(AvatarNode.Bike, Union(bolts.ToArray()), V(-0.03f, 0.84f, 0.345f), V(0.03f, 0.895f, 0.51f), 0.0005f, 900, metalMat);
+        }
+
+        /// <summary>Small hex bolt head: base at <paramref name="c"/> (just inside the surface), extending along <paramref name="axis"/>.</summary>
+        internal static Sdf HexBolt(Vector3 c, Vector3 axis, float acrossFlats, float height)
+        {
+            var n = Vector3.Normalize(axis);
+            MeshBuilder.Basis(n, out var u, out var w);
+            return p =>
+            {
+                var d = p - c;
+                float a = Vector3.Dot(d, n);
+                float hex = HexDistance(Vector3.Dot(d, u), Vector3.Dot(d, w)) - (acrossFlats / 2f) + 0.0002f;
+                float slab = MathF.Abs(a - (height / 2f)) - (height / 2f) + 0.0002f;
+                return new Vector2(MathF.Max(hex, 0f), MathF.Max(slab, 0f)).Length() + MathF.Min(MathF.Max(hex, slab), 0f) - 0.0002f;
+            };
         }
 
         private static float RoundedBox2(Vector3 q, Vector3 half, float radius)

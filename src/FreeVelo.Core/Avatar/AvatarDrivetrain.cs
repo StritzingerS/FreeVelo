@@ -384,7 +384,7 @@ namespace FreeVelo.Core.Avatar
                 for (int i = -1; i <= 1; i += 2)
                 {
                     var b = legPoint + (leg * (i * 0.011f)) + new Vector3(0, 0, 0.0085f);
-                    bolts.Add(SdfShapes.RoundCone(b, b + new Vector3(0, 0, 0.0045f), 0.003f, 0.003f)); // bolt heads on the front of the leg
+                    bolts.Add(HexBolt(b + new Vector3(0, 0, 0.0005f), Vector3.UnitZ, 0.005f, 0.0018f)); // hex bolt heads on the front of the leg
                 }
             }
             else
@@ -398,7 +398,7 @@ namespace FreeVelo.Core.Avatar
                 for (int i = -1; i <= 1; i += 2)
                 {
                     var b = new Vector3(memberX, axle.Y - 0.009f, under.Z + (i * 0.013f));
-                    bolts.Add(SdfShapes.RoundCone(b, b - new Vector3(0, 0.006f, 0), 0.0032f, 0.0032f)); // bolts from below the stay
+                    bolts.Add(HexBolt(b - new Vector3(0, 0.003f, 0), -Vector3.UnitY, 0.005f, 0.002f)); // hex bolts from below the stay
                 }
             }
 
