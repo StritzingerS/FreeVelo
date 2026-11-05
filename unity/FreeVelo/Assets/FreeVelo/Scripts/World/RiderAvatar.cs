@@ -319,13 +319,28 @@ namespace FreeVelo.World
                 new Vector2(0.085f, 0.07f),
             };
             p.Builder(p.Shorts).Sweep(new[] { spine[0], spine[1] }, new[] { torsoRadii[0], torsoRadii[1] }, Side, 16, true, false);
-            // Pelvis resting on the saddle and two rounded glutes behind the hip joints (bib shorts).
-            var shorts = p.Builder(p.Shorts);
-            shorts.Ellipsoid(new Vector3(0, 1.075f, -0.19f), new Vector3(0.15f, 0.075f, 0.12f), Quaternion.identity, 16, 10);
-            for (int s = -1; s <= 1; s += 2)
-            {
-                shorts.Ellipsoid(new Vector3(s * 0.068f, 1.068f, -0.245f), new Vector3(0.08f, 0.075f, 0.088f), Quaternion.Euler(-20, s * -10, 0), 14, 10);
-            }
+            // Pelvis/seat as one smooth shape swept from back to front (bib shorts): wide, flat,
+            // resting on the saddle; the lower torso and the thigh tops start inside it (no seams).
+            p.Builder(p.Shorts).Sweep(
+                new[]
+                {
+                    new Vector3(0, 1.075f, -0.315f),
+                    new Vector3(0, 1.07f, -0.29f),
+                    new Vector3(0, 1.07f, -0.245f),
+                    new Vector3(0, 1.075f, -0.19f),
+                    new Vector3(0, 1.08f, -0.13f),
+                    new Vector3(0, 1.08f, -0.085f),
+                },
+                new[]
+                {
+                    new Vector2(0.07f, 0.035f),
+                    new Vector2(0.115f, 0.06f),
+                    new Vector2(0.145f, 0.078f),
+                    new Vector2(0.152f, 0.082f),
+                    new Vector2(0.14f, 0.075f),
+                    new Vector2(0.1f, 0.05f),
+                },
+                Side, 18);
             p.Builder(p.Jersey).Sweep(spine.Skip(1).ToList(), torsoRadii.Skip(1).ToList(), Side, 16, false, true);
             p.Builder(p.Accent).Sweep(
                 new[] { Vector3.Lerp(spine[2], spine[3], 0.45f), Vector3.Lerp(spine[2], spine[3], 0.7f) },
@@ -412,8 +427,8 @@ namespace FreeVelo.World
             var bone = NewBone("Thigh");
             float l = ThighLength;
             p.Builder(p.Shorts).Sweep(
-                new[] { new Vector3(0, -0.02f, -0.01f), new Vector3(0, l * 0.15f, 0.005f), new Vector3(0, l * 0.5f, 0.01f), new Vector3(0, l * 0.78f, 0.005f) },
-                new[] { new Vector2(0.078f, 0.084f), new Vector2(0.076f, 0.083f), new Vector2(0.066f, 0.072f), new Vector2(0.057f, 0.06f) },
+                new[] { new Vector3(0, -0.06f, -0.015f), new Vector3(0, -0.01f, -0.005f), new Vector3(0, l * 0.15f, 0.005f), new Vector3(0, l * 0.5f, 0.01f), new Vector3(0, l * 0.78f, 0.005f) },
+                new[] { new Vector2(0.06f, 0.065f), new Vector2(0.08f, 0.086f), new Vector2(0.076f, 0.083f), new Vector2(0.066f, 0.072f), new Vector2(0.057f, 0.06f) },
                 Side, 14);
             p.Builder(p.Skin).Sweep(
                 new[] { new Vector3(0, l * 0.77f, 0.005f), new Vector3(0, l * 0.92f, 0f), new Vector3(0, l + 0.01f, 0f) },
