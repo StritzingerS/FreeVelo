@@ -14,8 +14,8 @@ namespace FreeVelo.UI
         public static readonly Color Surface3 = Hex(0x2B3542);
         public static readonly Color Stroke = Hex(0x323D4B);
         public static readonly Color Text = Hex(0xF3F6F9);
-        public static readonly Color Muted = Hex(0x97A4B2);
-        public static readonly Color Faint = Hex(0x5E6B79);
+        public static readonly Color Muted = Hex(0xB3BECA);
+        public static readonly Color Faint = Hex(0x76828F);
         public static readonly Color Accent = Hex(0xFF6A2B);
         public static readonly Color AccentDark = Hex(0xD9541C);
         public static readonly Color Success = Hex(0x35C97D);
@@ -60,8 +60,8 @@ namespace FreeVelo.UI
             H2 = Style(_semiBold, 24, Text, TextAnchor.MiddleLeft);
             H3 = Style(_semiBold, 20, Text, TextAnchor.MiddleLeft);
             Body = Style(_regular, 19, Text, TextAnchor.MiddleLeft, wrap: true);
-            BodyMuted = Style(_regular, 17, Muted, TextAnchor.MiddleLeft, wrap: true);
-            Caption = Style(_medium, 15, Muted, TextAnchor.MiddleLeft);
+            BodyMuted = Style(_medium, 17, Muted, TextAnchor.MiddleLeft, wrap: true);
+            Caption = Style(_medium, 16, Muted, TextAnchor.MiddleLeft);
             Overline = Style(_semiBold, 13, Muted, TextAnchor.MiddleLeft);
             ButtonText = Style(_semiBold, 19, Text, TextAnchor.MiddleCenter);
             Field = Style(_medium, 21, Text, TextAnchor.MiddleLeft);
@@ -374,7 +374,7 @@ namespace FreeVelo.UI
             if (hasLarge) right -= (b * 1.25f) + 6;
             if (Button(new Rect(right - b, r.y, b, b), null, ButtonKind.Secondary, Icon.ChevronRight)) value += small;
             var mid = new Rect(x + b + 6, r.y, right - b - 6 - (x + b + 6), b);
-            GUI.Label(mid, $"{value} <color=#97A4B2><size=16>{unit}</size></color>", Theme.With(Theme.H2, anchor: TextAnchor.MiddleCenter));
+            GUI.Label(mid, $"{value} <color=#B3BECA><size=16>{unit}</size></color>", Theme.With(Theme.H2, anchor: TextAnchor.MiddleCenter));
             return Mathf.Clamp(value, min, max);
         }
 

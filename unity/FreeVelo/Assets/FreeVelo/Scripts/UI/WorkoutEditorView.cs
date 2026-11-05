@@ -27,6 +27,9 @@ namespace FreeVelo.UI
         }
 
         private WorkoutEditor _editor;
+        private int _statsFrame = -1;
+        private double _statsTss;
+        private bool _statsDirty;
         private bool _editingBuiltIn;
         private string _editorName;
         private string _editorMessage;
@@ -78,6 +81,15 @@ namespace FreeVelo.UI
         {
             var ed = _editor;
             ed.FtpW = AppSettings.FtpW;
+
+            // TSS and the unsaved state need the whole workout: once per frame, not for every input event.
+            if (_statsFrame != Time.frameCount)
+            {
+                _statsFrame = Time.frameCount;
+                _statsTss = ed.EstimatedTss();
+                _statsDirty = ed.IsDirty;
+            }
+
             Ui.Rect(_full, Theme.Alpha(Theme.Background, 0.94f), 0);
             var area = new Rect(28, 20, _w - 56, _h - 40);
 
@@ -126,9 +138,9 @@ namespace FreeVelo.UI
             y += 66;
             float cx = x;
             cx += Ui.Chip(new Rect(cx, y, 0, 32), Ui.Clock(ed.Workout.TotalDurationS), Theme.Info, Icon.Timer) + 8;
-            cx += Ui.Chip(new Rect(cx, y, 0, 32), $"TSS {ed.EstimatedTss():0}", Theme.Accent, Icon.Bolt) + 8;
+            cx += Ui.Chip(new Rect(cx, y, 0, 32), $"TSS {_statsTss:0}", Theme.Accent, Icon.Bolt) + 8;
             cx += Ui.Chip(new Rect(cx, y, 0, 32), $"FTP {ed.FtpW} W", Theme.Muted) + 8;
-            if (ed.IsDirty) Ui.Chip(new Rect(cx, y, 0, 32), L.Get("unsaved"), Theme.Warning, Icon.Edit);
+            if (_statsDirty) Ui.Chip(new Rect(cx, y, 0, 32), L.Get("unsaved"), Theme.Warning, Icon.Edit);
             if (!string.IsNullOrEmpty(_editorMessage))
             {
                 Ui.Toast(_editorMessage);
@@ -246,7 +258,7 @@ namespace FreeVelo.UI
             else
             {
                 GUI.Label(new Rect(r.x, r.y + 6, r.width, 26), title, Theme.With(Theme.H3, textColor, 19, TextAnchor.MiddleCenter));
-                GUI.Label(new Rect(r.x, r.y + 32, r.width, 20), sub, Theme.With(Theme.Caption, Theme.Alpha(textColor, 0.75f), 14, TextAnchor.MiddleCenter));
+                GUI.Label(new Rect(r.x, r.y + 32, r.width, 20), sub, Theme.With(Theme.Caption, textColor, 15, TextAnchor.MiddleCenter));
             }
         }
 
@@ -254,7 +266,7 @@ namespace FreeVelo.UI
 
         private float SecondsPerPx(Rect timeline)
         {
-            if (_gesture == Gesture.Duration || _gesture == Gesture.Power || _gesture == Gesture.PowerRampEnd) return _gestureSecondsPerPx;
+            if ((_gesture == Gesture.Duration || _gesture == Gesture.Power || _gesture == Gesture.PowerRampEnd) && _gestureSecondsPerPx > 0) return _gestureSecondsPerPx;
             int total = Mathf.Max(60, _editor.Blocks.Sum(BlockSeconds));
             return total / (timeline.width - 20);
         }
@@ -362,7 +374,7 @@ namespace FreeVelo.UI
 
             void Bar(float bx, float bw, double fromPct, double toPct)
             {
-                int steps = Mathf.Abs((float)(toPct - fromPct)) < 0.5 ? 1 : Mathf.Max(1, Mathf.CeilToInt(bw / 5));
+                int steps = Mathf.Abs((float)(toPct - fromPct)) < 0.5 || !(bw < 100000) ? 1 : Mathf.Clamp(Mathf.CeilToInt(bw / 5), 1, 400);
                 for (int i = 0; i < steps; i++)
                 {
                     double pct = fromPct + ((toPct - fromPct) * (i + 0.5) / steps);
@@ -497,10 +509,12 @@ namespace FreeVelo.UI
         private void StartEdgeGesture(Gesture kind, Rect timeline, Vector2 p)
         {
             var ed = _editor;
+
+            // Freeze the scale first: SecondsPerPx returns the frozen value once the gesture is active.
+            _gestureSecondsPerPx = SecondsPerPx(timeline);
             _gesture = kind;
             _gestureIndex = ed.Selected;
             _gestureStart = p;
-            _gestureSecondsPerPx = SecondsPerPx(timeline);
             switch (ed.SelectedBlock)
             {
                 case TimedBlock tb when kind == Gesture.Duration: _gestureValue = tb.DurationS; break;

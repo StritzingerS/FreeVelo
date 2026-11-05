@@ -678,7 +678,7 @@ namespace FreeVelo.UI
             }
 
             GUI.Label(new Rect(p.x, p.y + 10, p.width, 18), L.Get("power").ToUpperInvariant(), Theme.With(Theme.Overline, anchor: TextAnchor.MiddleCenter));
-            GUI.Label(new Rect(p.x, p.y + 26, p.width, 70), $"{_ride.Power3s:0}<size=24><color=#97A4B2> W</color></size>", Theme.With(Theme.Display, powerColor, 60));
+            GUI.Label(new Rect(p.x, p.y + 26, p.width, 70), $"{_ride.Power3s:0}<size=24><color=#B3BECA> W</color></size>", Theme.With(Theme.Display, powerColor, 60));
             string sub = workout && state.TargetW.HasValue ? $"{L.Get("target")} {state.TargetW} W" : $"{_ride.Power3s / Mathf.Max(1f, AppSettings.RiderWeightKg):0.0} W/kg";
             GUI.Label(new Rect(p.x, p.yMax - 32, p.width, 22), sub, Theme.With(Theme.Caption, anchor: TextAnchor.MiddleCenter));
 
@@ -735,7 +735,7 @@ namespace FreeVelo.UI
         private static void Metric(Rect r, Icon icon, string label, string value, string unit, Color iconColor)
         {
             Ui.DrawIcon(new Rect(r.center.x - 10, r.y + 16, 20, 20), icon, iconColor);
-            string v = unit != null ? $"{value}<size=16><color=#97A4B2> {unit}</color></size>" : value;
+            string v = unit != null ? $"{value}<size=16><color=#B3BECA> {unit}</color></size>" : value;
             GUI.Label(new Rect(r.x, r.y + 40, r.width, 56), v, Theme.With(Theme.Value, anchor: TextAnchor.MiddleCenter));
         }
 
@@ -779,7 +779,7 @@ namespace FreeVelo.UI
                 {
                     var zc = ZoneColor(state.TargetW.Value, ftp);
                     Ui.Rect(new Rect(card.x + 22, card.y + 46, 8, 40), zc, 4);
-                    GUI.Label(new Rect(card.x + 40, card.y + 42, card.width - 60, 48), $"{state.TargetW} W <size=18><color=#97A4B2>{state.TargetW.Value * 100.0 / ftp:0} %</color></size>", Theme.With(Theme.H1, size: 34));
+                    GUI.Label(new Rect(card.x + 40, card.y + 42, card.width - 60, 48), $"{state.TargetW} W <size=18><color=#B3BECA>{state.TargetW.Value * 100.0 / ftp:0} %</color></size>", Theme.With(Theme.H1, size: 34));
                 }
                 else
                 {
@@ -900,7 +900,7 @@ namespace FreeVelo.UI
                 var f = new Rect(x, y, w, 72);
                 Ui.Rect(f, Theme.Alpha(Theme.Accent, 0.14f), Theme.RadiusSmall);
                 Ui.DrawIcon(new Rect(f.x + 18, f.center.y - 14, 28, 28), Icon.Target, Theme.Accent);
-                GUI.Label(new Rect(f.x + 60, f.y, w - 300, f.height), $"{L.Get("new_ftp")}: <b>{s.EstimatedFtpW} W</b>  <color=#97A4B2>({AppSettings.FtpW} W)</color>", Theme.Body);
+                GUI.Label(new Rect(f.x + 60, f.y, w - 300, f.height), $"{L.Get("new_ftp")}: <b>{s.EstimatedFtpW} W</b>  <color=#B3BECA>({AppSettings.FtpW} W)</color>", Theme.Body);
                 if (s.EstimatedFtpW != AppSettings.FtpW && Ui.Button(new Rect(f.xMax - 230, f.y + 12, 214, 48), L.Get("apply_ftp"), ButtonKind.Primary, Icon.Check))
                 {
                     AppSettings.FtpW = s.EstimatedFtpW.Value;
