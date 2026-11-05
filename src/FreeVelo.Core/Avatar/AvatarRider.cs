@@ -56,10 +56,11 @@ namespace FreeVelo.Core.Avatar
             var jersey = Mat("jersey", Style.Jersey, 0.3f);
             var accent = Mat("accent", Style.JerseyAccent, 0.3f);
             var shorts = Mat("shorts", Style.Shorts, 0.35f);
+            var jersey2 = Mat("jersey2", Style.JerseySecondary, 0.3f);
 
             var parts = new List<Sdf>
             {
-                Ellipsoid(V(0, 1.08f, -0.195f), V(0.145f, 0.072f, 0.1f), Rot.Euler(-30, 0, 0)), // pelvis
+                Ellipsoid(V(0, 1.08f, -0.195f), V(0.138f, 0.072f, 0.1f), Rot.Euler(-30, 0, 0)), // pelvis
                 Ellipsoid(T(0, -0.005f, 0.17f), V(0.14f, 0.1f, 0.15f), TorsoRot), // abdomen / lower back
                 Ellipsoid(T(0, 0.02f, 0.05f), V(0.145f, 0.092f, 0.11f), TorsoRot), // lumbar: fills the waist above the pelvis
                 Ellipsoid(T(0, 0.005f, 0.35f), V(0.152f, 0.112f, 0.19f), TorsoRot), // ribcage
@@ -67,7 +68,7 @@ namespace FreeVelo.Core.Avatar
             };
             for (int s = -1; s <= 1; s += 2)
             {
-                parts.Add(Ellipsoid(V(s * 0.06f, 1.055f, -0.235f), V(0.062f, 0.048f, 0.056f), Rot.Euler(-30, 0, 0))); // gluteus (seated: flattened on the saddle)
+                parts.Add(Ellipsoid(V(s * 0.056f, 1.055f, -0.235f), V(0.058f, 0.046f, 0.054f), Rot.Euler(-30, 0, 0))); // gluteus (seated: flattened on the saddle)
                 parts.Add(Ellipsoid(T(s * 0.1f, 0.03f, 0.37f), V(0.065f, 0.075f, 0.14f), TorsoRot)); // latissimus
                 parts.Add(Ellipsoid(T(s * 0.065f, -0.07f, 0.45f), V(0.07f, 0.045f, 0.065f), TorsoRot)); // pectoral
             }
@@ -101,6 +102,7 @@ namespace FreeVelo.Core.Avatar
                 (Plane(T(0, 0, hemAlong), -SpineDir), jersey),
                 (Plane(T(0, 0, 0.302f), -SpineDir), accent), // chest band (accent above its lower edge …
                 (Plane(T(0, 0, 0.334f), -SpineDir), jersey), // … jersey again above its upper edge)
+                (SidePanel(hemAlong), jersey2), // contrast side panels from the hem to the armpits
                 (Grow(collar, 0.004f), accent), // collar
             };
             for (int s = -1; s <= 1; s += 2)
@@ -118,6 +120,32 @@ namespace FreeVelo.Core.Avatar
             }
 
             Sculpt(AvatarNode.Rider, shape, V(-0.29f, 0.97f, -0.37f), V(0.29f, 1.53f, 0.42f), 0.007f, 9000, shorts, regions.ToArray());
+        }
+
+        /// <summary>Jersey side panel: torso sides below the armpits, not on the sleeves.</summary>
+        private static Sdf SidePanel(float hemAlong)
+        {
+            var arms = new List<(Vector3 A, Vector3 B)>();
+            for (int s = -1; s <= 1; s += 2)
+            {
+                ArmJoints(s, out var shoulder, out var elbow, out _);
+                arms.Add((shoulder, elbow));
+            }
+
+            return p =>
+            {
+                float along = AlongSpine(p);
+                float side = 0.108f - MathF.Abs(p.X);
+                float armDistance = float.MaxValue;
+                foreach (var (a, b) in arms)
+                {
+                    var ab = b - a;
+                    float t = Math.Clamp(Vector3.Dot(p - a, ab) / ab.LengthSquared(), 0f, 1f);
+                    armDistance = MathF.Min(armDistance, Vector3.Distance(p, a + (ab * t)));
+                }
+
+                return MathF.Max(MathF.Max(side, along - 0.44f), MathF.Max(hemAlong - along, 0.075f - armDistance));
+            };
         }
 
         // ------------------------------------------------------------------ arms and hands
@@ -319,6 +347,9 @@ namespace FreeVelo.Core.Avatar
                 straps.Add(Chain(new[] { V(s * 0.07f, -0.02f, -0.07f), V(s * 0.04f, -0.045f, -0.098f), V(0, -0.05f, -0.105f) }, new[] { 0.004f, 0.004f, 0.004f }));
             }
 
+            // Fit dial at the back of the retention cradle.
+            var dial = V(0, -0.05f, -0.112f);
+            straps.Add(q => SmoothMax(new Vector2(q.X - dial.X, q.Y - dial.Y).Length() - 0.012f, MathF.Abs(q.Z - dial.Z) - 0.007f, 0.003f));
             Sculpt(AvatarNode.Rider, Transformed(Union(straps.ToArray()), HeadCenter, HeadRot), V(-0.12f, 1.36f, 0.2f), V(0.12f, 1.62f, 0.52f), 0.0022f, 700, black);
         }
 
@@ -367,7 +398,7 @@ namespace FreeVelo.Core.Avatar
                 var muscles = Blend(
                     0.04f,
                     RoundCone(V(0, 0, 0), V(0, l, 0), 0.063f, 0.046f),
-                    Sphere(V(0, 0.01f, 0.008f), 0.062f), // hip
+                    Sphere(V(0, 0.01f, 0.008f), 0.06f), // hip
                     Ellipsoid(V(0, 0.55f * l, 0.026f), V(0.058f, 0.2f, 0.045f)), // rectus femoris
                     Ellipsoid(V(s * 0.032f, 0.5f * l, 0f), V(0.045f, 0.17f, 0.048f)), // vastus lateralis
                     Ellipsoid(V(0, 0.5f * l, -0.028f), V(0.052f, 0.16f, 0.04f)), // hamstrings

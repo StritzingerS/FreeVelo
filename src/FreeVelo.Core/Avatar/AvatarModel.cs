@@ -83,6 +83,9 @@ namespace FreeVelo.Core.Avatar
 
         public Vector3 JerseyAccent { get; set; } = new Vector3(0.95f, 0.95f, 0.95f);
 
+        /// <summary>Contrast colour of the jersey side panels.</summary>
+        public Vector3 JerseySecondary { get; set; } = new Vector3(0.04f, 0.1f, 0.26f);
+
         public Vector3 Shorts { get; set; } = new Vector3(0.05f, 0.05f, 0.06f);
 
         public Vector3 Skin { get; set; } = new Vector3(0.9f, 0.72f, 0.58f);
