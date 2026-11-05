@@ -142,6 +142,7 @@ namespace FreeVelo.Ride
         {
             if (State != RideState.Riding) return;
             State = RideState.Finished;
+            _physics.SpeedMps = 0; // the rider stops: no more wheel/world movement after the ride
             _ble.Hub.SetSimulation(0); // release ERG resistance
             _ble.Hub.LowCadenceProtectionEnabled = true;
 

@@ -111,7 +111,8 @@ namespace FreeVelo.App
 
             bool riding = _ride.State == RideState.Riding;
             float cadence = riding ? (float)(_ble.Hub.Live.CadenceRpm ?? 0) : 0;
-            _avatar.Animate((float)_ride.SpeedMps, cadence, dt);
+            float speed = riding ? (float)_ride.SpeedMps : 0f; // wheels stand still outside a ride (menus, summary)
+            _avatar.Animate(speed, cadence, dt);
 
             Vector3 target;
             if (riding)
