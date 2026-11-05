@@ -97,9 +97,15 @@ namespace FreeVelo.World
         private void BuildRoad(Route route)
         {
             int n = route.Points.Count;
+            // One MeshData per strip: a strip connects each vertex pair to the next pair it receives.
             var road = new MeshData();
-            var lines = new MeshData();
-            var shoulders = new MeshData();
+            var leftLine = new MeshData();
+            var rightLine = new MeshData();
+            var dashes = new MeshData();
+            var leftShoulder = new MeshData();
+            var rightShoulder = new MeshData();
+            var posts = new MeshBuilder();
+            var postBands = new MeshBuilder();
             float half = RoadWidth / 2;
 
             for (int i = 0; i < n; i++)
@@ -117,13 +123,24 @@ namespace FreeVelo.World
                 // Shoulders: gravel, sloping slightly down to the grass.
                 var drop = new Vector3(0, -0.32f, 0); // meets the ground (road height − 0.3 m)
                 float sv = (float)p.DistanceM / 2f;
-                shoulders.Strip(c - (right * (half + ShoulderWidth)) + drop, c - (right * half) + (Vector3.up * -0.01f), sv, i < n - 1);
-                shoulders.Strip(c + (right * half) + (Vector3.up * -0.01f), c + (right * (half + ShoulderWidth)) + drop, sv, i < n - 1);
+                leftShoulder.Strip(c - (right * (half + ShoulderWidth)) + drop, c - (right * half) + (Vector3.up * -0.01f), sv, i < n - 1);
+                rightShoulder.Strip(c + (right * half) + (Vector3.up * -0.01f), c + (right * (half + ShoulderWidth)) + drop, sv, i < n - 1);
 
                 // Solid edge lines and dashed centre line (marking slightly above the asphalt).
                 var up = Vector3.up * 0.015f;
-                lines.Strip(c - (right * (half - 0.2f)) + up, c - (right * (half - 0.32f)) + up, 0, i < n - 1);
-                lines.Strip(c + (right * (half - 0.32f)) + up, c + (right * (half - 0.2f)) + up, 0, i < n - 1);
+                leftLine.Strip(c - (right * (half - 0.2f)) + up, c - (right * (half - 0.32f)) + up, 0, i < n - 1);
+                rightLine.Strip(c + (right * (half - 0.32f)) + up, c + (right * (half - 0.2f)) + up, 0, i < n - 1);
+
+                // Delineator posts every 50 m on both sides (white with a black band).
+                if (i % 10 == 0)
+                {
+                    for (int s = -1; s <= 1; s += 2)
+                    {
+                        var foot = c + (right * (s * (half + ShoulderWidth + 0.4f))) + new Vector3(0, -0.35f, 0);
+                        posts.EllipticTube(foot, foot + (Vector3.up * 1.35f), new Vector2(0.06f, 0.08f), new Vector2(0.05f, 0.07f), right, 6);
+                        postBands.EllipticTube(foot + (Vector3.up * 1.05f), foot + (Vector3.up * 1.25f), new Vector2(0.062f, 0.082f), new Vector2(0.056f, 0.074f), right, 6);
+                    }
+                }
             }
 
             for (int i = 0; i < n - 1; i += 2)
@@ -134,12 +151,19 @@ namespace FreeVelo.World
                 var right = new Vector3(dir.z, 0, -dir.x) * 0.07f;
                 var ca = new Vector3((float)a.X, (float)a.ElevationM + 0.065f, (float)a.Z);
                 var cb = new Vector3((float)b.X, (float)b.ElevationM + 0.065f, (float)b.Z);
-                lines.Quad(ca - right, ca + right, cb - right, cb + right);
+                dashes.Quad(ca - right, ca + right, cb - right, cb + right);
             }
 
             CreateMesh("Road", road, Mat(Color.white, TextureFactory.Asphalt(), 0.12f), shadows: false);
-            CreateMesh("Shoulders", shoulders, Mat(Color.white, TextureFactory.Gravel(), 0.05f), shadows: false);
-            CreateMesh("Markings", lines, Mat(new Color(0.92f, 0.92f, 0.88f), null, 0.3f), shadows: false);
+            var gravel = Mat(Color.white, TextureFactory.Gravel(), 0.05f);
+            CreateMesh("ShoulderLeft", leftShoulder, gravel, shadows: false);
+            CreateMesh("ShoulderRight", rightShoulder, gravel, shadows: false);
+            var paint = Mat(new Color(0.92f, 0.92f, 0.88f), null, 0.3f);
+            CreateMesh("EdgeLineLeft", leftLine, paint, shadows: false);
+            CreateMesh("EdgeLineRight", rightLine, paint, shadows: false);
+            CreateMesh("CentreLine", dashes, paint, shadows: false);
+            CreateMesh("Posts", posts, Mat(new Color(0.93f, 0.93f, 0.9f), null, 0.4f), shadows: true);
+            CreateMesh("PostBands", postBands, Mat(new Color(0.05f, 0.05f, 0.05f), null, 0.3f), shadows: false);
         }
 
         // ------------------------------------------------------------------ ground

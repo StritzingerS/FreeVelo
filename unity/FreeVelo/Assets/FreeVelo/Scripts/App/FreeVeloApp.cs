@@ -114,9 +114,10 @@ namespace FreeVelo.App
             }
             else
             {
+                // Menus: slow orbit close to the rider so bike and rider are visible.
                 _orbit += dt * 8f;
-                var offset = Quaternion.Euler(0, _orbit, 0) * new Vector3(0, 0, -7.5f);
-                target = position + offset + (Vector3.up * 2.8f);
+                var offset = Quaternion.Euler(0, _orbit, 0) * new Vector3(0, 0, -3.6f);
+                target = position + offset + (Vector3.up * 1.5f);
             }
 
             _camera.transform.position = Vector3.Lerp(_camera.transform.position, target, 1f - Mathf.Exp(-4f * dt));
