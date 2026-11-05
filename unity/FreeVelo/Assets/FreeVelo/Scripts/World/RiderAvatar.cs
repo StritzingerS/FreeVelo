@@ -25,9 +25,10 @@ namespace FreeVelo.World
         private const float PedalOffsetX = 0.125f;
 
         // Rider (≈ 1.78 m)
-        private const float ThighLength = 0.45f;
-        private const float ShinLength = 0.44f;
-        private static readonly Vector3 Hip = new Vector3(0.085f, 1.02f, -0.17f);
+        // Hip joint ~5 cm above the saddle top (sit bones on the saddle); knee 70–143° over a revolution.
+        private const float ThighLength = 0.46f;
+        private const float ShinLength = 0.45f;
+        private static readonly Vector3 Hip = new Vector3(0.085f, 1.06f, -0.185f);
         private static readonly Vector3 Shoulder = new Vector3(0.175f, 1.40f, 0.25f);
         private static readonly Vector3 Hand = new Vector3(0.205f, 0.91f, 0.555f);
 
@@ -301,24 +302,30 @@ namespace FreeVelo.World
             // Torso along a rounded back: bib shorts (pelvis → waist) and jersey (waist → shoulders).
             var spine = new[]
             {
-                new Vector3(0, 1.03f, -0.18f),
-                new Vector3(0, 1.1f, -0.125f),
-                new Vector3(0, 1.2f, -0.02f),
-                new Vector3(0, 1.3f, 0.1f),
+                new Vector3(0, 1.085f, -0.19f),
+                new Vector3(0, 1.145f, -0.125f),
+                new Vector3(0, 1.225f, -0.03f),
+                new Vector3(0, 1.31f, 0.09f),
                 new Vector3(0, 1.385f, 0.21f),
                 new Vector3(0, 1.43f, 0.27f),
             };
             var torsoRadii = new[]
             {
-                new Vector2(0.14f, 0.1f),
+                new Vector2(0.148f, 0.11f),
                 new Vector2(0.138f, 0.105f),
-                new Vector2(0.15f, 0.118f),
+                new Vector2(0.148f, 0.115f),
                 new Vector2(0.168f, 0.12f),
                 new Vector2(0.178f, 0.105f),
                 new Vector2(0.085f, 0.07f),
             };
             p.Builder(p.Shorts).Sweep(new[] { spine[0], spine[1] }, new[] { torsoRadii[0], torsoRadii[1] }, Side, 16, true, false);
-            p.Builder(p.Shorts).Ellipsoid(new Vector3(0, 1.0f, -0.165f), new Vector3(0.13f, 0.07f, 0.1f), Quaternion.identity, 14, 8); // seat
+            // Pelvis resting on the saddle and two rounded glutes behind the hip joints (bib shorts).
+            var shorts = p.Builder(p.Shorts);
+            shorts.Ellipsoid(new Vector3(0, 1.075f, -0.19f), new Vector3(0.15f, 0.075f, 0.12f), Quaternion.identity, 16, 10);
+            for (int s = -1; s <= 1; s += 2)
+            {
+                shorts.Ellipsoid(new Vector3(s * 0.068f, 1.068f, -0.245f), new Vector3(0.08f, 0.075f, 0.088f), Quaternion.Euler(-20, s * -10, 0), 14, 10);
+            }
             p.Builder(p.Jersey).Sweep(spine.Skip(1).ToList(), torsoRadii.Skip(1).ToList(), Side, 16, false, true);
             p.Builder(p.Accent).Sweep(
                 new[] { Vector3.Lerp(spine[2], spine[3], 0.45f), Vector3.Lerp(spine[2], spine[3], 0.7f) },
@@ -406,7 +413,7 @@ namespace FreeVelo.World
             float l = ThighLength;
             p.Builder(p.Shorts).Sweep(
                 new[] { new Vector3(0, -0.02f, -0.01f), new Vector3(0, l * 0.15f, 0.005f), new Vector3(0, l * 0.5f, 0.01f), new Vector3(0, l * 0.78f, 0.005f) },
-                new[] { new Vector2(0.072f, 0.078f), new Vector2(0.074f, 0.082f), new Vector2(0.066f, 0.072f), new Vector2(0.057f, 0.06f) },
+                new[] { new Vector2(0.078f, 0.084f), new Vector2(0.076f, 0.083f), new Vector2(0.066f, 0.072f), new Vector2(0.057f, 0.06f) },
                 Side, 14);
             p.Builder(p.Skin).Sweep(
                 new[] { new Vector3(0, l * 0.77f, 0.005f), new Vector3(0, l * 0.92f, 0f), new Vector3(0, l + 0.01f, 0f) },
