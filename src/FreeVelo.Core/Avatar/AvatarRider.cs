@@ -409,21 +409,21 @@ namespace FreeVelo.Core.Avatar
                 // Shoe (local: origin at the cleat, +z toes, +y up).
                 var upperBlend = Blend(
                     0.03f,
-                    Ellipsoid(V(0, 0.05f, -0.105f), V(0.036f, 0.055f, 0.048f)), // heel
-                    Ellipsoid(V(0, 0.042f, -0.02f), V(0.045f, 0.05f, 0.085f)), // midfoot
-                    Ellipsoid(V(s * 0.004f, 0.028f, 0.065f), V(0.049f, 0.04f, 0.07f)), // forefoot
-                    Ellipsoid(V(s * 0.002f, 0.022f, 0.115f), V(0.037f, 0.032f, 0.04f))); // toe box
+                    Ellipsoid(V(0, 0.048f, -0.122f), V(0.033f, 0.05f, 0.042f)), // heel
+                    Ellipsoid(V(0, 0.036f, -0.045f), V(0.04f, 0.044f, 0.08f)), // midfoot
+                    Ellipsoid(V(s * 0.004f, 0.024f, 0.035f), V(0.043f, 0.032f, 0.06f)), // forefoot
+                    Ellipsoid(V(s * 0.002f, 0.019f, 0.07f), V(0.034f, 0.025f, 0.031f))); // toe box
                 var upper = Intersect(upperBlend, Plane(V(0, 0.014f, 0), -Vector3.UnitY));
-                upper = SmoothSubtract(upper, Ellipsoid(V(0, 0.108f, -0.082f), V(0.03f, 0.036f, 0.042f)), 0.01f); // collar opening
+                upper = SmoothSubtract(upper, Ellipsoid(V(0, 0.1f, -0.108f), V(0.028f, 0.034f, 0.04f)), 0.01f); // collar opening
                 var footprint = Grow(upperBlend, 0.003f);
                 Sdf sole = p => SmoothMax(footprint(new Vector3(p.X, 0.014f, p.Z)), MathF.Abs(p.Y - 0.007f) - 0.0075f, 0.004f);
-                var dialCenter = V(s * 0.012f, 0.088f, -0.004f);
+                var dialCenter = V(s * 0.012f, 0.077f, -0.042f);
                 var dialRot = Rot.Euler(-28, 0, s * 12f);
                 var dial = Transformed(p => SmoothMax(new Vector2(p.X, p.Z).Length() - 0.015f, MathF.Abs(p.Y) - 0.006f, 0.003f), dialCenter, dialRot);
-                var strap = Intersect(Shell(Grow(upper, 0.0015f), 0.003f), p => MathF.Max(MathF.Abs(p.Z - 0.055f) - 0.012f, 0.02f - p.Y));
+                var strap = Intersect(Shell(Grow(upper, 0.0015f), 0.003f), p => MathF.Max(MathF.Abs(p.Z - 0.02f) - 0.011f, 0.02f - p.Y));
                 var cleat = RoundBox(V(0, -0.002f, 0.002f), V(0.03f, 0.007f, 0.04f), 0.004f);
                 var shoe = Union(Blend(0.004f, upper, sole), dial, strap, cleat);
-                Sdf stripe = p => MathF.Max(MathF.Abs(p.Z + (p.Y * 0.9f) - 0.0f) - 0.008f, -(p.X * s) + 0.025f);
+                Sdf stripe = p => MathF.Max(MathF.Abs(p.Z + (p.Y * 0.9f) + 0.03f) - 0.007f, -(p.X * s) + 0.025f);
                 Sculpt(
                     footNode,
                     shoe,
@@ -434,7 +434,7 @@ namespace FreeVelo.Core.Avatar
                     shoes,
                     (stripe, shoeAccent),
                     (p => MathF.Min(p.Y - 0.0142f, Vector3.Distance(p, dialCenter) - 0.019f), black),
-                    (p => MathF.Max(MathF.Abs(p.Z - 0.055f) - 0.012f, MathF.Max(0.0145f - p.Y, -(Grow(upper, 0.0006f)(p)))), black));
+                    (p => MathF.Max(MathF.Abs(p.Z - 0.02f) - 0.011f, MathF.Max(0.0145f - p.Y, -(Grow(upper, 0.0006f)(p)))), black));
             }
         }
 

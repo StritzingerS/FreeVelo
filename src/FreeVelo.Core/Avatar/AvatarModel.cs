@@ -126,7 +126,7 @@ namespace FreeVelo.Core.Avatar
         public static readonly Vector3 Hand = new Vector3(0.205f, 0.91f, 0.555f);
 
         /// <summary>Ankle relative to the cleat (pedal axle) in the foot frame.</summary>
-        public static readonly Vector3 AnkleInFoot = new Vector3(0, 0.085f, -0.075f);
+        public static readonly Vector3 AnkleInFoot = new Vector3(0, 0.08f, -0.1f);
 
         internal static readonly Vector3 Side = Vector3.UnitX;
 
