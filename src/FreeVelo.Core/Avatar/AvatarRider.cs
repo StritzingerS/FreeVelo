@@ -1,0 +1,444 @@
+using System;
+using System.Collections.Generic;
+using System.Numerics;
+using static FreeVelo.Core.Avatar.SdfShapes;
+
+namespace FreeVelo.Core.Avatar
+{
+    /// <summary>
+    /// The rider, sculpted from blended signed-distance shapes (muscles, pelvis, ribcage …) and meshed by the
+    /// polygonizer. Static upper body on the Rider node; legs are bones moved by <see cref="Pose"/>.
+    /// </summary>
+    public sealed partial class AvatarModel
+    {
+        // Torso frame: along the spine (pelvis → neck), dorsal direction, lateral = x.
+        private static readonly Vector3 SpineDir = Vector3.Normalize(new Vector3(0, 0.33f, 0.43f));
+        private static readonly Vector3 DorsalDir = new Vector3(0, SpineDir.Z, -SpineDir.Y);
+        private static readonly Vector3 TorsoOrigin = new Vector3(0, 1.09f, -0.19f);
+        private static readonly Rot TorsoRot = Rot.LookRotation(SpineDir, DorsalDir);
+        private static readonly Vector3 HeadCenter = new Vector3(0, 1.54f, 0.37f);
+        private static readonly Rot HeadRot = Rot.Euler(8, 0, 0);
+
+        /// <summary>Point in the torso frame: lateral, dorsal (back) offset, distance along the spine.</summary>
+        private static Vector3 T(float lateral, float dorsal, float along) => TorsoOrigin + (Vector3.UnitX * lateral) + (DorsalDir * dorsal) + (SpineDir * along);
+
+        private static float AlongSpine(Vector3 p) => Vector3.Dot(p - TorsoOrigin, SpineDir);
+
+        private static Vector3 HeadToWorld(Vector3 local) => HeadCenter + (HeadRot * local);
+
+        private void BuildRider()
+        {
+            BuildTorso();
+            for (int s = -1; s <= 1; s += 2)
+            {
+                BuildArm(s);
+                BuildHand(s);
+            }
+
+            BuildHead();
+            BuildHelmet();
+            BuildGlasses();
+            BuildLegs();
+        }
+
+        private static void ArmJoints(int s, out Vector3 shoulder, out Vector3 elbow, out Vector3 wrist)
+        {
+            shoulder = V(s * Shoulder.X, Shoulder.Y, Shoulder.Z);
+            var hand = V(s * Hand.X, Hand.Y, Hand.Z);
+            elbow = SolveJoint(shoulder, hand, 0.3f, 0.31f, V(s * 0.6f, -1f, 0f));
+            wrist = elbow + ((hand - elbow) * 0.84f);
+        }
+
+        // ------------------------------------------------------------------ torso, pelvis, sleeves
+
+        private void BuildTorso()
+        {
+            var jersey = Mat("jersey", Style.Jersey, 0.3f);
+            var accent = Mat("accent", Style.JerseyAccent, 0.3f);
+            var shorts = Mat("shorts", Style.Shorts, 0.35f);
+
+            var parts = new List<Sdf>
+            {
+                Ellipsoid(V(0, 1.085f, -0.2f), V(0.158f, 0.08f, 0.115f), Rot.Euler(-25, 0, 0)), // pelvis
+                Ellipsoid(T(0, -0.005f, 0.17f), V(0.14f, 0.1f, 0.15f), TorsoRot), // abdomen / lower back
+                Ellipsoid(T(0, 0.005f, 0.35f), V(0.152f, 0.112f, 0.19f), TorsoRot), // ribcage
+                Ellipsoid(T(0, 0.025f, 0.5f), V(0.185f, 0.08f, 0.08f), TorsoRot), // shoulder girdle
+            };
+            for (int s = -1; s <= 1; s += 2)
+            {
+                parts.Add(Ellipsoid(V(s * 0.066f, 1.078f, -0.25f), V(0.074f, 0.068f, 0.07f))); // gluteus
+                parts.Add(Ellipsoid(T(s * 0.1f, 0.03f, 0.37f), V(0.065f, 0.075f, 0.14f), TorsoRot)); // latissimus
+                parts.Add(Ellipsoid(T(s * 0.065f, -0.07f, 0.45f), V(0.07f, 0.045f, 0.065f), TorsoRot)); // pectoral
+            }
+
+            var core = Blend(0.06f, parts.ToArray());
+
+            var upper = new List<Sdf> { core };
+            var sleeves = new List<Sdf>();
+            for (int s = -1; s <= 1; s += 2)
+            {
+                ArmJoints(s, out var shoulder, out var elbow, out _);
+                var arm = elbow - shoulder;
+                var dir = Vector3.Normalize(arm);
+                upper.Add(RoundCone(T(s * 0.14f, 0.035f, 0.54f), T(0, 0.03f, 0.63f), 0.035f, 0.05f)); // trapezius
+                upper.Add(Ellipsoid(shoulder + (dir * 0.035f) + V(s * 0.012f, 0.012f, 0), V(0.058f, 0.08f, 0.06f), Rot.FromTo(Vector3.UnitY, dir))); // deltoid
+                var hem = shoulder + (arm * 0.55f);
+                sleeves.Add(SmoothIntersect(RoundCone(shoulder, shoulder + (arm * 0.62f), 0.056f, 0.048f), Plane(hem, dir), 0.008f));
+            }
+
+            Sdf body = Blend(0.035f, upper.ToArray());
+            foreach (var sleeve in sleeves) body = Blend(0.03f, body, sleeve);
+
+            // Jersey worn over the shorts: a 3 mm lip at the hem, three rear pockets, collar.
+            float hemAlong = 0.08f;
+            var jerseyShell = SmoothIntersect(Grow(body, 0.0025f), Plane(T(0, 0, hemAlong), -SpineDir), 0.006f);
+            var pockets = new List<Sdf>();
+            for (int i = -1; i <= 1; i++) pockets.Add(RoundBox(T(i * 0.066f, 0.08f, 0.14f), V(0.036f, 0.018f, 0.05f), 0.012f, TorsoRot));
+            var collar = Torus(T(0, 0.004f, 0.625f), SpineDir, 0.054f, 0.009f);
+            var shape = Union(Blend(0.008f, Union(body, jerseyShell), Union(pockets.ToArray())), collar);
+
+            var regions = new List<(Sdf, AvatarMaterial)>
+            {
+                (Plane(T(0, 0, hemAlong), -SpineDir), jersey),
+                (Plane(T(0, 0, 0.302f), -SpineDir), accent), // chest band (accent above its lower edge …
+                (Plane(T(0, 0, 0.334f), -SpineDir), jersey), // … jersey again above its upper edge)
+                (Grow(collar, 0.004f), accent), // collar
+            };
+            for (int s = -1; s <= 1; s += 2)
+            {
+                ArmJoints(s, out var shoulder, out var elbow, out _);
+                var arm = elbow - shoulder;
+                var dir = Vector3.Normalize(arm);
+                float len = arm.Length();
+                var sh = shoulder;
+                regions.Add((p =>
+                {
+                    float t = Vector3.Dot(p - sh, dir);
+                    return MathF.Max((len * 0.49f) - t, Vector3.Distance(p, sh + (dir * t)) - 0.085f);
+                }, accent)); // sleeve cuff
+            }
+
+            Sculpt(AvatarNode.Rider, shape, V(-0.29f, 0.97f, -0.37f), V(0.29f, 1.53f, 0.42f), 0.007f, 9000, shorts, regions.ToArray());
+        }
+
+        // ------------------------------------------------------------------ arms and hands
+
+        private void BuildArm(int s)
+        {
+            var skin = Mat("skin", Style.Skin, 0.35f);
+            ArmJoints(s, out var shoulder, out var elbow, out var wrist);
+            var arm = elbow - shoulder;
+            var fore = wrist - elbow;
+            var armDir = Vector3.Normalize(arm);
+            var foreDir = Vector3.Normalize(fore);
+
+            // Inside of the elbow bend (biceps side) and the outside (triceps, olecranon).
+            var inside = Vector3.Normalize(foreDir - (Vector3.Dot(foreDir, armDir) * armDir));
+            var armRot = Rot.FromTo(Vector3.UnitY, armDir);
+            var foreRot = Rot.FromTo(Vector3.UnitY, foreDir);
+            var lateralUp = Vector3.Normalize(Vector3.Cross(foreDir, inside) * s);
+
+            var shape = Blend(
+                0.025f,
+                RoundCone(shoulder + (arm * 0.3f), elbow, 0.047f, 0.036f),
+                Ellipsoid(shoulder + (arm * 0.56f) + (inside * 0.014f), V(0.034f, 0.085f, 0.034f), armRot), // biceps
+                Ellipsoid(shoulder + (arm * 0.5f) - (inside * 0.014f), V(0.036f, 0.1f, 0.036f), armRot), // triceps
+                Sphere(elbow - (inside * 0.018f), 0.03f), // olecranon
+                RoundCone(elbow, wrist, 0.037f, 0.025f),
+                Ellipsoid(elbow + (fore * 0.27f) + (lateralUp * 0.01f), V(0.042f, 0.085f, 0.038f), foreRot)); // forearm muscles
+
+            var min = Vector3.Min(Vector3.Min(shoulder, elbow), wrist) - new Vector3(0.08f);
+            var max = Vector3.Max(Vector3.Max(shoulder, elbow), wrist) + new Vector3(0.08f);
+            Sculpt(AvatarNode.Rider, shape, min, max, 0.005f, 1400, skin);
+        }
+
+        private void BuildHand(int s)
+        {
+            var glove = Mat("glove", V(0.08f, 0.08f, 0.09f), 0.25f);
+            var skin = Mat("skin", Style.Skin, 0.35f);
+            ArmJoints(s, out _, out _, out var wrist);
+            float x0 = s * 0.205f;
+
+            var parts = new List<Sdf>
+            {
+                RoundBox(V(x0, 0.94f, 0.572f), V(0.04f, 0.016f, 0.045f), 0.014f, Rot.Euler(12, 0, 0)), // palm
+                Ellipsoid(V(x0, 0.952f, 0.566f), V(0.036f, 0.012f, 0.04f)), // back of the hand
+                RoundCone(wrist, V(x0, 0.946f, 0.536f), 0.026f, 0.029f), // wrist
+            };
+
+            // Fingers wrap around the hood and over the lever blade; index finger on the inside (−s).
+            float[] offsets = { -0.027f, -0.009f, 0.009f, 0.026f };
+            float[] lengths = { 0.95f, 1f, 0.96f, 0.82f };
+            float[] radii = { 0.0095f, 0.0098f, 0.0092f, 0.0082f };
+            for (int k = 0; k < 4; k++)
+            {
+                float o = s * offsets[k];
+                float l = lengths[k];
+                var knuckle = V(x0 + o, 0.94f, 0.606f);
+                var p1 = knuckle + (V(o * 0.08f, -0.008f, 0.03f) * l);
+                var p2 = p1 + (V(0, -0.026f, 0.014f) * l);
+                var tip = p2 + (V(-o * 0.08f, -0.026f, -0.006f) * l);
+                parts.Add(Chain(new[] { knuckle, p1, p2, tip }, new[] { radii[k] * 1.08f, radii[k], radii[k] * 0.93f, radii[k] * 0.85f }));
+            }
+
+            var thumbTip = V(x0 - (s * 0.03f), 0.905f, 0.602f);
+            parts.Add(Chain(new[] { V(x0 - (s * 0.028f), 0.936f, 0.548f), V(x0 - (s * 0.037f), 0.917f, 0.578f), thumbTip }, new[] { 0.0125f, 0.0105f, 0.0088f }));
+
+            var shape = Blend(0.01f, parts.ToArray());
+            Sculpt(
+                AvatarNode.Rider,
+                shape,
+                V(x0 - 0.075f, 0.84f, Math.Min(wrist.Z, 0.5f) - 0.04f),
+                V(x0 + 0.075f, 1.0f, 0.68f),
+                0.0026f,
+                1800,
+                glove,
+                (p => 0.632f - p.Z, skin), // fingerless gloves
+                (Sphere(thumbTip, 0.013f), skin));
+        }
+
+        // ------------------------------------------------------------------ head
+
+        private void BuildHead()
+        {
+            var skin = Mat("skin", Style.Skin, 0.35f);
+            var hair = Mat("hair", Style.Hair, 0.15f);
+
+            var head = Blend(
+                0.025f,
+                Ellipsoid(V(0, 0.018f, -0.008f), V(0.074f, 0.088f, 0.097f)), // cranium
+                Ellipsoid(V(0, -0.035f, 0.03f), V(0.062f, 0.065f, 0.07f)), // face
+                Ellipsoid(V(0.045f, -0.06f, 0.0f), V(0.022f, 0.032f, 0.04f)), // jaw angles
+                Ellipsoid(V(-0.045f, -0.06f, 0.0f), V(0.022f, 0.032f, 0.04f)),
+                Ellipsoid(V(0, -0.093f, 0.068f), V(0.026f, 0.02f, 0.022f))); // chin
+
+            head = Blend(
+                0.01f,
+                head,
+                Ellipsoid(V(0.043f, -0.012f, 0.07f), V(0.022f, 0.017f, 0.02f)), // cheekbones
+                Ellipsoid(V(-0.043f, -0.012f, 0.07f), V(0.022f, 0.017f, 0.02f)),
+                Capsule(V(-0.036f, 0.032f, 0.087f), V(0.036f, 0.032f, 0.087f), 0.012f), // brow ridge
+                RoundCone(V(0, 0.022f, 0.097f), V(0, -0.017f, 0.117f), 0.008f, 0.011f), // nose
+                Ellipsoid(V(0, -0.026f, 0.106f), V(0.016f, 0.009f, 0.011f)), // nostrils
+                Ellipsoid(V(0, -0.052f, 0.096f), V(0.023f, 0.011f, 0.012f))); // lips
+
+            head = SmoothSubtract(head, Capsule(V(-0.019f, -0.054f, 0.109f), V(0.019f, -0.054f, 0.109f), 0.0018f), 0.003f); // mouth
+            for (int s = -1; s <= 1; s += 2)
+            {
+                head = SmoothSubtract(head, Sphere(V(s * 0.032f, 0.012f, 0.1f), 0.013f), 0.01f); // eye sockets
+                var ear = SmoothSubtract(
+                    Ellipsoid(V(s * 0.074f, -0.004f, -0.008f), V(0.012f, 0.03f, 0.019f), Rot.Euler(0, s * 15f, 0)),
+                    Ellipsoid(V(s * 0.083f, -0.006f, -0.005f), V(0.006f, 0.017f, 0.01f)),
+                    0.004f);
+                head = Blend(0.006f, head, ear);
+            }
+
+            // Neck down into the collar.
+            var neckBase = HeadRot.Transposed * (T(0, -0.005f, 0.5f) - HeadCenter);
+            head = Blend(0.035f, head, RoundCone(V(0, -0.055f, -0.035f), neckBase, 0.05f, 0.058f));
+
+            // Short hair: back and sides, under the helmet.
+            Sdf hairRegion = p =>
+            {
+                var q = HeadRot.Transposed * (p - HeadCenter);
+                float backAndTop = MathF.Max(-(q.Y + 0.012f), q.Z - 0.045f);
+                float nape = MathF.Max(-(q.Y + 0.05f), q.Z + 0.035f);
+                float above = MathF.Max(-(q.Y - 0.05f), q.Z - 0.085f);
+                float notEars = -(Ellipsoid(V(MathF.Sign(q.X) * 0.076f, -0.004f, -0.008f), V(0.02f, 0.036f, 0.026f))(q));
+                return MathF.Max(MathF.Min(MathF.Min(backAndTop, nape), above), notEars);
+            };
+
+            Sculpt(AvatarNode.Rider, Transformed(head, HeadCenter, HeadRot), V(-0.11f, 1.36f, 0.17f), V(0.11f, 1.67f, 0.5f), 0.003f, 4500, skin, (hairRegion, hair));
+        }
+
+        private Sdf HelmetOuter()
+        {
+            var outer = Blend(
+                0.04f,
+                Ellipsoid(V(0, 0.034f, -0.008f), V(0.102f, 0.1f, 0.135f)),
+                Ellipsoid(V(0, 0.016f, -0.085f), V(0.083f, 0.072f, 0.085f)));
+
+            // Lower edge: high over the forehead, low at the back.
+            var rimPoint = V(0, 0.045f, 0.12f);
+            var rimNormal = Vector3.Normalize(V(0, 0.95f, -0.31f));
+            return SmoothIntersect(outer, Plane(rimPoint, -rimNormal), 0.01f);
+        }
+
+        private void BuildHelmet()
+        {
+            var shell = Mat("helmet", Style.Helmet, 0.75f);
+            var inner = Mat("helmetinner", V(0.13f, 0.13f, 0.14f), 0.2f);
+            var accent = Mat("accent", Style.JerseyAccent, 0.3f);
+            var black = Mat("black", V(0.06f, 0.06f, 0.07f), 0.35f);
+
+            var outer = HelmetOuter();
+            var helmet = SmoothSubtract(outer, Ellipsoid(V(0, 0.02f, -0.01f), V(0.084f, 0.098f, 0.108f)), 0.004f);
+
+            // Vents: long slots from front to back, splayed outwards; three brow vents.
+            for (int i = -2; i <= 2; i++)
+            {
+                float xc = i * 0.026f;
+                float splay = i * 0.12f;
+                float halfLen = i == 0 ? 0.035f : 0.045f;
+                float zc = i == 0 ? 0.0f : -0.01f;
+                helmet = SmoothSubtract(helmet, p =>
+                {
+                    float x = p.X - xc - (splay * (p.Z - zc) * 0.6f);
+                    float z = MathF.Max(MathF.Abs(p.Z - zc) - halfLen, 0f);
+                    return MathF.Sqrt((x * x) + (z * z)) - 0.0075f;
+                }, 0.004f);
+            }
+
+            for (int i = -1; i <= 1; i++)
+            {
+                float xc = i * 0.034f;
+                helmet = SmoothSubtract(helmet, p =>
+                {
+                    float x = MathF.Max(MathF.Abs(p.X - xc) - 0.011f, 0f);
+                    float y = p.Y - 0.065f;
+                    return MathF.Sqrt((x * x) + (y * y)) - 0.009f + (p.Z < 0.06f ? 1f : 0f);
+                }, 0.004f);
+            }
+
+            Sdf innerRegion = p => outer(HeadRot.Transposed * (p - HeadCenter)) + 0.0035f;
+            Sdf stripe = p =>
+            {
+                var q = HeadRot.Transposed * (p - HeadCenter);
+                return MathF.Abs(MathF.Abs(q.X) - 0.083f + (q.Y * 0.25f)) - 0.007f;
+            };
+
+            Sculpt(AvatarNode.Rider, Transformed(helmet, HeadCenter, HeadRot), V(-0.13f, 1.44f, 0.18f), V(0.13f, 1.7f, 0.56f), 0.003f, 4500, shell, (stripe, accent), (innerRegion, inner));
+
+            // Straps and retention cradle.
+            var straps = new List<Sdf>();
+            for (int s = -1; s <= 1; s += 2)
+            {
+                var below = V(s * 0.066f, -0.055f, 0.012f);
+                straps.Add(Chain(new[] { V(s * 0.08f, 0.0f, 0.04f), below }, new[] { 0.0032f, 0.0032f }));
+                straps.Add(Chain(new[] { V(s * 0.082f, 0.0f, -0.045f), below }, new[] { 0.0032f, 0.0032f }));
+                straps.Add(Chain(new[] { below, V(s * 0.05f, -0.1f, 0.03f), V(0, -0.118f, 0.045f) }, new[] { 0.0035f, 0.0035f, 0.0035f }));
+                straps.Add(Chain(new[] { V(s * 0.07f, -0.02f, -0.07f), V(s * 0.04f, -0.045f, -0.098f), V(0, -0.05f, -0.105f) }, new[] { 0.004f, 0.004f, 0.004f }));
+            }
+
+            Sculpt(AvatarNode.Rider, Transformed(Union(straps.ToArray()), HeadCenter, HeadRot), V(-0.12f, 1.36f, 0.2f), V(0.12f, 1.62f, 0.52f), 0.0022f, 700, black);
+        }
+
+        private void BuildGlasses()
+        {
+            var lens = Mat("lens", V(0.05f, 0.08f, 0.15f), 0.95f);
+            var black = Mat("black", V(0.06f, 0.06f, 0.07f), 0.35f);
+
+            var shield = Ellipsoid(V(0, 0.012f, 0.0f), V(0.088f, 0.1f, 0.113f));
+            var outline = Ellipsoid(V(0, 0.012f, 0.06f), V(0.093f, 0.026f, 0.12f));
+            var lensShape = Intersect(Intersect(Shell(shield, 0.003f), outline), Plane(V(0, 0, 0.03f), -Vector3.UnitZ));
+            lensShape = SmoothSubtract(lensShape, Ellipsoid(V(0, -0.016f, 0.11f), V(0.013f, 0.02f, 0.04f)), 0.004f); // nose cut-out
+            var frame = Intersect(Intersect(Shell(Grow(shield, 0.0015f), 0.005f), Ellipsoid(V(0, 0.034f, 0.06f), V(0.094f, 0.006f, 0.12f))), Plane(V(0, 0, 0.03f), -Vector3.UnitZ));
+            var parts = new List<Sdf> { lensShape, frame };
+            for (int s = -1; s <= 1; s += 2) parts.Add(Chain(new[] { V(s * 0.083f, 0.03f, 0.035f), V(s * 0.083f, 0.018f, -0.02f), V(s * 0.078f, 0.004f, -0.045f) }, new[] { 0.0028f, 0.0026f, 0.0024f }));
+
+            Sdf frameRegion = p =>
+            {
+                var q = HeadRot.Transposed * (p - HeadCenter);
+                return MathF.Min(0.0305f - q.Y, 0.033f - q.Z);
+            };
+
+            Sculpt(AvatarNode.Rider, Transformed(Union(parts.ToArray()), HeadCenter, HeadRot), V(-0.11f, 1.48f, 0.3f), V(0.11f, 1.62f, 0.52f), 0.0018f, 900, lens, (frameRegion, black));
+        }
+
+        // ------------------------------------------------------------------ legs and shoes
+
+        private void BuildLegs()
+        {
+            var shorts = Mat("shorts", Style.Shorts, 0.35f);
+            var jersey = Mat("jersey", Style.Jersey, 0.3f);
+            var skin = Mat("skin", Style.Skin, 0.35f);
+            var socks = Mat("socks", Style.Socks, 0.15f);
+            var shoes = Mat("shoes", Style.Shoes, 0.55f);
+            var black = Mat("black", V(0.06f, 0.06f, 0.07f), 0.35f);
+            var shoeAccent = Mat("shoeaccent", V(0.2f, 0.21f, 0.23f), 0.5f);
+
+            foreach (var (thighNode, shinNode, footNode, s) in new[]
+            {
+                (AvatarNode.ThighRight, AvatarNode.ShinRight, AvatarNode.FootRight, 1f),
+                (AvatarNode.ThighLeft, AvatarNode.ShinLeft, AvatarNode.FootLeft, -1f),
+            })
+            {
+                // Thigh (local: +y hip → knee, +z front, +x right).
+                float l = ThighLength;
+                var muscles = Blend(
+                    0.04f,
+                    RoundCone(V(0, 0, 0), V(0, l, 0), 0.07f, 0.046f),
+                    Sphere(V(0, -0.005f, -0.005f), 0.078f), // hip
+                    Ellipsoid(V(0, 0.55f * l, 0.026f), V(0.058f, 0.2f, 0.045f)), // rectus femoris
+                    Ellipsoid(V(s * 0.032f, 0.5f * l, 0f), V(0.045f, 0.17f, 0.048f)), // vastus lateralis
+                    Ellipsoid(V(0, 0.45f * l, -0.03f), V(0.055f, 0.17f, 0.042f)), // hamstrings
+                    Ellipsoid(V(-s * 0.03f, 0.25f * l, 0f), V(0.045f, 0.12f, 0.05f))); // adductors
+                var thigh = Blend(
+                    0.02f,
+                    muscles,
+                    Ellipsoid(V(-s * 0.028f, 0.8f * l, 0.02f), V(0.035f, 0.065f, 0.035f)), // vastus medialis
+                    Sphere(V(0, l, 0.003f), 0.046f), // knee
+                    Ellipsoid(V(0, l - 0.008f, 0.04f), V(0.026f, 0.03f, 0.014f))); // patella
+                float legEnd = 0.72f * l;
+                var shortsLeg = SmoothIntersect(Grow(thigh, 0.0025f), Plane(V(0, legEnd, 0), Vector3.UnitY), 0.005f);
+                Sculpt(
+                    thighNode,
+                    Union(thigh, shortsLeg),
+                    V(-0.11f, -0.1f, -0.11f),
+                    V(0.11f, l + 0.06f, 0.11f),
+                    0.006f,
+                    2600,
+                    shorts,
+                    (Plane(V(0, legEnd - 0.03f, 0), -Vector3.UnitY), jersey), // leg gripper in jersey colour
+                    (Plane(V(0, legEnd - 0.0004f, 0), -Vector3.UnitY), skin));
+
+                // Shin (local: +y knee → ankle, +z front).
+                float sl = ShinLength;
+                var shin = Blend(
+                    0.03f,
+                    Sphere(V(0, 0, 0.003f), 0.045f),
+                    RoundCone(V(0, 0.02f, 0.005f), V(0, sl, -0.005f), 0.043f, 0.029f),
+                    Ellipsoid(V(-s * 0.017f, 0.3f * sl, -0.03f), V(0.034f, 0.1f, 0.04f)), // gastrocnemius medial
+                    Ellipsoid(V(s * 0.018f, 0.26f * sl, -0.028f), V(0.031f, 0.085f, 0.036f)), // lateral
+                    Capsule(V(0, 0.08f * sl, 0.03f), V(0, 0.85f * sl, 0.017f), 0.013f), // tibia
+                    RoundCone(V(0, 0.65f * sl, -0.03f), V(0, sl, -0.032f), 0.015f, 0.012f)); // achilles
+                shin = Blend(0.012f, shin, Sphere(V(s * 0.026f, sl - 0.005f, 0), 0.014f), Sphere(V(-s * 0.024f, sl - 0.012f, 0.002f), 0.013f), Sphere(V(0, sl, -0.005f), 0.031f));
+                float sockTop = 0.7f * sl;
+                var cuff = SmoothIntersect(Grow(shin, 0.002f), p => MathF.Abs(p.Y - (sockTop + 0.012f)) - 0.012f, 0.004f);
+                Sculpt(shinNode, Union(shin, cuff), V(-0.08f, -0.06f, -0.09f), V(0.08f, sl + 0.05f, 0.08f), 0.005f, 2200, skin, (Plane(V(0, sockTop, 0), -Vector3.UnitY), socks));
+
+                // Shoe (local: origin at the cleat, +z toes, +y up).
+                var upperBlend = Blend(
+                    0.03f,
+                    Ellipsoid(V(0, 0.05f, -0.105f), V(0.036f, 0.055f, 0.048f)), // heel
+                    Ellipsoid(V(0, 0.042f, -0.02f), V(0.045f, 0.05f, 0.085f)), // midfoot
+                    Ellipsoid(V(s * 0.004f, 0.028f, 0.065f), V(0.049f, 0.04f, 0.07f)), // forefoot
+                    Ellipsoid(V(s * 0.002f, 0.022f, 0.115f), V(0.037f, 0.032f, 0.04f))); // toe box
+                var upper = Intersect(upperBlend, Plane(V(0, 0.014f, 0), -Vector3.UnitY));
+                upper = SmoothSubtract(upper, Ellipsoid(V(0, 0.108f, -0.082f), V(0.03f, 0.036f, 0.042f)), 0.01f); // collar opening
+                var footprint = Grow(upperBlend, 0.003f);
+                Sdf sole = p => SmoothMax(footprint(new Vector3(p.X, 0.014f, p.Z)), MathF.Abs(p.Y - 0.007f) - 0.0075f, 0.004f);
+                var dialCenter = V(s * 0.012f, 0.088f, -0.004f);
+                var dialRot = Rot.Euler(-28, 0, s * 12f);
+                var dial = Transformed(p => SmoothMax(new Vector2(p.X, p.Z).Length() - 0.015f, MathF.Abs(p.Y) - 0.006f, 0.003f), dialCenter, dialRot);
+                var strap = Intersect(Shell(Grow(upper, 0.0015f), 0.003f), p => MathF.Max(MathF.Abs(p.Z - 0.055f) - 0.012f, 0.02f - p.Y));
+                var cleat = RoundBox(V(0, -0.002f, 0.002f), V(0.03f, 0.007f, 0.04f), 0.004f);
+                var shoe = Union(Blend(0.004f, upper, sole), dial, strap, cleat);
+                Sdf stripe = p => MathF.Max(MathF.Abs(p.Z + (p.Y * 0.9f) - 0.0f) - 0.008f, -(p.X * s) + 0.025f);
+                Sculpt(
+                    footNode,
+                    shoe,
+                    V(-0.075f, -0.02f, -0.175f),
+                    V(0.075f, 0.13f, 0.175f),
+                    0.0035f,
+                    2600,
+                    shoes,
+                    (stripe, shoeAccent),
+                    (p => MathF.Min(p.Y - 0.0142f, Vector3.Distance(p, dialCenter) - 0.019f), black),
+                    (p => MathF.Max(MathF.Abs(p.Z - 0.055f) - 0.012f, MathF.Max(0.0145f - p.Y, -(Grow(upper, 0.0006f)(p)))), black));
+            }
+        }
+
+        private static float SmoothMax(float a, float b, float k) => -SMin(-a, -b, k);
+    }
+}
