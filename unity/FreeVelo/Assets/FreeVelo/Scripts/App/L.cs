@@ -54,6 +54,9 @@ namespace FreeVelo.App
             ["finished"] = ("Workout finished!", "Workout geschafft!"),
             ["share"] = ("Share FIT file", "FIT-Datei teilen"),
             ["save_downloads"] = ("Save to Downloads", "In Downloads speichern"),
+            ["file_missing"] = ("File not found", "Datei nicht gefunden"),
+            ["save_failed"] = ("Saving failed", "Speichern fehlgeschlagen"),
+            ["plugin_outdated"] = ("Android plugin outdated – in Unity: FreeVelo → Update Android plugins, then build again", "Android-Plugin veraltet – in Unity: FreeVelo → Update Android plugins, dann neu bauen"),
             ["no_trainer"] = ("No trainer connected – connect one under Devices.", "Kein Rollentrainer verbunden – unter Geräte verbinden."),
         };
 
