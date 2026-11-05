@@ -273,15 +273,19 @@ namespace FreeVelo.Core.Workouts
         // ------------------------------------------------------------------ statistics
 
         /// <summary>Estimated training stress score at <see cref="FtpW"/> (free-ride parts counted at 75 %).</summary>
-        public double EstimatedTss()
+        public double EstimatedTss() => EstimateTss(Workout, FtpW);
+
+        /// <summary>Estimated TSS of a workout at <paramref name="ftpW"/> (free-ride parts counted at 75 %).</summary>
+        public static double EstimateTss(Workout workout, int ftpW)
         {
+            ftpW = Math.Max(1, ftpW);
             double sum = 0;
-            foreach (var seg in Workout.Flatten())
+            foreach (var seg in workout.Flatten())
             {
                 for (int t = 0; t < seg.DurationS; t += 5)
                 {
-                    double w = seg.BaseTargetW(t + 2.5, FtpW) ?? (0.75 * FtpW);
-                    double f = w / FtpW;
+                    double w = seg.BaseTargetW(t + 2.5, ftpW) ?? (0.75 * ftpW);
+                    double f = w / ftpW;
                     sum += f * f * Math.Min(5, seg.DurationS - t);
                 }
             }

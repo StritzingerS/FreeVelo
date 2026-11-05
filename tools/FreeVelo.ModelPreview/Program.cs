@@ -5,6 +5,38 @@ using FreeVelo.ModelPreview;
 
 // Renders the procedural rider/bike (exactly the geometry Unity uses) from several cameras into one PNG.
 // Usage: dotnet run -c Release -- out.png [crankDegrees] [views: game,side,rear34,front34,face,drive,cockpit,top]
+if (args.Length > 1 && args[0] == "--icons")
+{
+    // Icon sheet for checking the procedural UI icons: dark background, white icons at 96 px and 32 px.
+    var icons = Enum.GetValues<FreeVelo.Core.Ui.Icon>();
+    const int big = 96, small = 32, cell = 140;
+    int iconCols = 8, rowsN = (icons.Length + iconCols - 1) / iconCols;
+    int sw2 = iconCols * cell, sh2 = rowsN * cell;
+    var rgb2 = new byte[sw2 * sh2 * 3];
+    for (int i = 0; i < rgb2.Length; i += 3) { rgb2[i] = 22; rgb2[i + 1] = 27; rgb2[i + 2] = 34; }
+    for (int i = 0; i < icons.Length; i++)
+    {
+        int ox = (i % iconCols) * cell, oy = (i / iconCols) * cell;
+        void Blit(float[] a, int size, int x0, int y0)
+        {
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float v = a[(y * size) + x];
+                int o = (((y0 + y) * sw2) + x0 + x) * 3;
+                for (int c = 0; c < 3; c++) rgb2[o + c] = (byte)((rgb2[o + c] * (1 - v)) + (240 * v));
+            }
+        }
+
+        Blit(FreeVelo.Core.Ui.IconPainter.Render(icons[i], big), big, ox + 8, oy + 8);
+        Blit(FreeVelo.Core.Ui.IconPainter.Render(icons[i], small), small, ox + 106, oy + 8);
+    }
+
+    Renderer.WritePng(args[1], rgb2, sw2, sh2);
+    Console.WriteLine($"{icons.Length} icons -> {args[1]}");
+    return;
+}
+
 if (args.Length > 1 && args[0] == "--bake")
 {
     // args[1] = Resources folder: high detail and a low-detail LOD for distant riders.

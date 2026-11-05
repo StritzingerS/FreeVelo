@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using FreeVelo.App;
+using FreeVelo.Core.Ui;
 using FreeVelo.Core.Workouts;
 using UnityEngine;
 
@@ -49,6 +50,10 @@ namespace FreeVelo.UI
         private const int FreeItem = 7;
         private const int IntervalItem = 8;
 
+        private static GUIStyle _tinyCenterStyle;
+
+        private static GUIStyle TinyCenter => _tinyCenterStyle ??= Theme.With(Theme.Caption, Theme.Text, 14, TextAnchor.MiddleCenter);
+
         private void OpenEditor(Workout workout, bool builtIn)
         {
             _editor = workout != null
@@ -73,87 +78,94 @@ namespace FreeVelo.UI
         {
             var ed = _editor;
             ed.FtpW = AppSettings.FtpW;
-            var area = new Rect(20, 20, _w - 40, _h - 40);
-            GUI.Box(area, GUIContent.none, _panel);
+            Ui.Rect(new Rect(0, 0, _w, _h), Theme.Alpha(Theme.Background, 0.94f), 0);
+            var area = new Rect(28, 20, _w - 56, _h - 40);
 
-            // ---- top bar
-            float x = area.x + 15, y = area.y + 12;
-            GUI.Label(new Rect(x, y + 8, 90, 40), L.Get("name") + ":", _label);
-            string name = GUI.TextField(new Rect(x + 90, y + 4, 380, 50), _editorName ?? string.Empty, 60, _textField);
+            // ---- top bar: close, name, undo/redo, unit, save
+            float x = area.x, y = area.y;
+            if (Ui.IconButton(new Rect(x, y, 52, 52), _confirmDiscard ? Icon.Trash : Icon.ChevronLeft, _confirmDiscard ? ButtonKind.Danger : ButtonKind.Secondary))
+            {
+                if (!ed.IsDirty || _confirmDiscard)
+                {
+                    CloseEditor();
+                    return;
+                }
+
+                _confirmDiscard = true;
+                Ui.Toast(L.Get("discard_hint"));
+            }
+
+            string name = Ui.TextField(new Rect(x + 64, y, Mathf.Min(460, area.width - 640), 52), _editorName, 60);
             if (name != _editorName)
             {
                 _editorName = name;
                 ed.Rename(name);
             }
 
-            float bx = area.xMax - 15;
+            float bx = area.xMax;
             bx -= 150;
-            if (GUI.Button(new Rect(bx, y, 150, 56), _confirmDiscard ? L.Get("discard") : L.Get("close"), _button))
-            {
-                if (!ed.IsDirty || _confirmDiscard) CloseEditor();
-                else _confirmDiscard = true;
-                return;
-            }
-
+            if (Ui.Button(new Rect(bx, y, 150, 52), L.Get("save"), ButtonKind.Primary, Icon.Check)) SaveEditor(asCopy: false);
             if (_editingBuiltIn)
             {
-                bx -= 190;
-                if (GUI.Button(new Rect(bx, y, 182, 56), L.Get("save_copy"), _button)) SaveEditor(asCopy: true);
+                bx -= 196;
+                if (Ui.Button(new Rect(bx, y, 186, 52), L.Get("save_copy"), ButtonKind.Secondary, Icon.Copy)) SaveEditor(asCopy: true);
             }
 
-            bx -= 150;
-            if (GUI.Button(new Rect(bx, y, 142, 56), L.Get("save"), _button)) SaveEditor(asCopy: false);
             bool watts = UsesWatts(ed.Workout);
-            bx -= 110;
-            if (GUI.Button(new Rect(bx, y, 102, 56), watts ? "W" : "%", _button)) ed.SetUnit(!watts);
-            bx -= 80;
-            GUI.enabled = ed.CanRedo;
-            if (GUI.Button(new Rect(bx, y, 72, 56), "↷", _button)) ed.Redo();
-            bx -= 80;
-            GUI.enabled = ed.CanUndo;
-            if (GUI.Button(new Rect(bx, y, 72, 56), "↶", _button)) ed.Undo();
-            GUI.enabled = true;
+            bx -= 140;
+            int unit = Ui.Segmented(new Rect(bx, y, 130, 52), new[] { "%", "W" }, watts ? 1 : 0);
+            if ((unit == 1) != watts) ed.SetUnit(unit == 1);
+            bx -= 62;
+            if (Ui.IconButton(new Rect(bx, y, 52, 52), Icon.Redo, ButtonKind.Secondary, ed.CanRedo)) ed.Redo();
+            bx -= 60;
+            if (Ui.IconButton(new Rect(bx, y, 52, 52), Icon.Undo, ButtonKind.Secondary, ed.CanUndo)) ed.Undo();
 
-            // ---- info line
-            y += 64;
-            string info = $"{L.Get("total")}: {FormatTime(ed.Workout.TotalDurationS)}   TSS ≈ {ed.EstimatedTss():0}   FTP {ed.FtpW} W";
-            if (ed.IsDirty) info += "   •";
-            if (!string.IsNullOrEmpty(_editorMessage)) info += "    " + _editorMessage;
-            GUI.Label(new Rect(x, y, area.width - 30, 30), info, _small);
+            // ---- stats chips
+            y += 66;
+            float cx = x;
+            cx += Ui.Chip(new Rect(cx, y, 0, 32), Ui.Clock(ed.Workout.TotalDurationS), Theme.Info, Icon.Timer) + 8;
+            cx += Ui.Chip(new Rect(cx, y, 0, 32), $"TSS {ed.EstimatedTss():0}", Theme.Accent, Icon.Bolt) + 8;
+            cx += Ui.Chip(new Rect(cx, y, 0, 32), $"FTP {ed.FtpW} W", Theme.Muted) + 8;
+            if (ed.IsDirty) Ui.Chip(new Rect(cx, y, 0, 32), L.Get("unsaved"), Theme.Warning, Icon.Edit);
+            if (!string.IsNullOrEmpty(_editorMessage))
+            {
+                Ui.Toast(_editorMessage);
+                _editorMessage = null;
+            }
 
             // ---- palette
-            y += 32;
+            y += 46;
             var paletteRects = new List<Rect>();
-            float pw = Mathf.Min(118, (area.width - 30 - (8 * 8)) / 9f);
-            for (int i = 0; i < 9; i++)
+            int items = ed.OpenRepeat != null ? 8 : 9;
+            float pw = Mathf.Min(124, (area.width - (10 * (items - 1))) / items);
+            for (int i = 0; i < items; i++)
             {
-                if (i == IntervalItem && ed.OpenRepeat != null) break; // no nested repeats
-                var r = new Rect(x + (i * (pw + 8)), y, pw, 58);
+                var r = new Rect(x + (i * (pw + 10)), y, pw, 60);
                 paletteRects.Add(r);
                 DrawPaletteItem(r, i);
             }
 
-            // ---- breadcrumb inside a repeat block
-            y += 66;
+            // ---- breadcrumb inside a repeat block / hint
+            y += 72;
             if (ed.OpenRepeat != null)
             {
-                GUI.Label(new Rect(x, y, 600, 34), $"{L.Get("intervals")} ×{ed.OpenRepeat.Count} — {L.Get("editing_intervals")}", _label);
-                if (GUI.Button(new Rect(x + 620, y - 4, 200, 42), L.Get("done"), _button)) ed.CloseRepeat();
+                Ui.Chip(new Rect(x, y, 0, 34), $"{L.Get("intervals")} ×{ed.OpenRepeat.Count} — {L.Get("editing_intervals")}", Theme.Accent, Icon.Reset);
+                if (Ui.Button(new Rect(area.xMax - 160, y - 6, 160, 44), L.Get("done"), ButtonKind.Primary, Icon.Check)) ed.CloseRepeat();
             }
             else
             {
-                GUI.Label(new Rect(x, y, area.width - 30, 34), L.Get("editor_hint"), _small);
+                GUI.Label(new Rect(x, y, area.width, 30), L.Get("editor_hint"), Theme.Caption);
             }
 
             // ---- timeline
-            y += 40;
-            var timeline = new Rect(x, y, area.width - 30, 250);
-            GUI.Box(timeline, GUIContent.none, _panel);
+            y += 44;
+            var timeline = new Rect(x, y, area.width, 240);
+            Ui.Card(timeline);
             DrawTimeline(timeline);
             HandleEditorInput(timeline, paletteRects);
 
             // ---- selected block panel
-            DrawBlockPanel(new Rect(x, timeline.yMax + 10, area.width - 30, area.yMax - timeline.yMax - 22));
+            DrawBlockPanel(new Rect(x, timeline.yMax + 16, area.width, area.yMax - timeline.yMax - 16));
         }
 
         private void SaveEditor(bool asCopy)
@@ -203,22 +215,37 @@ namespace FreeVelo.UI
 
         private void DrawPaletteItem(Rect r, int item)
         {
-            var old = GUI.color;
-            string text;
+            bool dragging = _gesture == Gesture.Palette && _paletteItem == item;
+            Color color;
+            string title, sub;
+            Icon? icon = null;
             if (item < Palette.Length)
             {
-                GUI.color = ZoneColor(Palette[item].Percent / 100.0 * AppSettings.FtpW, AppSettings.FtpW);
-                text = $"{Palette[item].Label}\n<size=15>{Palette[item].Percent:0} %</size>";
+                color = ZoneColor(Palette[item].Percent / 100.0 * AppSettings.FtpW, AppSettings.FtpW);
+                title = Palette[item].Label;
+                sub = $"{Palette[item].Percent:0} %";
             }
             else
             {
-                GUI.color = new Color(0.45f, 0.5f, 0.58f);
-                text = item == RampItem ? L.Get("ramp") : item == FreeItem ? L.Get("free") : L.Get("intervals");
+                color = Theme.Surface3;
+                title = item == RampItem ? L.Get("ramp") : item == FreeItem ? L.Get("free") : L.Get("intervals");
+                sub = null;
+                icon = item == RampItem ? Icon.Route : item == FreeItem ? Icon.Bike : Icon.Reset;
             }
 
-            GUI.DrawTexture(r, Texture2D.whiteTexture);
-            GUI.color = old;
-            GUI.Label(r, text, _paletteLabel);
+            Ui.Rect(r, Theme.Alpha(color, dragging ? 0.4f : 1f), Theme.RadiusSmall);
+            bool dark = item < Palette.Length;
+            var textColor = dark ? Theme.Background : Theme.Text;
+            if (icon.HasValue)
+            {
+                Ui.DrawIcon(new Rect(r.center.x - 11, r.y + 8, 22, 22), icon.Value, textColor);
+                GUI.Label(new Rect(r.x, r.y + 32, r.width, 22), title, Theme.With(Theme.Caption, textColor, 14, TextAnchor.MiddleCenter));
+            }
+            else
+            {
+                GUI.Label(new Rect(r.x, r.y + 6, r.width, 26), title, Theme.With(Theme.H3, textColor, 19, TextAnchor.MiddleCenter));
+                GUI.Label(new Rect(r.x, r.y + 32, r.width, 20), sub, Theme.With(Theme.Caption, Theme.Alpha(textColor, 0.75f), 14, TextAnchor.MiddleCenter));
+            }
         }
 
         // ------------------------------------------------------------------ timeline
@@ -249,7 +276,7 @@ namespace FreeVelo.UI
             float ftpY = PercentToY(t, 100);
             GUI.DrawTexture(new Rect(t.x + 4, ftpY, t.width - 8, 1), Texture2D.whiteTexture);
             GUI.color = old;
-            GUI.Label(new Rect(t.xMax - 90, ftpY - 22, 80, 22), "FTP", _small);
+            GUI.Label(new Rect(t.xMax - 60, ftpY - 20, 50, 18), "FTP", Theme.With(Theme.Caption, size: 13));
 
             for (int i = 0; i < ed.Blocks.Count; i++)
             {
@@ -264,7 +291,7 @@ namespace FreeVelo.UI
 
                 if (i == ed.Selected)
                 {
-                    DrawOutline(new Rect(rect.x, t.y + 4, rect.width, t.height - 8), new Color(1f, 0.85f, 0.2f), 3);
+                    Ui.Outline(new Rect(rect.x - 2, t.y + 4, rect.width + 4, t.height - 8), Theme.Text, 3, 8);
                     DrawHandles(t, rect, block);
                 }
 
@@ -274,8 +301,7 @@ namespace FreeVelo.UI
             if (_dropIndex >= 0)
             {
                 float dropX = _dropIndex < _blockRects.Count ? _blockRects[_dropIndex].Rect.x : x;
-                GUI.color = new Color(1f, 0.85f, 0.2f);
-                GUI.DrawTexture(new Rect(dropX - 2, t.y + 4, 4, t.height - 8), Texture2D.whiteTexture);
+                Ui.Rect(new Rect(dropX - 3, t.y + 4, 6, t.height - 8), Theme.Accent, 3);
                 GUI.color = old;
             }
         }
@@ -297,7 +323,7 @@ namespace FreeVelo.UI
                     GUI.color = new Color(0.55f, 0.58f, 0.62f, 0.75f * tint.a);
                     GUI.DrawTexture(new Rect(rect.x + 1, top, rect.width - 2, t.yMax - 8 - top), Texture2D.whiteTexture);
                     GUI.color = tint;
-                    GUI.Label(new Rect(rect.x, top - 26, rect.width, 24), f.IsMaxEffort ? "MAX" : L.Get("free"), _tinyCenter);
+                    GUI.Label(new Rect(rect.x, top - 26, rect.width, 24), f.IsMaxEffort ? "MAX" : L.Get("free"), TinyCenter);
                     break;
                 }
 
@@ -324,13 +350,13 @@ namespace FreeVelo.UI
                     GUI.color = new Color(1, 1, 1, 0.8f * tint.a);
                     GUI.DrawTexture(new Rect(rect.x + 2, t.y + 8, rect.width - 4, 3), Texture2D.whiteTexture);
                     GUI.color = tint;
-                    GUI.Label(new Rect(rect.x, t.y + 12, rect.width, 26), $"×{rep.Count}", _tinyCenter);
+                    GUI.Label(new Rect(rect.x, t.y + 12, rect.width, 26), $"×{rep.Count}", TinyCenter);
                     break;
                 }
             }
 
             GUI.color = tint;
-            if (rect.width > 46) GUI.Label(new Rect(rect.x, t.yMax - 30, rect.width, 24), FormatTime(block.TotalDurationS), _tinyCenter);
+            if (rect.width > 46) GUI.Label(new Rect(rect.x, t.yMax - 30, rect.width, 24), Ui.Clock(block.TotalDurationS), TinyCenter);
 
             void Bar(float bx, float bw, double fromPct, double toPct)
             {
@@ -345,7 +371,7 @@ namespace FreeVelo.UI
                 }
 
                 GUI.color = tint;
-                if (bw > 40) GUI.Label(new Rect(bx, PercentToY(t, Mathf.Max((float)fromPct, (float)toPct)) - 24, bw, 22), PowerText(fromPct, toPct), _tinyCenter);
+                if (bw > 40) GUI.Label(new Rect(bx, PercentToY(t, Mathf.Max((float)fromPct, (float)toPct)) - 24, bw, 22), PowerText(fromPct, toPct), TinyCenter);
             }
         }
 
@@ -358,8 +384,7 @@ namespace FreeVelo.UI
 
         private void DrawHandles(Rect t, Rect rect, WorkoutBlock block)
         {
-            var c = new Color(1f, 0.85f, 0.2f);
-            foreach (var h in Handles(t, rect, block)) DrawKnob(h.Rect, c);
+            foreach (var h in Handles(t, rect, block)) DrawKnob(h.Rect, Theme.Text);
         }
 
         private IEnumerable<(Gesture Kind, Rect Rect)> Handles(Rect t, Rect rect, WorkoutBlock block)
@@ -380,12 +405,10 @@ namespace FreeVelo.UI
 
         private static void DrawKnob(Rect r, Color c)
         {
-            var old = GUI.color;
-            GUI.color = new Color(0, 0, 0, 0.6f);
-            GUI.DrawTexture(new Rect(r.x - 1, r.y - 1, r.width + 2, r.height + 2), Texture2D.whiteTexture);
-            GUI.color = c;
-            GUI.DrawTexture(new Rect(r.x + 3, r.y + 3, r.width - 6, r.height - 6), Texture2D.whiteTexture);
-            GUI.color = old;
+            var knob = new Rect(r.center.x - 12, r.center.y - 12, 24, 24);
+            Ui.Shadow(knob, 12, 0.8f);
+            Ui.Rect(knob, c, 12);
+            Ui.Rect(new Rect(knob.center.x - 5, knob.center.y - 5, 10, 10), Theme.Accent, 5);
         }
 
         private static void DrawOutline(Rect r, Color c, float thickness)
@@ -580,69 +603,67 @@ namespace FreeVelo.UI
         {
             var ed = _editor;
             var block = ed.SelectedBlock;
-            GUILayout.BeginArea(r);
+            Ui.Card(r);
             if (block == null)
             {
-                GUILayout.Label(L.Get("select_block"), _label);
-                GUILayout.EndArea();
+                Ui.DrawIcon(new Rect(r.x + 24, r.center.y - 14, 28, 28), Icon.Edit, Theme.Muted);
+                GUI.Label(new Rect(r.x + 64, r.y, r.width - 80, r.height), L.Get("select_block"), Theme.BodyMuted);
                 return;
             }
 
             int i = ed.Selected;
             int ftp = ed.FtpW;
-            GUILayout.BeginHorizontal();
-            GUILayout.BeginVertical(GUILayout.Width(r.width * 0.62f));
+            string type = block is SteadyBlock ? L.Get("steady") : block is RampBlock ? L.Get("ramp") : block is FreeRideBlock ? L.Get("free") : L.Get("intervals");
+            GUI.Label(new Rect(r.x + 24, r.y + 16, 300, 20), type.ToUpperInvariant(), Theme.Overline);
+
+            float rowY = r.y + 44;
+            float rowW = Mathf.Min(560, r.width - 420);
             switch (block)
             {
                 case SteadyBlock s:
-                    DurationRow(i, s.DurationS);
-                    PowerRow(L.Get("power"), s.Target.ToPercent(ftp), v => ed.SetPercent(i, v));
+                    DurationRow(new Rect(r.x + 24, rowY, rowW, 50), i, s.DurationS);
+                    PowerRow(new Rect(r.x + 24, rowY + 60, rowW, 50), L.Get("power"), s.Target.ToPercent(ftp), v => ed.SetPercent(i, v));
                     break;
                 case RampBlock rb:
-                    DurationRow(i, rb.DurationS);
-                    PowerRow(L.Get("from"), rb.From.ToPercent(ftp), v => ed.SetPercent(i, v));
-                    PowerRow(L.Get("to"), rb.To.ToPercent(ftp), v => ed.SetPercent(i, v, rampEnd: true));
+                    DurationRow(new Rect(r.x + 24, rowY, rowW, 50), i, rb.DurationS);
+                    float half = (rowW - 12) / 2f;
+                    PowerRow(new Rect(r.x + 24, rowY + 60, rowW, 50), L.Get("from"), rb.From.ToPercent(ftp), v => ed.SetPercent(i, v));
+                    PowerRow(new Rect(r.x + 24, rowY + 120, rowW, 50), L.Get("to"), rb.To.ToPercent(ftp), v => ed.SetPercent(i, v, rampEnd: true));
                     break;
                 case FreeRideBlock f:
-                    DurationRow(i, f.DurationS);
-                    GUILayout.Label(L.Get("free_hint"), _small);
+                    DurationRow(new Rect(r.x + 24, rowY, rowW, 50), i, f.DurationS);
+                    GUI.Label(new Rect(r.x + 24, rowY + 60, rowW, 50), L.Get("free_hint"), Theme.BodyMuted);
                     break;
                 case RepeatBlock rep:
-                    EditorRow(L.Get("repeats"), $"×{rep.Count}", ("−1", () => ed.SetRepeatCount(i, rep.Count - 1)), ("+1", () => ed.SetRepeatCount(i, rep.Count + 1)));
-                    GUILayout.Label($"{rep.Blocks.Count} {L.Get("blocks")} · {FormatTime(rep.TotalDurationS)}", _small);
+                    GUI.Label(new Rect(r.x + 24, rowY, 140, 50), L.Get("repeats"), Theme.Body);
+                    int count = Ui.Stepper(new Rect(r.x + 164, rowY, rowW - 140, 50), rep.Count, "×", 1, 1, 1, 50);
+                    if (count != rep.Count) ed.SetRepeatCount(i, count);
+                    GUI.Label(new Rect(r.x + 24, rowY + 60, rowW, 40), $"{rep.Blocks.Count} {L.Get("blocks")} · {Ui.Clock(rep.TotalDurationS)}", Theme.BodyMuted);
                     break;
             }
 
-            GUILayout.EndVertical();
-
-            GUILayout.BeginVertical();
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("◀", _button, GUILayout.Height(50))) ed.Move(i, i - 1);
-            if (GUILayout.Button("▶", _button, GUILayout.Height(50))) ed.Move(i, i + 1);
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button(L.Get("duplicate"), _button, GUILayout.Height(50))) ed.Duplicate();
-            if (GUILayout.Button(L.Get("delete"), _button, GUILayout.Height(50))) ed.Delete();
-            GUILayout.EndHorizontal();
-            if (block is RepeatBlock && GUILayout.Button(L.Get("edit_intervals"), _button, GUILayout.Height(50))) ed.OpenSelectedRepeat();
-            GUILayout.EndVertical();
-            GUILayout.EndHorizontal();
-            GUILayout.EndArea();
+            // Actions (right)
+            float ax = r.xMax - 24 - 360;
+            float ay = r.y + 44;
+            if (Ui.IconButton(new Rect(ax, ay, 52, 52), Icon.ChevronLeft, ButtonKind.Secondary, i > 0)) ed.Move(i, i - 1);
+            if (Ui.IconButton(new Rect(ax + 60, ay, 52, 52), Icon.ChevronRight, ButtonKind.Secondary, i < ed.Blocks.Count - 1)) ed.Move(i, i + 1);
+            if (Ui.Button(new Rect(ax + 124, ay, 236, 52), L.Get("duplicate"), ButtonKind.Secondary, Icon.Copy)) ed.Duplicate();
+            if (Ui.Button(new Rect(ax + 124, ay + 62, 236, 52), L.Get("delete"), ButtonKind.Danger, Icon.Trash)) ed.Delete();
+            if (block is RepeatBlock && Ui.Button(new Rect(ax, ay + 124, 360, 52), L.Get("edit_intervals"), ButtonKind.Primary, Icon.Edit)) ed.OpenSelectedRepeat();
         }
 
-        private void DurationRow(int index, int seconds)
+        private void DurationRow(Rect r, int index, int seconds)
         {
             var ed = _editor;
-            EditorRow(
-                L.Get("duration"),
-                FormatTime(seconds),
+            GUI.Label(new Rect(r.x, r.y, 140, r.height), L.Get("duration"), Theme.Body);
+            Steps(new Rect(r.x + 140, r.y, r.width - 140, r.height), Ui.Clock(seconds),
                 ("−1m", () => ed.SetDuration(index, seconds - 60)),
                 ("−15s", () => ed.SetDuration(index, seconds - 15)),
                 ("+15s", () => ed.SetDuration(index, seconds + 15)),
                 ("+1m", () => ed.SetDuration(index, seconds + 60)));
         }
 
-        private void PowerRow(string label, double percent, System.Action<double> set)
+        private void PowerRow(Rect r, string label, double percent, System.Action<double> set)
         {
             bool watts = UsesWatts(_editor.Workout);
             int ftp = _editor.FtpW;
@@ -650,32 +671,34 @@ namespace FreeVelo.UI
             double small = watts ? 500.0 / ftp : 1; // 5 W or 1 %
             double large = watts ? 2500.0 / ftp : 5; // 25 W or 5 %
             string s = watts ? "5" : "1", l = watts ? "25" : "5";
-            EditorRow(
-                label,
-                value,
+            GUI.Label(new Rect(r.x, r.y, 140, r.height), label, Theme.Body);
+            Steps(new Rect(r.x + 140, r.y, r.width - 140, r.height), value,
                 ("−" + l, () => set(percent - large)),
                 ("−" + s, () => set(percent - small)),
                 ("+" + s, () => set(percent + small)),
                 ("+" + l, () => set(percent + large)));
         }
 
-        private void EditorRow(string label, string value, params (string Text, System.Action Action)[] buttons)
+        /// <summary>Value in the middle, half of the buttons on each side.</summary>
+        private static void Steps(Rect r, string value, params (string Text, System.Action Action)[] buttons)
         {
-            GUILayout.BeginHorizontal(GUILayout.Height(54));
-            GUILayout.Label(label, _label, GUILayout.Width(150));
             int half = buttons.Length / 2;
+            float bw = 72;
             for (int b = 0; b < half; b++)
             {
-                if (GUILayout.Button(buttons[b].Text, _button, GUILayout.Width(82), GUILayout.Height(50))) buttons[b].Action();
+                if (Ui.Button(new Rect(r.x + (b * (bw + 6)), r.y, bw, r.height), buttons[b].Text)) buttons[b].Action();
             }
 
-            GUILayout.Label(value, _labelCenter, GUILayout.Width(130));
-            for (int b = half; b < buttons.Length; b++)
+            float right = r.xMax;
+            for (int b = buttons.Length - 1; b >= half; b--)
             {
-                if (GUILayout.Button(buttons[b].Text, _button, GUILayout.Width(82), GUILayout.Height(50))) buttons[b].Action();
+                right -= bw;
+                if (Ui.Button(new Rect(right, r.y, bw, r.height), buttons[b].Text)) buttons[b].Action();
+                right -= 6;
             }
 
-            GUILayout.EndHorizontal();
+            float left = r.x + (half * (bw + 6));
+            GUI.Label(new Rect(left, r.y, right - left, r.height), value, Theme.With(Theme.H2, anchor: TextAnchor.MiddleCenter));
         }
     }
 }
