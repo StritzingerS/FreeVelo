@@ -186,6 +186,62 @@ namespace FreeVelo.UI
 
         public static void Divider(Rect r) => Rect(new Rect(r.x, r.y, r.width, 1), Theme.Stroke, 0);
 
+        private static Texture2D _gradient;
+
+        /// <summary>
+        /// Smooth fade of <paramref name="color"/>: opaque at the start, transparent at the end. Directions:
+        /// 0 = left→right, 1 = top→bottom, 2 = bottom→top.
+        /// </summary>
+        public static void Fade(Rect r, Color color, int direction)
+        {
+            if (Event.current.type != EventType.Repaint) return;
+            if (_gradient == null)
+            {
+                _gradient = new Texture2D(64, 1, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+                for (int i = 0; i < 64; i++)
+                {
+                    float t = i / 63f;
+                    _gradient.SetPixel(i, 0, new Color(1, 1, 1, 1f - (t * t * (3f - (2f * t)))));
+                }
+
+                _gradient.Apply();
+            }
+
+            var old = GUI.color;
+            GUI.color = color;
+            if (direction == 0)
+            {
+                GUI.DrawTexture(r, _gradient, ScaleMode.StretchToFill, true);
+            }
+            else
+            {
+                // Rotate the horizontal gradient by drawing it in a rotated GUI matrix.
+                var m = GUI.matrix;
+                var pivot = new Vector2(r.x, r.y);
+                if (direction == 1)
+                {
+                    GUIUtility.RotateAroundPivot(90, pivot);
+                    GUI.DrawTexture(new Rect(r.x, r.y - r.width, r.height, r.width), _gradient, ScaleMode.StretchToFill, true);
+                }
+                else
+                {
+                    GUIUtility.RotateAroundPivot(-90, pivot);
+                    GUI.DrawTexture(new Rect(r.x - r.height, r.y, r.height, r.width), _gradient, ScaleMode.StretchToFill, true);
+                }
+
+                GUI.matrix = m;
+            }
+
+            GUI.color = old;
+        }
+
+        /// <summary>Width a button needs for its text (and icon).</summary>
+        public static float ButtonWidth(string text, bool icon, float height = 52)
+        {
+            var size = Theme.With(Theme.ButtonText, size: height < 46 ? 16 : (int?)null).CalcSize(new GUIContent(text ?? string.Empty));
+            return size.x + (icon ? Mathf.Min(height * 0.42f, 26) + 10 : 0) + 44;
+        }
+
         // ------------------------------------------------------------------ buttons
 
         // While a finger/mouse holds an IMGUI button, that button is the hot control (no legacy Input API: the project uses the Input System).

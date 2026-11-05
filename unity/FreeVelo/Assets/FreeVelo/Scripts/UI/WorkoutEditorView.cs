@@ -95,7 +95,7 @@ namespace FreeVelo.UI
                 Ui.Toast(L.Get("discard_hint"));
             }
 
-            string name = Ui.TextField(new Rect(x + 64, y, Mathf.Min(460, area.width - 640), 52), _editorName, 60);
+            string name = Ui.TextField(new Rect(x + 64, y, Mathf.Clamp(area.width - 760, 240, 460), 52), _editorName, 60);
             if (name != _editorName)
             {
                 _editorName = name;
@@ -103,12 +103,14 @@ namespace FreeVelo.UI
             }
 
             float bx = area.xMax;
-            bx -= 150;
-            if (Ui.Button(new Rect(bx, y, 150, 52), L.Get("save"), ButtonKind.Primary, Icon.Check)) SaveEditor(asCopy: false);
+            float sw = Ui.ButtonWidth(L.Get("save"), true);
+            bx -= sw;
+            if (Ui.Button(new Rect(bx, y, sw, 52), L.Get("save"), ButtonKind.Primary, Icon.Check)) SaveEditor(asCopy: false);
             if (_editingBuiltIn)
             {
-                bx -= 196;
-                if (Ui.Button(new Rect(bx, y, 186, 52), L.Get("save_copy"), ButtonKind.Secondary, Icon.Copy)) SaveEditor(asCopy: true);
+                float cw = Ui.ButtonWidth(L.Get("save_copy"), true);
+                bx -= cw + 10;
+                if (Ui.Button(new Rect(bx, y, cw, 52), L.Get("save_copy"), ButtonKind.Secondary, Icon.Copy)) SaveEditor(asCopy: true);
             }
 
             bool watts = UsesWatts(ed.Workout);
@@ -159,13 +161,13 @@ namespace FreeVelo.UI
 
             // ---- timeline
             y += 44;
-            var timeline = new Rect(x, y, area.width, 240);
+            var timeline = new Rect(x, y, area.width, 200);
             Ui.Card(timeline);
             DrawTimeline(timeline);
             HandleEditorInput(timeline, paletteRects);
 
             // ---- selected block panel
-            DrawBlockPanel(new Rect(x, timeline.yMax + 16, area.width, area.yMax - timeline.yMax - 16));
+            DrawBlockPanel(new Rect(x, timeline.yMax + 12, area.width, area.yMax - timeline.yMax - 12));
         }
 
         private void SaveEditor(bool asCopy)
@@ -614,24 +616,24 @@ namespace FreeVelo.UI
             int i = ed.Selected;
             int ftp = ed.FtpW;
             string type = block is SteadyBlock ? L.Get("steady") : block is RampBlock ? L.Get("ramp") : block is FreeRideBlock ? L.Get("free") : L.Get("intervals");
-            GUI.Label(new Rect(r.x + 24, r.y + 16, 300, 20), type.ToUpperInvariant(), Theme.Overline);
+            GUI.Label(new Rect(r.x + 24, r.y + 12, 300, 20), type.ToUpperInvariant(), Theme.Overline);
 
-            float rowY = r.y + 44;
+            float rowY = r.y + 36;
             float rowW = Mathf.Min(560, r.width - 420);
             switch (block)
             {
                 case SteadyBlock s:
-                    DurationRow(new Rect(r.x + 24, rowY, rowW, 50), i, s.DurationS);
-                    PowerRow(new Rect(r.x + 24, rowY + 60, rowW, 50), L.Get("power"), s.Target.ToPercent(ftp), v => ed.SetPercent(i, v));
+                    DurationRow(new Rect(r.x + 24, rowY, rowW, 46), i, s.DurationS);
+                    PowerRow(new Rect(r.x + 24, rowY + 54, rowW, 46), L.Get("power"), s.Target.ToPercent(ftp), v => ed.SetPercent(i, v));
                     break;
                 case RampBlock rb:
-                    DurationRow(new Rect(r.x + 24, rowY, rowW, 50), i, rb.DurationS);
+                    DurationRow(new Rect(r.x + 24, rowY, rowW, 46), i, rb.DurationS);
                     float half = (rowW - 12) / 2f;
-                    PowerRow(new Rect(r.x + 24, rowY + 60, rowW, 50), L.Get("from"), rb.From.ToPercent(ftp), v => ed.SetPercent(i, v));
-                    PowerRow(new Rect(r.x + 24, rowY + 120, rowW, 50), L.Get("to"), rb.To.ToPercent(ftp), v => ed.SetPercent(i, v, rampEnd: true));
+                    PowerRow(new Rect(r.x + 24, rowY + 54, rowW, 46), L.Get("from"), rb.From.ToPercent(ftp), v => ed.SetPercent(i, v));
+                    PowerRow(new Rect(r.x + 24, rowY + 108, rowW, 46), L.Get("to"), rb.To.ToPercent(ftp), v => ed.SetPercent(i, v, rampEnd: true));
                     break;
                 case FreeRideBlock f:
-                    DurationRow(new Rect(r.x + 24, rowY, rowW, 50), i, f.DurationS);
+                    DurationRow(new Rect(r.x + 24, rowY, rowW, 46), i, f.DurationS);
                     GUI.Label(new Rect(r.x + 24, rowY + 60, rowW, 50), L.Get("free_hint"), Theme.BodyMuted);
                     break;
                 case RepeatBlock rep:
@@ -644,12 +646,12 @@ namespace FreeVelo.UI
 
             // Actions (right)
             float ax = r.xMax - 24 - 360;
-            float ay = r.y + 44;
+            float ay = r.y + 36;
             if (Ui.IconButton(new Rect(ax, ay, 52, 52), Icon.ChevronLeft, ButtonKind.Secondary, i > 0)) ed.Move(i, i - 1);
             if (Ui.IconButton(new Rect(ax + 60, ay, 52, 52), Icon.ChevronRight, ButtonKind.Secondary, i < ed.Blocks.Count - 1)) ed.Move(i, i + 1);
             if (Ui.Button(new Rect(ax + 124, ay, 236, 52), L.Get("duplicate"), ButtonKind.Secondary, Icon.Copy)) ed.Duplicate();
-            if (Ui.Button(new Rect(ax + 124, ay + 62, 236, 52), L.Get("delete"), ButtonKind.Danger, Icon.Trash)) ed.Delete();
-            if (block is RepeatBlock && Ui.Button(new Rect(ax, ay + 124, 360, 52), L.Get("edit_intervals"), ButtonKind.Primary, Icon.Edit)) ed.OpenSelectedRepeat();
+            if (Ui.Button(new Rect(ax + 124, ay + 60, 236, 52), L.Get("delete"), ButtonKind.Danger, Icon.Trash)) ed.Delete();
+            if (block is RepeatBlock && Ui.Button(new Rect(ax, ay + 120, 360, 52), L.Get("edit_intervals"), ButtonKind.Primary, Icon.Edit)) ed.OpenSelectedRepeat();
         }
 
         private void DurationRow(Rect r, int index, int seconds)
