@@ -323,7 +323,7 @@ namespace FreeVelo.Core.Avatar
             var frameMat = Mat("frame", Style.Frame, 0.75f);
             var axle = front ? FrontAxle : RearAxle;
             float rotorX = front ? FrontRotorX : RearRotorX;
-            float angle = front ? -50f : 64f; // rear: between the seat stay (~30°) and the chain stay (~99°) // around the axle: 0 = up, 90 = forward
+            float angle = front ? -68f : 64f; // around the axle (0 = up, 90 = forward); rear between seat stay and chain stay
             float rad = angle * MathF.PI / 180f;
             var radial = new Vector3(0, MathF.Cos(rad), MathF.Sin(rad));
             var tangent = new Vector3(0, -MathF.Sin(rad), MathF.Cos(rad));
@@ -368,18 +368,25 @@ namespace FreeVelo.Core.Avatar
             float memberX = front ? -0.0565f : -0.0735f;
             if (front)
             {
-                // Fork leg centre (z) at a height above the axle: straight between axle end and the bend.
+                // Flat adapter plate on the outboard side: from the caliper forward onto the side of the fork leg,
+                // bolted there (two bolt heads on the plate).
                 float ForkZ(float h) => -0.002f + ((h - 0.012f) / (0.655f - FrontAxle.Y - 0.012f) * (0.452f - FrontAxle.Z + 0.002f));
+                var leg = Vector3.Normalize(new Vector3(0, 0.655f - FrontAxle.Y - 0.012f, 0.452f - FrontAxle.Z + 0.002f));
                 float h0 = center.Y - axle.Y;
-                var legBack = new Vector3(memberX, axle.Y + h0, axle.Z + ForkZ(h0) - 0.0105f);
-                var plateEnd = L(o * 0.0095f, -0.006f, 0.024f);
+                var legPoint = new Vector3(axle.X, axle.Y + h0, axle.Z + ForkZ(h0));
+                float plateX = memberX - 0.0055f; // against the outboard face of the leg
+                var from = new Vector3(plateX, center.Y, legPoint.Z - 0.004f);
+                var to = new Vector3(plateX, center.Y, center.Z + 0.006f); // ends under the front edge of the caliper
+                var plateCenter = (from + to) / 2f;
+                var plateRot = Rot.LookRotation(Vector3.UnitX, leg);
                 mount = SdfShapes.Blend(
-                    0.004f,
-                    SdfShapes.RoundBox((legBack + plateEnd) / 2f, new Vector3(0.0045f, 0.018f, (Vector3.Distance(legBack, plateEnd) / 2f) + 0.004f), 0.003f, Rot.LookRotation(Vector3.Normalize(plateEnd - legBack), Vector3.UnitY)));
+                    0.003f,
+                    SdfShapes.RoundBox(plateCenter, new Vector3(0.0022f, 0.017f, (MathF.Abs(to.Z - from.Z) / 2f) + 0.006f), 0.002f, Rot.LookRotation(Vector3.UnitZ, leg)),
+                    SdfShapes.RoundBox(new Vector3(memberX - 0.0015f, center.Y, center.Z + 0.012f), new Vector3(0.007f, 0.02f, 0.008f), 0.003f, Rot.LookRotation(Vector3.UnitZ, leg))); // spacer to the caliper
                 for (int i = -1; i <= 1; i += 2)
                 {
-                    var b = new Vector3(memberX, legBack.Y + (i * 0.011f), axle.Z + ForkZ(h0 + (i * 0.011f)) + 0.009f);
-                    bolts.Add(SdfShapes.RoundCone(b, b + new Vector3(0, 0, 0.0055f), 0.0034f, 0.0034f)); // bolt heads on the front of the leg
+                    var b = legPoint + (leg * (i * 0.013f)) + new Vector3(plateX - axle.X - 0.0025f, 0, 0);
+                    bolts.Add(SdfShapes.RoundCone(b, b - new Vector3(0.003f, 0, 0), 0.0034f, 0.0034f)); // bolt heads into the fork leg
                 }
             }
             else
