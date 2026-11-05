@@ -63,8 +63,9 @@ namespace FreeVelo.Core.Avatar
                 Ellipsoid(V(0, 1.08f, -0.195f), V(0.138f, 0.072f, 0.1f), Rot.Euler(-30, 0, 0)), // pelvis
                 Ellipsoid(T(0, -0.005f, 0.17f), V(0.14f, 0.1f, 0.15f), TorsoRot), // abdomen / lower back
                 Ellipsoid(T(0, 0.02f, 0.05f), V(0.145f, 0.092f, 0.11f), TorsoRot), // lumbar: fills the waist above the pelvis
-                Ellipsoid(T(0, 0.005f, 0.35f), V(0.145f, 0.104f, 0.19f), TorsoRot), // ribcage
-                Ellipsoid(T(0, 0.015f, 0.5f), V(0.155f, 0.066f, 0.072f), TorsoRot), // shoulder girdle
+                Ellipsoid(T(0, 0.016f, 0.34f), V(0.145f, 0.104f, 0.19f), TorsoRot), // ribcage
+                Ellipsoid(T(0, 0.04f, 0.4f), V(0.12f, 0.08f, 0.13f), TorsoRot), // rounded thoracic back (riders are never flat)
+                Ellipsoid(T(0, 0.01f, 0.5f), V(0.155f, 0.066f, 0.072f), TorsoRot), // shoulder girdle
             };
             for (int s = -1; s <= 1; s += 2)
             {
@@ -167,11 +168,11 @@ namespace FreeVelo.Core.Avatar
 
             var shape = Blend(
                 0.025f,
-                RoundCone(shoulder + (arm * 0.3f), elbow, 0.039f, 0.034f),
+                RoundCone(shoulder + (arm * 0.3f), elbow, 0.039f, 0.03f),
                 Ellipsoid(shoulder + (arm * 0.64f) + (inside * 0.01f), V(0.029f, 0.07f, 0.029f), armRot), // biceps
                 Ellipsoid(shoulder + (arm * 0.62f) - (inside * 0.01f), V(0.03f, 0.08f, 0.03f), armRot), // triceps
-                Sphere(elbow - (inside * 0.018f), 0.03f), // olecranon
-                RoundCone(elbow, wrist, 0.034f, 0.024f),
+                Sphere(elbow - (inside * 0.012f), 0.022f), // olecranon
+                RoundCone(elbow, wrist, 0.03f, 0.024f),
                 Ellipsoid(elbow + (fore * 0.27f) + (lateralUp * 0.008f), V(0.037f, 0.08f, 0.033f), foreRot)); // forearm muscles
 
             var min = Vector3.Min(Vector3.Min(shoulder, elbow), wrist) - new Vector3(0.08f);
@@ -231,38 +232,45 @@ namespace FreeVelo.Core.Avatar
             var skin = Mat("skin", Style.Skin, 0.35f);
             var hair = Mat("hair", Style.Hair, 0.15f);
 
+            // Proportions of an adult male head (local: y up, z forward, origin mid-cranium): breadth 15 cm,
+            // length 19.5 cm, eyes at y ≈ 0.01, nose base −0.04, mouth −0.066, chin −0.12.
             var head = Blend(
-                0.025f,
-                Ellipsoid(V(0, 0.018f, -0.008f), V(0.074f, 0.088f, 0.097f)), // cranium
-                Ellipsoid(V(0, -0.035f, 0.03f), V(0.062f, 0.065f, 0.07f)), // face
-                Ellipsoid(V(0.045f, -0.06f, 0.0f), V(0.022f, 0.032f, 0.04f)), // jaw angles
-                Ellipsoid(V(-0.045f, -0.06f, 0.0f), V(0.022f, 0.032f, 0.04f)),
-                Ellipsoid(V(0, -0.093f, 0.068f), V(0.026f, 0.02f, 0.022f))); // chin
+                0.022f,
+                Ellipsoid(V(0, 0.02f, -0.01f), V(0.074f, 0.09f, 0.098f)), // cranium
+                Ellipsoid(V(0, -0.022f, 0.036f), V(0.059f, 0.058f, 0.06f)), // midface (maxilla, cheeks)
+                Chain(new[] { V(-0.05f, -0.062f, -0.012f), V(-0.034f, -0.096f, 0.043f), V(0, -0.104f, 0.082f), V(0.034f, -0.096f, 0.043f), V(0.05f, -0.062f, -0.012f) }, new[] { 0.017f, 0.016f, 0.015f, 0.016f, 0.017f })); // mandible
 
             head = Blend(
-                0.01f,
+                0.008f,
                 head,
-                Ellipsoid(V(0.043f, -0.012f, 0.07f), V(0.022f, 0.017f, 0.02f)), // cheekbones
-                Ellipsoid(V(-0.043f, -0.012f, 0.07f), V(0.022f, 0.017f, 0.02f)),
-                Capsule(V(-0.036f, 0.032f, 0.087f), V(0.036f, 0.032f, 0.087f), 0.012f), // brow ridge
-                RoundCone(V(0, 0.022f, 0.097f), V(0, -0.017f, 0.117f), 0.008f, 0.011f), // nose
-                Ellipsoid(V(0, -0.026f, 0.106f), V(0.016f, 0.009f, 0.011f)), // nostrils
-                Ellipsoid(V(0, -0.052f, 0.096f), V(0.023f, 0.011f, 0.012f))); // lips
+                Ellipsoid(V(0, -0.068f, 0.068f), V(0.034f, 0.044f, 0.031f)), // mouth and chin (orbicularis, mentalis)
+                Ellipsoid(V(0, -0.104f, 0.086f), V(0.018f, 0.013f, 0.012f)), // chin
+                Ellipsoid(V(0.044f, -0.004f, 0.068f), V(0.02f, 0.013f, 0.02f)), // cheekbones
+                Ellipsoid(V(-0.044f, -0.004f, 0.068f), V(0.02f, 0.013f, 0.02f)),
+                Capsule(V(-0.034f, 0.03f, 0.088f), V(0.034f, 0.03f, 0.088f), 0.0105f), // brow ridge
+                RoundCone(V(0, 0.02f, 0.096f), V(0, -0.026f, 0.114f), 0.0065f, 0.0082f), // nose bridge
+                Sphere(V(0, -0.03f, 0.113f), 0.0095f), // nose tip
+                Ellipsoid(V(0.012f, -0.037f, 0.104f), V(0.009f, 0.008f, 0.009f)), // nostril wings
+                Ellipsoid(V(-0.012f, -0.037f, 0.104f), V(0.009f, 0.008f, 0.009f)),
+                Ellipsoid(V(0, -0.058f, 0.097f), V(0.02f, 0.008f, 0.008f)), // upper lip
+                Ellipsoid(V(0, -0.072f, 0.094f), V(0.017f, 0.0075f, 0.008f))); // lower lip
 
-            head = SmoothSubtract(head, Capsule(V(-0.019f, -0.054f, 0.109f), V(0.019f, -0.054f, 0.109f), 0.0018f), 0.003f); // mouth
-            for (int s = -1; s <= 1; s += 2)
+            head = SmoothSubtract(head, Capsule(V(-0.019f, -0.065f, 0.103f), V(0.019f, -0.065f, 0.103f), 0.0013f), 0.0025f); // mouth line
+                        for (int s = -1; s <= 1; s += 2)
             {
-                head = SmoothSubtract(head, Sphere(V(s * 0.032f, 0.012f, 0.1f), 0.013f), 0.01f); // eye sockets
+                head = SmoothSubtract(head, Sphere(V(s * 0.032f, 0.008f, 0.098f), 0.0135f), 0.01f); // eye sockets
+                head = SmoothSubtract(head, Ellipsoid(V(s * 0.057f, -0.05f, 0.058f), V(0.009f, 0.016f, 0.012f)), 0.012f); // slight cheek hollows
+                head = SmoothSubtract(head, Sphere(V(s * 0.021f, -0.066f, 0.093f), 0.003f), 0.004f); // mouth corners
                 var ear = SmoothSubtract(
-                    Ellipsoid(V(s * 0.074f, -0.004f, -0.008f), V(0.012f, 0.03f, 0.019f), Rot.Euler(0, s * 15f, 0)),
-                    Ellipsoid(V(s * 0.083f, -0.006f, -0.005f), V(0.006f, 0.017f, 0.01f)),
+                    Ellipsoid(V(s * 0.074f, -0.006f, -0.012f), V(0.011f, 0.03f, 0.018f), Rot.Euler(-10, s * 15f, 0)),
+                    Ellipsoid(V(s * 0.082f, -0.008f, -0.009f), V(0.006f, 0.017f, 0.01f)),
                     0.004f);
                 head = Blend(0.006f, head, ear);
             }
 
-            // Neck down into the collar.
+            // Neck from behind the jaw down into the collar.
             var neckBase = HeadRot.Transposed * (T(0, -0.005f, 0.5f) - HeadCenter);
-            head = Blend(0.03f, head, RoundCone(V(0, -0.055f, -0.035f), neckBase, 0.045f, 0.05f));
+            head = Blend(0.028f, head, RoundCone(V(0, -0.06f, -0.04f), neckBase, 0.044f, 0.05f));
 
             // Short hair: back and sides, under the helmet.
             Sdf hairRegion = p =>
@@ -275,7 +283,13 @@ namespace FreeVelo.Core.Avatar
                 return MathF.Max(MathF.Min(MathF.Min(backAndTop, nape), above), notEars);
             };
 
-            Sculpt(AvatarNode.Rider, Transformed(head, HeadCenter, HeadRot), V(-0.11f, 1.33f, 0.17f), V(0.11f, 1.65f, 0.56f), 0.003f, 4500, skin, (hairRegion, hair));
+            Sdf lipsRegion = p =>
+            {
+                var q = HeadRot.Transposed * (p - HeadCenter);
+                return MathF.Max(Ellipsoid(V(0, -0.065f, 0.098f), V(0.02f, 0.0135f, 0.016f))(q), 0.093f - q.Z);
+            };
+
+            Sculpt(AvatarNode.Rider, Transformed(head, HeadCenter, HeadRot), V(-0.11f, 1.33f, 0.17f), V(0.11f, 1.65f, 0.56f), 0.0026f, 5000, skin, (hairRegion, hair), (lipsRegion, Mat("lips", LipColor(Style.Skin), 0.45f)));
         }
 
         private Sdf HelmetOuter()
@@ -352,10 +366,10 @@ namespace FreeVelo.Core.Avatar
             var straps = new List<Sdf>();
             for (int s = -1; s <= 1; s += 2)
             {
-                var below = V(s * 0.066f, -0.055f, 0.012f);
+                var below = V(s * 0.07f, -0.062f, 0.004f);
                 straps.Add(Chain(new[] { V(s * 0.08f, 0.0f, 0.04f), below }, new[] { 0.0032f, 0.0032f }));
                 straps.Add(Chain(new[] { V(s * 0.082f, 0.0f, -0.045f), below }, new[] { 0.0032f, 0.0032f }));
-                straps.Add(Chain(new[] { below, V(s * 0.05f, -0.1f, 0.03f), V(0, -0.118f, 0.045f) }, new[] { 0.0035f, 0.0035f, 0.0035f }));
+                straps.Add(Chain(new[] { below, V(s * 0.047f, -0.108f, 0.035f), V(0, -0.126f, 0.06f) }, new[] { 0.0035f, 0.0035f, 0.0035f }));
                 straps.Add(Chain(new[] { V(s * 0.07f, -0.02f, -0.07f), V(s * 0.04f, -0.045f, -0.098f), V(0, -0.05f, -0.105f) }, new[] { 0.004f, 0.004f, 0.004f }));
             }
 
@@ -482,5 +496,7 @@ namespace FreeVelo.Core.Avatar
         }
 
         private static float SmoothMax(float a, float b, float k) => -SMin(-a, -b, k);
+
+        internal static Vector3 LipColor(Vector3 skin) => skin * new Vector3(0.92f, 0.78f, 0.76f);
     }
 }

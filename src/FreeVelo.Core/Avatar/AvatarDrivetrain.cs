@@ -12,7 +12,7 @@ namespace FreeVelo.Core.Avatar
     public sealed partial class AvatarModel
     {
         private const float ChainPitch = 0.0127f;
-        private const float ChainLineX = 0.07f;
+        private const float ChainLineX = 0.047f; // big ring; road chainline ≈ 43.5 mm
         private static readonly int[] CassetteTeeth = { 28, 25, 23, 21, 19, 17, 15, 14, 13, 12, 11 };
         private const int ChainCog = 7; // 14T, in line with the big ring
         private static Vector3 UpperJockey => RearAxle + new Vector3(0, -0.058f, 0.012f);
@@ -20,7 +20,7 @@ namespace FreeVelo.Core.Avatar
 
         private static float PitchRadius(int teeth) => ChainPitch / (2f * MathF.Sin(MathF.PI / teeth));
 
-        private static float CogX(int index) => 0.042f + (index * 0.0039f);
+        private static float CogX(int index) => 0.0195f + (index * 0.0039f); // between the 142 mm dropouts
 
         /// <summary>Toothed sprocket around an axis parallel to x through <paramref name="center"/>.</summary>
         private static Sdf Sprocket(Vector3 center, int teeth, float thickness, float innerRadius, float toothHeight = 0.0042f)
@@ -45,7 +45,7 @@ namespace FreeVelo.Core.Avatar
             // Crankset (local to the bottom bracket): right arm up at angle 0, left arm opposite.
             var bigRing = Sprocket(V(ChainLineX, 0, 0), 50, 0.003f, PitchRadius(50) - 0.013f);
             var smallRing = Sprocket(V(ChainLineX - 0.0065f, 0, 0), 34, 0.003f, PitchRadius(34) - 0.011f);
-            Sculpt(AvatarNode.Crankset, Union(bigRing, smallRing), V(0.056f, -0.112f, -0.112f), V(0.078f, 0.112f, 0.112f), 0.0011f, 3200, ringMat);
+            Sculpt(AvatarNode.Crankset, Union(bigRing, smallRing), V(ChainLineX - 0.016f, -0.112f, -0.112f), V(ChainLineX + 0.008f, 0.112f, 0.112f), 0.0011f, 3200, ringMat);
 
             var crankParts = new List<Sdf>
             {
@@ -66,9 +66,9 @@ namespace FreeVelo.Core.Avatar
             Sculpt(AvatarNode.Crankset, Blend(0.012f, crankParts.ToArray()), V(-0.11f, -0.2f, -0.11f), V(0.11f, 0.2f, 0.11f), 0.0022f, 1800, crankMat);
 
             // Cassette (on the rear wheel) and freehub body.
-            var cogs = new List<Sdf> { RoundCone(V(0.036f, 0, 0), V(0.088f, 0, 0), 0.0165f, 0.0165f) };
+            var cogs = new List<Sdf> { RoundCone(V(0.014f, 0, 0), V(0.066f, 0, 0), 0.0165f, 0.0165f) };
             for (int i = 0; i < CassetteTeeth.Length; i++) cogs.Add(Sprocket(V(CogX(i), 0, 0), CassetteTeeth[i], 0.0022f, 0.012f, 0.0028f));
-            Sculpt(AvatarNode.RearWheel, Union(cogs.ToArray()), V(0.034f, -0.064f, -0.064f), V(0.09f, 0.064f, 0.064f), 0.001f, 3200, metalMat);
+            Sculpt(AvatarNode.RearWheel, Union(cogs.ToArray()), V(0.012f, -0.064f, -0.064f), V(0.068f, 0.064f, 0.064f), 0.001f, 3200, metalMat);
 
             BuildChain(chainMat);
             BuildDerailleurs(blackMat, metalMat, seatDir);
@@ -79,7 +79,7 @@ namespace FreeVelo.Core.Avatar
                 c,
                 Rot.Euler(pitch, 0, 0));
             var front = FrontAxle + V(-0.058f, 0.07f, -0.045f);
-            var rear = RearAxle + V(-0.058f, 0.045f, 0.06f);
+            var rear = RearAxle + V(-0.066f, 0.045f, 0.06f);
             Sculpt(AvatarNode.Bike, Caliper(front, -35f), front - V(0.04f, 0.05f, 0.05f), front + V(0.04f, 0.05f, 0.05f), 0.002f, 350, blackMat);
             Sculpt(AvatarNode.Bike, Caliper(rear, 25f), rear - V(0.04f, 0.05f, 0.05f), rear + V(0.04f, 0.05f, 0.05f), 0.002f, 350, blackMat);
 
@@ -237,9 +237,9 @@ namespace FreeVelo.Core.Avatar
             rd = Union(rd, Plate(ChainLineX + 0.0085f, 0.0025f, 0.017f), Plate(ChainLineX - 0.008f, 0.002f, 0.0135f));
             var rdMin = Vector3.Min(UpperJockey, LowerJockey) - V(0, 0.04f, 0.05f);
             var rdMax = RearAxle + V(0, 0.01f, 0.07f);
-            Sculpt(AvatarNode.Bike, rd, new Vector3(0.055f, rdMin.Y, rdMin.Z), new Vector3(0.097f, rdMax.Y, rdMax.Z), 0.0015f, 1600, blackMat);
+            Sculpt(AvatarNode.Bike, rd, new Vector3(ChainLineX - 0.016f, rdMin.Y, rdMin.Z), new Vector3(0.097f, rdMax.Y, rdMax.Z), 0.0015f, 1600, blackMat);
             var jockeys = Union(Sprocket(UpperJockey + V(ChainLineX, 0, 0), 11, 0.0035f, 0.004f), Sprocket(LowerJockey + V(ChainLineX, 0, 0), 11, 0.0035f, 0.004f));
-            Sculpt(AvatarNode.Bike, jockeys, new Vector3(0.062f, rdMin.Y, rdMin.Z), new Vector3(0.078f, rdMax.Y, rdMax.Z), 0.0011f, 700, metalMat);
+            Sculpt(AvatarNode.Bike, jockeys, new Vector3(ChainLineX - 0.008f, rdMin.Y, rdMin.Z), new Vector3(ChainLineX + 0.008f, rdMax.Y, rdMax.Z), 0.0011f, 700, metalMat);
 
             // Front derailleur: curved cage plates above the big ring, clamped to the seat tube.
             float ring = PitchRadius(50);
@@ -258,7 +258,7 @@ namespace FreeVelo.Core.Avatar
                 Cage(ChainLineX + 0.012f, 0.0025f, 1.65f, 2.2f),
                 Cage(ChainLineX - 0.01f, 0.002f, 1.75f, 2.15f),
                 Transformed(RoundBox(Vector3.Zero, V(0.016f, 0.012f, 0.014f), 0.005f), mount + V(0.03f, 0.0f, -0.012f), Rot.LookRotation(Vector3.Cross(Vector3.UnitX, seatDir), seatDir)));
-            Sculpt(AvatarNode.Bike, fd, V(0.05f, 0.33f, -0.12f), V(0.1f, 0.47f, 0.0f), 0.0015f, 700, blackMat);
+            Sculpt(AvatarNode.Bike, fd, V(ChainLineX - 0.02f, 0.33f, -0.12f), V(0.1f, 0.47f, 0.0f), 0.0015f, 700, blackMat);
         }
     }
 }

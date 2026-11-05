@@ -141,21 +141,24 @@ namespace FreeVelo.Core.Avatar
                 }
             }
             var metal = B(node, metalMat);
-            metal.Tube(V(-0.055f, 0, 0), V(0.055f, 0, 0), 0.016f, 0.016f, 12);
-            for (int s = -1; s <= 1; s += 2) metal.Torus(V(s * 0.032f, 0, 0), Vector3.UnitX, 0.024f, 0.005f, 0.002f, 16, 5); // hub flanges
+            float hubHalf = rear ? 0.07f : 0.05f;
+            metal.Tube(V(-hubHalf, 0, 0), V(hubHalf, 0, 0), 0.016f, 0.016f, 12);
+            // Hub flanges: on the rear the drive-side flange sits inboard of the cassette.
+            float FlangeX(float side) => rear ? (side > 0 ? 0.016f : -0.036f) : side * 0.034f;
+            for (int s = -1; s <= 1; s += 2) metal.Torus(V(FlangeX(s), 0, 0), Vector3.UnitX, 0.024f, 0.005f, 0.002f, 16, 5);
             var spokes = B(node, spokeMat);
             for (int k = 0; k < 24; k++)
             {
                 float a = k * MathF.PI * 2f / 24;
                 float side = k % 2 == 0 ? 1f : -1f;
                 float lead = side * 0.12f;
-                var hub = V(side * 0.032f, MathF.Cos(a + lead) * 0.026f, MathF.Sin(a + lead) * 0.026f);
+                var hub = V(FlangeX(side), MathF.Cos(a + lead) * 0.026f, MathF.Sin(a + lead) * 0.026f);
                 var rimPoint = V(side * 0.004f, MathF.Cos(a) * 0.264f, MathF.Sin(a) * 0.264f);
                 spokes.Tube(hub, rimPoint, 0.0011f, 0.0011f, 4, false);
             }
 
             // Disc brake rotor (160 mm) on the left: braking track with cooling holes, six-arm spider.
-            var rotorX = -0.05f;
+            var rotorX = rear ? -0.058f : -0.046f;
             Sdf rotor = p =>
             {
                 float r = MathF.Sqrt((p.Y * p.Y) + (p.Z * p.Z));
