@@ -63,14 +63,14 @@ namespace FreeVelo.Core.Avatar
                 Ellipsoid(V(0, 1.08f, -0.195f), V(0.138f, 0.072f, 0.1f), Rot.Euler(-30, 0, 0)), // pelvis
                 Ellipsoid(T(0, -0.005f, 0.17f), V(0.14f, 0.1f, 0.15f), TorsoRot), // abdomen / lower back
                 Ellipsoid(T(0, 0.02f, 0.05f), V(0.145f, 0.092f, 0.11f), TorsoRot), // lumbar: fills the waist above the pelvis
-                Ellipsoid(T(0, 0.005f, 0.35f), V(0.152f, 0.112f, 0.19f), TorsoRot), // ribcage
-                Ellipsoid(T(0, 0.025f, 0.5f), V(0.185f, 0.08f, 0.08f), TorsoRot), // shoulder girdle
+                Ellipsoid(T(0, 0.005f, 0.35f), V(0.145f, 0.104f, 0.19f), TorsoRot), // ribcage
+                Ellipsoid(T(0, 0.015f, 0.5f), V(0.155f, 0.066f, 0.072f), TorsoRot), // shoulder girdle
             };
             for (int s = -1; s <= 1; s += 2)
             {
                 parts.Add(Ellipsoid(V(s * 0.056f, 1.055f, -0.235f), V(0.058f, 0.046f, 0.054f), Rot.Euler(-30, 0, 0))); // gluteus (seated: flattened on the saddle)
-                parts.Add(Ellipsoid(T(s * 0.1f, 0.03f, 0.37f), V(0.065f, 0.075f, 0.14f), TorsoRot)); // latissimus
-                parts.Add(Ellipsoid(T(s * 0.065f, -0.07f, 0.45f), V(0.07f, 0.045f, 0.065f), TorsoRot)); // pectoral
+                parts.Add(Ellipsoid(T(s * 0.095f, 0.025f, 0.37f), V(0.055f, 0.066f, 0.13f), TorsoRot)); // latissimus
+                parts.Add(Ellipsoid(T(s * 0.06f, -0.065f, 0.45f), V(0.058f, 0.034f, 0.055f), TorsoRot)); // pectoral
             }
 
             var core = Blend(0.06f, parts.ToArray());
@@ -82,10 +82,10 @@ namespace FreeVelo.Core.Avatar
                 ArmJoints(s, out var shoulder, out var elbow, out _);
                 var arm = elbow - shoulder;
                 var dir = Vector3.Normalize(arm);
-                upper.Add(RoundCone(T(s * 0.14f, 0.035f, 0.54f), T(0, 0.03f, 0.63f), 0.035f, 0.05f)); // trapezius
-                upper.Add(Ellipsoid(shoulder + (dir * 0.035f) + V(s * 0.012f, 0.012f, 0), V(0.054f, 0.078f, 0.056f), Rot.FromTo(Vector3.UnitY, dir))); // deltoid
+                upper.Add(RoundCone(T(s * 0.12f, 0.018f, 0.525f), T(0, 0.015f, 0.615f), 0.022f, 0.036f)); // trapezius (lean)
+                upper.Add(Ellipsoid(shoulder + (dir * 0.035f) + V(s * 0.008f, 0.006f, 0), V(0.045f, 0.068f, 0.046f), Rot.FromTo(Vector3.UnitY, dir))); // deltoid
                 var hem = shoulder + (arm * 0.55f);
-                sleeves.Add(SmoothIntersect(RoundCone(shoulder, shoulder + (arm * 0.62f), 0.052f, 0.047f), Plane(hem, dir), 0.008f));
+                sleeves.Add(SmoothIntersect(RoundCone(shoulder, shoulder + (arm * 0.62f), 0.049f, 0.045f), Plane(hem, dir), 0.008f));
             }
 
             Sdf body = Blend(0.035f, upper.ToArray());
@@ -94,7 +94,7 @@ namespace FreeVelo.Core.Avatar
             // Jersey worn over the shorts: a lip at the hem, collar.
             float hemAlong = 0.015f;
             var jerseyShell = SmoothIntersect(Grow(body, 0.0025f), Plane(T(0, 0, hemAlong), -SpineDir), 0.006f);
-            var collar = Torus(T(0, 0.004f, 0.625f), SpineDir, 0.054f, 0.009f);
+            var collar = Torus(T(0, 0.004f, 0.625f), SpineDir, 0.049f, 0.008f);
             var shape = Union(body, jerseyShell, collar);
 
             var regions = new List<(Sdf, AvatarMaterial)>
@@ -262,7 +262,7 @@ namespace FreeVelo.Core.Avatar
 
             // Neck down into the collar.
             var neckBase = HeadRot.Transposed * (T(0, -0.005f, 0.5f) - HeadCenter);
-            head = Blend(0.035f, head, RoundCone(V(0, -0.055f, -0.035f), neckBase, 0.05f, 0.058f));
+            head = Blend(0.03f, head, RoundCone(V(0, -0.055f, -0.035f), neckBase, 0.045f, 0.05f));
 
             // Short hair: back and sides, under the helmet.
             Sdf hairRegion = p =>
