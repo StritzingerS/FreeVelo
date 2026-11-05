@@ -81,6 +81,9 @@ var cameras = new Dictionary<string, Camera>
     ["zw"] = new() { Name = "zw", Position = new Vector3(0.2f, 1.44f, 0.86f), Target = new Vector3(0, 1.47f, 0.42f), FieldOfView = 24 },
     ["zwfront"] = new() { Name = "zwfront", Position = new Vector3(0, 1.43f, 0.9f), Target = new Vector3(0, 1.47f, 0.42f), FieldOfView = 24 },
     ["zwside"] = new() { Name = "zwside", Position = new Vector3(0.55f, 1.47f, 0.5f), Target = new Vector3(0, 1.47f, 0.42f), FieldOfView = 26 },
+    ["fc1"] = new() { Name = "fc1", Position = new Vector3(0.16f, 1.44f, 0.72f), Target = new Vector3(0, 1.465f, 0.44f), FieldOfView = 26 },
+    ["fc2"] = new() { Name = "fc2", Position = new Vector3(-0.2f, 1.42f, 0.7f), Target = new Vector3(0, 1.465f, 0.44f), FieldOfView = 26 },
+    ["fc3"] = new() { Name = "fc3", Position = new Vector3(0.34f, 1.46f, 0.47f), Target = new Vector3(0, 1.465f, 0.43f), FieldOfView = 30 },
     ["back"] = new() { Name = "back", Position = new Vector3(0, 1.25f, -2.4f), Target = new Vector3(0, 1.0f, 0), FieldOfView = 34 },
 };
 
