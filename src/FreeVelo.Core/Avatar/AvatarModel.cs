@@ -116,7 +116,7 @@ namespace FreeVelo.Core.Avatar
         public const float PedalOffsetX = 0.125f;
         public static readonly Vector3 BottomBracket = new Vector3(0, 0.27f, 0);
         public static readonly Vector3 RearAxle = new Vector3(0, WheelRadius, -0.405f);
-        public static readonly Vector3 FrontAxle = new Vector3(0, WheelRadius, 0.565f);
+        public static readonly Vector3 FrontAxle = new Vector3(0, WheelRadius, 0.6f); // ~2 cm tyre clearance to the down tube
         public static readonly Vector3 SeatCluster = new Vector3(0, 0.80f, -0.16f);
         public static readonly Vector3 HeadTop = new Vector3(0, 0.83f, 0.39f);
         public static readonly Vector3 HeadBottom = new Vector3(0, 0.68f, 0.435f);

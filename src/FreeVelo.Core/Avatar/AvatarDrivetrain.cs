@@ -323,7 +323,7 @@ namespace FreeVelo.Core.Avatar
             var frameMat = Mat("frame", Style.Frame, 0.75f);
             var axle = front ? FrontAxle : RearAxle;
             float rotorX = front ? FrontRotorX : RearRotorX;
-            float angle = front ? -50f : 38f; // around the axle: 0 = up, 90 = forward
+            float angle = front ? -50f : 64f; // rear: between the seat stay (~30°) and the chain stay (~99°) // around the axle: 0 = up, 90 = forward
             float rad = angle * MathF.PI / 180f;
             var radial = new Vector3(0, MathF.Cos(rad), MathF.Sin(rad));
             var tangent = new Vector3(0, -MathF.Sin(rad), MathF.Cos(rad));
@@ -369,7 +369,7 @@ namespace FreeVelo.Core.Avatar
             if (front)
             {
                 // Fork leg centre (z) at a height above the axle: straight between axle end and the bend.
-                float ForkZ(float h) => -0.002f + ((h - 0.012f) / 0.108f * -0.022f);
+                float ForkZ(float h) => -0.002f + ((h - 0.012f) / (0.655f - FrontAxle.Y - 0.012f) * (0.452f - FrontAxle.Z + 0.002f));
                 float h0 = center.Y - axle.Y;
                 var legBack = new Vector3(memberX, axle.Y + h0, axle.Z + ForkZ(h0) - 0.0105f);
                 var plateEnd = L(o * 0.0095f, -0.006f, 0.024f);

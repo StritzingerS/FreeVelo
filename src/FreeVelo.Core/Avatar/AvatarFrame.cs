@@ -35,8 +35,7 @@ namespace FreeVelo.Core.Avatar
                 var ssBend = RearAxle + V(s * 0.072f, 0.115f, 0.06f);
                 stays.Add(Blend(0.01f, Aero(stayTop + V(s * 0.016f, 0, -0.012f), ssBend, 0.012f, 0.009f, 0.75f, s * 0.045f), Aero(ssBend, RearAxle + V(s * 0.0725f, 0.018f, 0.004f), 0.009f, 0.008f, 0.75f, s * 0.0725f))); // dropped seat stay
                 stays.Add(RoundBox(RearAxle + V(s * 0.0745f, 0.006f, 0.002f), V(0.0045f, 0.024f, 0.022f), 0.004f)); // rear dropout (142 mm spacing)
-                var forkBend = FrontAxle + V(s * 0.0565f, 0.12f, -0.024f);
-                stays.Add(Blend(0.012f, Aero(V(s * 0.036f, 0.655f, 0.45f), forkBend, 0.018f, 0.012f, 0.6f, s * 0.047f), Aero(forkBend, FrontAxle + V(s * 0.0565f, 0.012f, -0.002f), 0.012f, 0.009f, 0.6f, s * 0.0565f))); // fork blade
+stays.Add(Aero(V(s * 0.042f, 0.655f, 0.452f), FrontAxle + V(s * 0.0565f, 0.012f, -0.002f), 0.018f, 0.0095f, 0.6f, s * 0.05f)); // straight fork blade, flaring outwards past the rotor
                 stays.Add(RoundBox(FrontAxle + V(s * 0.056f, 0.004f, 0f), V(0.0055f, 0.02f, 0.018f), 0.005f)); // fork dropout (100 mm)
             }
 
