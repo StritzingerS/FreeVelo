@@ -100,7 +100,22 @@ namespace FreeVelo.Ble
             Hub.PowerSource = AppSettings.PowerSource;
         }
 
+        /// <summary>
+        /// Guards the device hub and the ride: normally used on the Unity thread, while the app is in the
+        /// background by the Android plugin's ticks (Unity's frame loop is paused then).
+        /// </summary>
+        public static readonly object Sync = new object();
+
         private void Update()
+        {
+            lock (Sync)
+            {
+                ProcessQueue();
+                UpdateOnMainThread();
+            }
+        }
+
+        private void ProcessQueue()
         {
             while (_queue.TryDequeue(out var action))
             {
@@ -113,7 +128,22 @@ namespace FreeVelo.Ble
                     UnityEngine.Debug.LogException(e);
                 }
             }
+        }
 
+        /// <summary>One background step (caller holds <see cref="Sync"/>): Bluetooth events and trainer commands.</summary>
+        public void BackgroundTick()
+        {
+            ProcessQueue();
+            Hub.Tick();
+        }
+
+        /// <summary>Lets the platform call <paramref name="tick"/> regularly while Unity is paused.</summary>
+        public void StartBackgroundTicks(Action<float> tick, int intervalMs) => _backend?.StartBackgroundTicks(tick, intervalMs);
+
+        public void StopBackgroundTicks() => _backend?.StopBackgroundTicks();
+
+        private void UpdateOnMainThread()
+        {
             _backend?.Update(Time.unscaledDeltaTime);
 
             if (_scanUntil > 0 && Time.time >= _scanUntil)

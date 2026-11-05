@@ -36,13 +36,17 @@ namespace FreeVelo.App
         /// <summary>"de" or "en".</summary>
         public static string Language
         {
-            get => PlayerPrefs.GetString("lang", Application.systemLanguage == SystemLanguage.German ? "de" : "en");
+            // Cached: also read by the ride logic when it runs in the background (off the Unity main thread).
+            get => _language ??= PlayerPrefs.GetString("lang", Application.systemLanguage == SystemLanguage.German ? "de" : "en");
             set
             {
+                _language = value;
                 PlayerPrefs.SetString("lang", value);
                 PlayerPrefs.Save();
             }
         }
+
+        private static string _language;
 
         private static FreeVelo.Core.Training.PowerZoneModel _zones;
 

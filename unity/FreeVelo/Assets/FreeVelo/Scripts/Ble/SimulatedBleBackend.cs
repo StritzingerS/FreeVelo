@@ -88,6 +88,14 @@ namespace FreeVelo.Ble
         {
         }
 
+        public void StartBackgroundTicks(Action<float> tick, int intervalMs)
+        {
+        }
+
+        public void StopBackgroundTicks()
+        {
+        }
+
         public void Update(float deltaTime)
         {
             _timer += deltaTime;

@@ -786,9 +786,9 @@ namespace FreeVelo.UI
             else DrawRouteProgress();
 
             // Cue
-            if (!string.IsNullOrEmpty(_ride.CueText) && Time.time < _ride.CueUntil)
+            if (!string.IsNullOrEmpty(_ride.CueText) && _ride.ClockS < _ride.CueUntil)
             {
-                float a = Mathf.Clamp01((_ride.CueUntil - Time.time) / 1.5f);
+                float a = Mathf.Clamp01((_ride.CueUntil - _ride.ClockS) / 1.5f);
                 var old = GUI.color;
                 GUI.color = new Color(1, 1, 1, a);
                 var style = Theme.With(Theme.H1, size: 40, anchor: TextAnchor.MiddleCenter);

@@ -36,6 +36,11 @@ interface UnityBleListener {
  * Facade over [BleManager] for Unity. Unity calls arrive on the Unity thread and are
  * forwarded to the Android main thread, where all BLE state lives.
  */
+/** Implemented in Unity (C#): one step of the ride logic, called while the Unity player is paused. */
+interface UnityBackgroundTick {
+    fun onTick(elapsedMs: Long)
+}
+
 class UnityBleBridge(context: Context, private val unity: UnityBleListener, logDirectory: String?) {
     private val main = Handler(Looper.getMainLooper())
 
@@ -90,9 +95,47 @@ class UnityBleBridge(context: Context, private val unity: UnityBleListener, logD
     }
 
     private val scheduleToken = Any()
+    private val tickToken = Any()
+
+    @Volatile
+    private var lastTickOkMs = 0L
 
     /**
-     * Sends writes at fixed times while Unity is paused (app in the background): [spec] is
+     * Calls Unity's ride logic every [intervalMs] while the app is in the background, so it keeps running with
+     * the same code as in the foreground. Failed calls are retried; the scheduled writes take over if no call
+     * succeeds for [TICK_TIMEOUT_MS].
+     */
+    fun startBackgroundTicks(tick: UnityBackgroundTick, intervalMs: Long) {
+        main.post {
+            main.removeCallbacksAndMessages(tickToken)
+            var last = SystemClock.uptimeMillis()
+            val loop = object : Runnable {
+                override fun run() {
+                    val now = SystemClock.uptimeMillis()
+                    try {
+                        tick.onTick(now - last)
+                        lastTickOkMs = now
+                    } catch (t: Throwable) {
+                        unity.onError("", "Background tick failed: ${t.message}")
+                    }
+                    last = now
+                    main.postAtTime(this, tickToken, now + intervalMs)
+                }
+            }
+            main.postAtTime(loop, tickToken, last + intervalMs)
+        }
+    }
+
+    fun stopBackgroundTicks() {
+        main.post { main.removeCallbacksAndMessages(tickToken) }
+    }
+
+    /** True while Unity's background ticks are running (then they control the trainer themselves). */
+    private fun ticksHealthy(): Boolean = SystemClock.uptimeMillis() - lastTickOkMs < TICK_TIMEOUT_MS
+
+    /**
+     * Fallback for the background: sends writes at fixed times, but only while Unity's ticks are not running
+     * (see [startBackgroundTicks]). [spec] is
      * "offsetMs|address|characteristic|hex" entries separated by ';'. Replaces any earlier schedule.
      * The ride foreground service holds a wake lock, so the main looper keeps running.
      */
@@ -102,7 +145,7 @@ class UnityBleBridge(context: Context, private val unity: UnityBleListener, logD
         main.post {
             main.removeCallbacksAndMessages(scheduleToken)
             for (e in entries) {
-                main.postAtTime({ write(e.address, e.characteristic, e.hex) }, scheduleToken, start + e.offsetMs)
+                main.postAtTime({ if (!ticksHealthy()) write(e.address, e.characteristic, e.hex) }, scheduleToken, start + e.offsetMs)
             }
         }
         return entries.size
@@ -126,6 +169,8 @@ class UnityBleBridge(context: Context, private val unity: UnityBleListener, logD
     data class ScheduledEntry(val offsetMs: Long, val address: String, val characteristic: String, val hex: String)
 
     companion object {
+        const val TICK_TIMEOUT_MS = 3000L
+
         /** Parses the [scheduleWrites] format; malformed entries are skipped. */
         fun parseSchedule(spec: String): List<ScheduledEntry> = spec.split(';').mapNotNull { item ->
             val parts = item.split('|')

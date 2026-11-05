@@ -84,7 +84,7 @@ namespace FreeVelo.Ride
         /// <summary>Paused by the user.</summary>
         public bool IsPaused { get; private set; }
 
-        /// <summary>Latest workout cue text and until when it is shown (Time.time).</summary>
+        /// <summary>Latest workout cue text and until when it is shown (<see cref="ClockS"/>).</summary>
         public string CueText { get; private set; }
 
         public float CueUntil { get; private set; }
@@ -198,11 +198,38 @@ namespace FreeVelo.Ride
             WorkoutState = null;
         }
 
+        private static readonly System.Diagnostics.Stopwatch Clock = System.Diagnostics.Stopwatch.StartNew();
+
+        /// <summary>Ride clock in seconds (usable from any thread, unlike Time.time).</summary>
+        public float ClockS => (float)Clock.Elapsed.TotalSeconds;
+
+        private bool _finishPending;
+        private DateTime _lastStepUtc;
+
         private void Update()
         {
-            if (State != RideState.Riding || Route == null) return;
+            lock (BleService.Sync)
+            {
+                if (_finishPending)
+                {
+                    _finishPending = false;
+                    ShowCue(L.Get("finished"));
+                    EndRide();
+                    return;
+                }
 
-            float dt = Mathf.Min(Time.deltaTime, 0.25f);
+                Step(Mathf.Min(Time.deltaTime, 0.25f), background: false);
+            }
+        }
+
+        /// <summary>
+        /// One step of the ride. Runs every frame, and while the app is in the background from the Android
+        /// plugin's ticks (no Unity main-thread APIs in here).
+        /// </summary>
+        private void Step(float dt, bool background)
+        {
+            if (State != RideState.Riding || Route == null) return;
+            _lastStepUtc = DateTime.UtcNow;
             var live = _ble.Hub.Live;
             double power = live.PowerW ?? 0;
             double cadence = live.CadenceRpm ?? 0;
@@ -275,8 +302,26 @@ namespace FreeVelo.Ride
 
             if (Engine != null && Engine.IsFinished)
             {
-                ShowCue(L.Get("finished"));
-                EndRide();
+                // Saving the FIT file needs the main thread: in the background, finish when the app returns.
+                if (background)
+                {
+                    _finishPending = true;
+                }
+                else
+                {
+                    ShowCue(L.Get("finished"));
+                    EndRide();
+                }
+            }
+        }
+
+        /// <summary>Background tick from the Android plugin (Unity paused): Bluetooth, trainer and ride go on.</summary>
+        private void BackgroundTick(float dt)
+        {
+            lock (BleService.Sync)
+            {
+                _ble.BackgroundTick();
+                if (!_finishPending) Step(Mathf.Min(dt, 1f), background: true);
             }
         }
 
@@ -295,8 +340,12 @@ namespace FreeVelo.Ride
                 if (State == RideState.Riding)
                 {
                     _backgroundSinceUtc = DateTime.UtcNow;
+                    _lastStepUtc = DateTime.UtcNow;
 
-                    // Keep the workout going on the trainer: the plugin sends the coming ERG targets on time.
+                    // The plugin keeps calling the ride logic (same code as every frame) four times a second.
+                    _ble.StartBackgroundTicks(BackgroundTick, 250);
+
+                    // Fallback, used by the plugin only if those ticks stop: the coming ERG targets on time.
                     if (Engine != null && !Engine.IsFinished && !IsPaused)
                     {
                         _ble.ScheduleBackgroundWrites(_ble.Hub.BuildErgSchedule(Engine.TargetsAhead(6 * 3600)));
@@ -306,12 +355,17 @@ namespace FreeVelo.Ride
                 return;
             }
 
+            _ble.StopBackgroundTicks();
             _ble.CancelBackgroundWrites();
 
+            // Catch up only what the background ticks did not cover (normally nothing).
             if (_backgroundSinceUtc.HasValue && State == RideState.Riding)
             {
-                double gap = (DateTime.UtcNow - _backgroundSinceUtc.Value).TotalSeconds;
-                if (gap > 1.5) CatchUp(_backgroundSinceUtc.Value, Math.Min(gap, 6 * 3600));
+                lock (BleService.Sync)
+                {
+                    double gap = (DateTime.UtcNow - _lastStepUtc).TotalSeconds;
+                    if (gap > 1.5) CatchUp(_lastStepUtc, Math.Min(gap, 6 * 3600));
+                }
             }
 
             _backgroundSinceUtc = null;
@@ -369,15 +423,16 @@ namespace FreeVelo.Ride
 
         private void UpdatePower3s(double power)
         {
-            _powerWindow.Enqueue((Time.time, power));
-            while (_powerWindow.Count > 0 && Time.time - _powerWindow.Peek().T > 3f) _powerWindow.Dequeue();
+            float now = ClockS;
+            _powerWindow.Enqueue((now, power));
+            while (_powerWindow.Count > 0 && now - _powerWindow.Peek().T > 3f) _powerWindow.Dequeue();
             Power3s = _powerWindow.Average(x => x.P);
         }
 
         private void ShowCue(string text)
         {
             CueText = text;
-            CueUntil = Time.time + 5f;
+            CueUntil = ClockS + 5f;
         }
     }
 }

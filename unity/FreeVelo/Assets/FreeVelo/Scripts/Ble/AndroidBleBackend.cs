@@ -74,6 +74,37 @@ namespace FreeVelo.Ble
 
         public void CancelScheduledWrites() => _bridge?.Call("cancelScheduledWrites");
 
+        private TickProxy _tickProxy;
+
+        public void StartBackgroundTicks(Action<float> tick, int intervalMs)
+        {
+            if (_bridge == null) return;
+            _tickProxy = new TickProxy(tick);
+            _bridge.Call("startBackgroundTicks", _tickProxy, (long)intervalMs);
+        }
+
+        public void StopBackgroundTicks()
+        {
+            _bridge?.Call("stopBackgroundTicks");
+            _tickProxy = null;
+        }
+
+        /// <summary>Implements the Kotlin UnityBackgroundTick interface (called on the Android main thread).</summary>
+        [Preserve]
+        private sealed class TickProxy : AndroidJavaProxy
+        {
+            private readonly Action<float> _tick;
+
+            public TickProxy(Action<float> tick)
+                : base("io.github.stritzingers.freevelo.ble.UnityBackgroundTick")
+            {
+                _tick = tick;
+            }
+
+            [Preserve]
+            public void onTick(long elapsedMs) => _tick(elapsedMs / 1000f);
+        }
+
         public void Update(float deltaTime)
         {
         }

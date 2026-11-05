@@ -45,6 +45,11 @@ namespace FreeVelo.Ble
         /// <summary>Drops scheduled writes that have not been sent yet.</summary>
         void CancelScheduledWrites();
 
+        /// <summary>Calls <paramref name="tick"/> (seconds since the last call) every <paramref name="intervalMs"/> while Unity is paused.</summary>
+        void StartBackgroundTicks(Action<float> tick, int intervalMs);
+
+        void StopBackgroundTicks();
+
         /// <summary>Called every frame on the Unity thread.</summary>
         void Update(float deltaTime);
     }
