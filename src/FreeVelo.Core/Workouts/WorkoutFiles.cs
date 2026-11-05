@@ -48,7 +48,9 @@ namespace FreeVelo.Core.Workouts
             XDocument doc;
             try
             {
-                doc = XDocument.Parse(xml);
+                // Generators such as zwo.fyi indent the whole document, including the XML declaration, which
+                // XML parsers reject; byte-order marks and leading whitespace are not meaningful here.
+                doc = XDocument.Parse(xml.TrimStart('\uFEFF', ' ', '\t', '\r', '\n'));
             }
             catch (XmlException e)
             {

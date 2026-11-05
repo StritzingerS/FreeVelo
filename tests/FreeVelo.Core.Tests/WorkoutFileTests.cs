@@ -55,6 +55,16 @@ public class WorkoutFileTests
     }
 
     [Fact]
+    public void ReadsZwoWithIndentedXmlDeclaration()
+    {
+        // As exported by zwo.fyi: newline and indentation before the XML declaration.
+        const string xml = "\n    <?xml version=\"1.0\" ?>\n    <workout_file>\n      <name>Vo2 Max Blaster</name>\n      <sportType>bike</sportType>\n      <workout>\n        <Warmup Duration=\"600\" PowerLow=\"0.4\" PowerHigh=\"0.65\" Cadence=\"90\"/>\n<IntervalsT Cadence=\"90\" Repeat=\"5\" OnDuration=\"180\" OffDuration=\"120\" OnPower=\"1.2\" OffPower=\"0.6\"/>\n<Cooldown Duration=\"300\" PowerLow=\"0.75\" PowerHigh=\"0.55\" Cadence=\"90\"/>\n      </workout>\n    </workout_file>\n  ";
+        var workout = WorkoutFiles.Load("vo2-max-blaster.zwo", xml);
+        Assert.Equal("Vo2 Max Blaster", workout.Name.Get("en"));
+        Assert.Equal(600 + (5 * 300) + 300, workout.TotalDurationS);
+    }
+
+    [Fact]
     public void FreeVeloFormatRoundTripsAllFeatures()
     {
         var original = BuiltInWorkouts.FortyTwenties();          // nested repeats, cues de/en, cadence
