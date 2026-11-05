@@ -323,7 +323,7 @@ namespace FreeVelo.Core.Avatar
             var frameMat = Mat("frame", Style.Frame, 0.75f);
             var axle = front ? FrontAxle : RearAxle;
             float rotorX = front ? FrontRotorX : RearRotorX;
-            float angle = front ? -68f : 64f; // around the axle (0 = up, 90 = forward); rear between seat stay and chain stay
+            float angle = front ? -60f : 64f; // around the axle (0 = up, 90 = forward); rear between seat stay and chain stay
             float rad = angle * MathF.PI / 180f;
             var radial = new Vector3(0, MathF.Cos(rad), MathF.Sin(rad));
             var tangent = new Vector3(0, -MathF.Sin(rad), MathF.Cos(rad));
