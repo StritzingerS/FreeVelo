@@ -64,7 +64,13 @@ namespace FreeVelo.Ride
 
         public RideSummary Summary { get; private set; }
 
+        /// <summary>Position on the route (keeps going across rides; loops wrap).</summary>
         public double DistanceM { get; private set; }
+
+        /// <summary>Distance ridden in the current ride (starts at 0 for every ride).</summary>
+        public double RideDistanceM => DistanceM - _rideStartDistanceM;
+
+        private double _rideStartDistanceM;
 
         public double ElapsedS { get; private set; }
 
@@ -98,6 +104,7 @@ namespace FreeVelo.Ride
         {
             Route = route;
             DistanceM = 0;
+            _rideStartDistanceM = 0;
         }
 
         /// <summary>Starts a ride; <paramref name="workout"/> null = free ride.</summary>
@@ -107,6 +114,7 @@ namespace FreeVelo.Ride
             _recording = new RideRecording(DateTime.UtcNow, workout != null ? workout.Name.Get(AppSettings.Language) : L.Get("free_ride"));
             _lastSegmentIndex = -1;
             _sampleTimer = 0;
+            _rideStartDistanceM = DistanceM; // continue where the rider is, but count this ride from 0
             _physics.SpeedMps = 0;
             _physics.RiderMassKg = AppSettings.RiderWeightKg;
             ElapsedS = 0;
@@ -145,7 +153,7 @@ namespace FreeVelo.Ride
             {
                 Title = _recording.Name,
                 DurationS = stats.Seconds,
-                DistanceM = DistanceM,
+                DistanceM = RideDistanceM,
                 AvgPowerW = stats.AvgPowerW ?? 0,
                 NormalizedPowerW = np,
                 IntensityFactor = PowerMetrics.IntensityFactor(np, ftp),
@@ -236,7 +244,7 @@ namespace FreeVelo.Ride
                         live.HeartRateBpm,
                         live.CadenceRpm.HasValue ? (int?)Mathf.RoundToInt((float)live.CadenceRpm.Value) : null,
                         _physics.SpeedMps,
-                        DistanceM,
+                        RideDistanceM,
                         position.Y,
                         WorkoutState?.TargetW));
                 }

@@ -279,7 +279,7 @@ namespace FreeVelo.UI
                 live.CadenceRpm.HasValue ? $"{live.CadenceRpm:0}" : "–",
                 live.HeartRateBpm.HasValue ? $"{live.HeartRateBpm}" : "–",
                 $"{_ride.SpeedMps * 3.6:0.0}",
-                $"{_ride.DistanceM / 1000:0.00} km",
+                $"{_ride.RideDistanceM / 1000:0.00} km",
                 FormatTime(_ride.ElapsedS),
             };
             float tileW = Mathf.Min(170, (_w - 300) / labels.Length);
