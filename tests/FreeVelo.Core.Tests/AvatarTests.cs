@@ -144,4 +144,32 @@ public class AvatarModelTests
             Assert.True(MathF.Abs(r.Y + l.Y) < 1e-4f && MathF.Abs(r.Z + l.Z) < 1e-4f);
         }
     }
+
+    [Fact]
+    public void StandingPosePutsLeftFootOnTheGroundAndKeepsHandsOnTheHoods()
+    {
+        var pose = AvatarModel.Pose(200, 0, 1f);
+        var lean = Rot.AboutZ(-AvatarModel.StopLeanDeg(1f)); // as the game applies it around the contact line
+        Assert.InRange(AvatarModel.StopLeanDeg(1f), -10f, -5f); // leans towards the left foot
+
+        // Left shoe flat on the road beside the bike, right shoe still clipped in at "2 o'clock".
+        var leftCleat = lean * pose[AvatarNode.FootLeft].Position;
+        Assert.InRange(leftCleat.Y, 0f, 0.03f);
+        Assert.True(leftCleat.X < -0.22f);
+        Assert.True(Vector3.Distance(pose[AvatarNode.FootRight].Position, pose[AvatarNode.PedalRight].Position) < 0.02f);
+
+        // Legs reach (thigh/shin chain closes) and the rider is off the saddle (hips ahead of the saddle nose).
+        foreach (var (thigh, shin, foot) in new[] { (AvatarNode.ThighRight, AvatarNode.ShinRight, AvatarNode.FootRight), (AvatarNode.ThighLeft, AvatarNode.ShinLeft, AvatarNode.FootLeft) })
+        {
+            var ankle = pose[shin].Apply(new Vector3(0, AvatarModel.ShinLength, 0));
+            Assert.True(Vector3.Distance(ankle, pose[foot].Apply(AvatarModel.AnkleInFoot)) < 0.01f);
+            Assert.True(pose[thigh].Position.Z > -0.06f);
+        }
+
+        // Hands stay where they hold the hoods; forearms still end there.
+        var hand = new Vector3(AvatarModel.Hand.X, AvatarModel.Hand.Y, AvatarModel.Hand.Z);
+        var restPose = AvatarModel.Pose(200, 0, 0f);
+        var restHandOnForearm = restPose[AvatarNode.ForearmRight].Apply(hand);
+        Assert.True(Vector3.Distance(pose[AvatarNode.ForearmRight].Apply(hand), restHandOnForearm) < 1e-3f);
+    }
 }

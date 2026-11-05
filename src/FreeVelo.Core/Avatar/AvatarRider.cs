@@ -7,7 +7,7 @@ namespace FreeVelo.Core.Avatar
 {
     /// <summary>
     /// The rider, sculpted from blended signed-distance shapes (muscles, pelvis, ribcage …) and meshed by the
-    /// polygonizer. Static upper body on the Rider node; legs are bones moved by <see cref="Pose(float, float)"/>.
+    /// polygonizer. Static upper body on the Rider node; legs are bones moved by <see cref="Pose(float, float, float)"/>.
     /// </summary>
     public sealed partial class AvatarModel
     {
@@ -56,7 +56,7 @@ namespace FreeVelo.Core.Avatar
         {
             shoulder = V(s * Shoulder.X, Shoulder.Y, Shoulder.Z);
             var hand = V(s * Hand.X, Hand.Y, Hand.Z);
-            elbow = SolveJoint(shoulder, hand, 0.3f, 0.31f, V(s * 0.3f, -1f, 0f)); // elbows only slightly out
+            elbow = SolveJoint(shoulder, hand, UpperArmLength, ForearmLength, ElbowPole(s)); // elbows only slightly out
             wrist = elbow + ((hand - elbow) * 0.84f);
         }
 
@@ -101,7 +101,24 @@ namespace FreeVelo.Core.Avatar
             }
 
             Sdf body = Blend(0.035f, upper.ToArray());
-            foreach (var sleeve in sleeves) body = Blend(0.03f, body, sleeve);
+
+            // Sleeves move with the upper arms (own nodes); sculpted here with the same jersey materials.
+            for (int s = -1; s <= 1; s += 2)
+            {
+                ArmJoints(s, out var shoulder, out var elbow, out _);
+                var arm = elbow - shoulder;
+                var dir = Vector3.Normalize(arm);
+                float len = arm.Length();
+                var sleeve = sleeves[(s + 1) / 2];
+                var shell = Union(sleeve, Grow(sleeve, 0.0025f));
+                var sh = shoulder;
+                Sdf cuff = p =>
+                {
+                    float t = Vector3.Dot(p - sh, dir);
+                    return MathF.Max((len * 0.49f) - t, Vector3.Distance(p, sh + (dir * t)) - 0.085f);
+                };
+                Sculpt(s > 0 ? AvatarNode.UpperArmRight : AvatarNode.UpperArmLeft, Intersect(shell, Plane(shoulder + (dir * 0.01f), -dir)), Vector3.Min(shoulder, shoulder + (arm * 0.7f)) - new Vector3(0.09f), Vector3.Max(shoulder, shoulder + (arm * 0.7f)) + new Vector3(0.09f), 0.004f, 900, jersey, (cuff, accent));
+            }
 
             // Jersey worn over the shorts: a lip at the hem, collar.
             float hemAlong = 0.015f;
@@ -116,19 +133,6 @@ namespace FreeVelo.Core.Avatar
                 (Plane(T(0, 0, 0.334f), -SpineDir), jersey), // … jersey again above its upper edge)
                 (SidePanel(hemAlong), jersey2), // contrast side panels from the hem to the armpits
             };
-            for (int s = -1; s <= 1; s += 2)
-            {
-                ArmJoints(s, out var shoulder, out var elbow, out _);
-                var arm = elbow - shoulder;
-                var dir = Vector3.Normalize(arm);
-                float len = arm.Length();
-                var sh = shoulder;
-                regions.Add((p =>
-                {
-                    float t = Vector3.Dot(p - sh, dir);
-                    return MathF.Max((len * 0.49f) - t, Vector3.Distance(p, sh + (dir * t)) - 0.085f);
-                }, accent)); // sleeve cuff
-            }
 
             Sculpt(AvatarNode.Rider, shape, V(-0.29f, 0.97f, -0.37f), V(0.29f, 1.53f, 0.42f), 0.007f, 9000, shorts, regions.ToArray());
         }
@@ -187,7 +191,15 @@ namespace FreeVelo.Core.Avatar
 
             var min = Vector3.Min(Vector3.Min(shoulder, elbow), wrist) - new Vector3(0.08f);
             var max = Vector3.Max(Vector3.Max(shoulder, elbow), wrist) + new Vector3(0.08f);
-            Sculpt(AvatarNode.Rider, shape, min, max, 0.005f, 1400, skin);
+
+            // Split at the elbow (bisecting plane) into the upper arm and the forearm nodes.
+            var cut = Vector3.Normalize(armDir + foreDir);
+            var upperNode = s > 0 ? AvatarNode.UpperArmRight : AvatarNode.UpperArmLeft;
+            var foreNode = s > 0 ? AvatarNode.ForearmRight : AvatarNode.ForearmLeft;
+            // The forearm reaches 6 mm into the upper arm and is a hair thinner there, so the joint never opens a gap.
+            // The upper arm ends in a rounded tip that dives under the (0.7 mm thinner) forearm: no rim or crack.
+            Sculpt(upperNode, SmoothIntersect(shape, Plane(elbow + (cut * 0.014f), cut), 0.01f), min, max, 0.005f, 800, skin);
+            Sculpt(foreNode, Intersect(Grow(shape, -0.0007f), Plane(elbow - (cut * 0.004f), -cut)), min, max, 0.005f, 800, skin);
         }
 
         private void BuildHand(int s)
@@ -233,7 +245,7 @@ namespace FreeVelo.Core.Avatar
             var shape = Blend(0.008f, parts.ToArray());
             var bareFingers = Union(bare.ToArray());
             Sculpt(
-                AvatarNode.Rider,
+                s > 0 ? AvatarNode.HandRight : AvatarNode.HandLeft,
                 shape,
                 V(x0 - 0.075f, 0.81f, Math.Min(wrist.Z, 0.5f) - 0.04f),
                 V(x0 + 0.075f, 0.98f, 0.68f),

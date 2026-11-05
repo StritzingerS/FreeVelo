@@ -108,7 +108,8 @@ namespace FreeVelo.App
                 ? (float)Route.LeanAngleDeg(_ride.SpeedMps, _ride.Route.CurvatureAt(_ride.DistanceM))
                 : 0f;
             _lean = Mathf.Lerp(_lean, targetLean, 1f - Mathf.Exp(-dt / 0.4f));
-            var rotation = Quaternion.Euler(pitch, heading, -_lean); // negative roll tilts the rider to the right
+            // Negative roll tilts to the right; the stop lean tips the bike towards the foot on the ground.
+            var rotation = Quaternion.Euler(pitch, heading, -(_lean + _avatar.StopLeanDeg));
             var right = Quaternion.Euler(0, heading, 0) * Vector3.right;
 
             // Ride on the right half of the road.

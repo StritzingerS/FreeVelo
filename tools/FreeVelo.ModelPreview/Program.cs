@@ -31,11 +31,11 @@ var model = File.Exists(Environment.GetEnvironmentVariable("FREEVELO_BAKED") ?? 
     : Environment.GetEnvironmentVariable("FREEVELO_HEAD") is { } headMode
         ? AvatarModel.BuildHeadStudy(glasses: !headMode.Contains("noglasses"), helmet: !headMode.Contains("nohelmet"))
         : AvatarModel.Build(detail: previewDetail);
-var pose = AvatarModel.Pose(crank, 37f);
+var pose = AvatarModel.Pose(crank, 37f, Stopped());
 var meshes = new List<SceneMesh>();
 bool noRider = Environment.GetEnvironmentVariable("FREEVELO_NORIDER") == "1";
 // Optional lean (degrees, positive = into a right-hand bend), as the game applies it.
-var lean = Rot.AboutZ(-float.Parse(Environment.GetEnvironmentVariable("FREEVELO_LEAN") ?? "0", System.Globalization.CultureInfo.InvariantCulture));
+var lean = Rot.AboutZ(-(float.Parse(Environment.GetEnvironmentVariable("FREEVELO_LEAN") ?? "0", System.Globalization.CultureInfo.InvariantCulture) + AvatarModel.StopLeanDeg(Stopped())));
 foreach (var part in model.Parts)
 {
     if (noRider && !AvatarModel.IsBikeNode(part.Node)) continue;
@@ -178,3 +178,6 @@ static SceneMesh Quad(Vector3 min, Vector3 max, Vector3 color, float smoothness)
         CastsShadow = false,
     };
 }
+
+// 0 = riding, 1 = standing with the left foot down (FREEVELO_STOP).
+static float Stopped() => float.Parse(Environment.GetEnvironmentVariable("FREEVELO_STOP") ?? "0", System.Globalization.CultureInfo.InvariantCulture);

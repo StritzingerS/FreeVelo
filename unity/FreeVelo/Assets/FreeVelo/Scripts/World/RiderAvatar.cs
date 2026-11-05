@@ -19,6 +19,7 @@ namespace FreeVelo.World
         private readonly Dictionary<AvatarNode, NodePose> _pose = new Dictionary<AvatarNode, NodePose>();
         private float _crankAngle;
         private float _wheelAngle;
+        private float _stopped = 1f; // start standing (menus)
 
         // Custom bicycle model (local Asset Store model)
         private readonly List<Renderer> _customWheels = new List<Renderer>();
@@ -75,6 +76,9 @@ namespace FreeVelo.World
             return null;
         }
 
+        /// <summary>Extra lean (degrees, positive = right) of the whole avatar while standing with a foot down.</summary>
+        public float StopLeanDeg => AvatarModel.StopLeanDeg(_stopped);
+
         /// <summary>Turns wheels and cranks and moves the legs. Call every frame.</summary>
         public void Animate(float speedMps, float cadenceRpm, float dt)
         {
@@ -89,7 +93,13 @@ namespace FreeVelo.World
                 if (_customCrank != null) _customCrank.transform.RotateAround(_customCrank.bounds.center, transform.right, cadenceRpm / 60f * 360f * dt);
             }
 
-            AvatarModel.Pose(_crankAngle, _wheelAngle, _pose);
+            // Standing: below ~1 km/h the rider unclips the left foot and puts it down (about 1.2 s), and clips back
+            // in as soon as the bike rolls again.
+            float stopTarget = speedMps < 0.3f ? 1f : 0f;
+            _stopped = Mathf.MoveTowards(_stopped, stopTarget, dt / 1.2f);
+            if (_stopped >= 1f) _crankAngle = AvatarModel.ParkedCrankDegrees; // push off from "2 o'clock"
+
+            AvatarModel.Pose(_crankAngle, _wheelAngle, _pose, _stopped);
             foreach (var pair in _nodes)
             {
                 if (!_pose.TryGetValue(pair.Key, out var pose)) continue;
