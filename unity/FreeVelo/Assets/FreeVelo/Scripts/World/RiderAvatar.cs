@@ -29,7 +29,7 @@ namespace FreeVelo.World
         private const float ThighLength = 0.46f;
         private const float ShinLength = 0.45f;
         private static readonly Vector3 Hip = new Vector3(0.085f, 1.06f, -0.185f);
-        private static readonly Vector3 Shoulder = new Vector3(0.175f, 1.40f, 0.25f);
+        private static readonly Vector3 Shoulder = new Vector3(0.16f, 1.39f, 0.245f);
         private static readonly Vector3 Hand = new Vector3(0.205f, 0.91f, 0.555f);
 
         /// <summary>Ankle relative to the cleat (pedal axle) in the foot frame.</summary>
@@ -306,21 +306,26 @@ namespace FreeVelo.World
             var shortsRadii = new[] { new Vector2(0.12f, 0.06f), new Vector2(0.15f, 0.1f), new Vector2(0.145f, 0.105f), new Vector2(0.14f, 0.104f) };
             p.Builder(p.Shorts).Sweep(shortsPath, shortsRadii, Side, 18);
 
-            var jerseyPath = new[] { new Vector3(0, 1.15f, -0.095f), new Vector3(0, 1.23f, 0f), new Vector3(0, 1.31f, 0.1f), new Vector3(0, 1.375f, 0.2f), new Vector3(0, 1.425f, 0.265f) };
-            var jerseyRadii = new[] { new Vector2(0.146f, 0.11f), new Vector2(0.15f, 0.113f), new Vector2(0.165f, 0.112f), new Vector2(0.172f, 0.1f), new Vector2(0.09f, 0.07f) };
-            p.Builder(p.Jersey).Sweep(jerseyPath, jerseyRadii, Side, 18);
+            // Slightly rounded back, broad shoulder line, narrowing into the neck.
+            var jerseyPath = new[] { new Vector3(0, 1.15f, -0.095f), new Vector3(0, 1.25f, -0.005f), new Vector3(0, 1.335f, 0.095f), new Vector3(0, 1.39f, 0.18f), new Vector3(0, 1.41f, 0.24f), new Vector3(0, 1.425f, 0.27f) };
+            var jerseyRadii = new[] { new Vector2(0.146f, 0.11f), new Vector2(0.152f, 0.114f), new Vector2(0.165f, 0.112f), new Vector2(0.168f, 0.098f), new Vector2(0.15f, 0.08f), new Vector2(0.08f, 0.06f) };
+            p.Builder(p.Jersey).Sweep(jerseyPath, jerseyRadii, Side, 20);
             p.Builder(p.Accent).Sweep(
-                new[] { Vector3.Lerp(jerseyPath[1], jerseyPath[2], 0.45f), Vector3.Lerp(jerseyPath[1], jerseyPath[2], 0.7f) },
-                new[] { Vector2.Lerp(jerseyRadii[1], jerseyRadii[2], 0.45f) * 1.025f, Vector2.Lerp(jerseyRadii[1], jerseyRadii[2], 0.7f) * 1.025f },
-                Side, 18, false, false); // chest band
+                new[] { Vector3.Lerp(jerseyPath[1], jerseyPath[2], 0.4f), Vector3.Lerp(jerseyPath[1], jerseyPath[2], 0.7f) },
+                new[] { Vector2.Lerp(jerseyRadii[1], jerseyRadii[2], 0.4f) * 1.03f, Vector2.Lerp(jerseyRadii[1], jerseyRadii[2], 0.7f) * 1.03f },
+                Side, 20, false, false); // chest band
             for (int s = -1; s <= 1; s += 2)
             {
-                p.Builder(p.Jersey).Ellipsoid(new Vector3(s * 0.15f, 1.372f, 0.232f), new Vector3(0.055f, 0.05f, 0.062f), Quaternion.identity, 12, 8); // shoulder
+                // Trapezius: sloping line from the neck out to the shoulder.
+                p.Builder(p.Jersey).Sweep(
+                    new[] { new Vector3(s * 0.03f, 1.45f, 0.262f), new Vector3(s * 0.09f, 1.43f, 0.25f), new Vector3(s * 0.14f, 1.4f, 0.24f) },
+                    new[] { new Vector2(0.04f, 0.045f), new Vector2(0.038f, 0.05f), new Vector2(0.045f, 0.055f) },
+                    Vector3.up, 14);
             }
 
             // Neck and head
             var skin = p.Builder(p.Skin);
-            skin.Sweep(new[] { new Vector3(0, 1.395f, 0.245f), new Vector3(0, 1.45f, 0.3f), new Vector3(0, 1.49f, 0.335f) }, new[] { new Vector2(0.065f, 0.058f), new Vector2(0.056f, 0.052f), new Vector2(0.05f, 0.047f) }, Side, 12, false, false);
+            skin.Sweep(new[] { new Vector3(0, 1.4f, 0.245f), new Vector3(0, 1.45f, 0.3f), new Vector3(0, 1.49f, 0.335f) }, new[] { new Vector2(0.062f, 0.056f), new Vector2(0.055f, 0.051f), new Vector2(0.05f, 0.047f) }, Side, 12, false, false);
             var headCenter = new Vector3(0, 1.54f, 0.37f);
             skin.Ellipsoid(headCenter, new Vector3(0.08f, 0.098f, 0.104f), Quaternion.Euler(15, 0, 0), 16, 10);
             skin.Ellipsoid(headCenter + new Vector3(0, -0.05f, 0.045f), new Vector3(0.058f, 0.045f, 0.058f), Quaternion.Euler(10, 0, 0), 12, 8); // jaw
@@ -358,20 +363,28 @@ namespace FreeVelo.World
 
             p.Builder(p.Lens).Sweep(lens, lensRadii, Vector3.up, 6);
 
-            // Arms: sleeve, forearm, gloved hand on the hood
+            // Arms: deltoid, sleeve, upper arm, elbow, forearm, gloved hand on the hood
             for (int s = -1; s <= 1; s += 2)
             {
                 var shoulder = new Vector3(s * Shoulder.x, Shoulder.y, Shoulder.z);
                 var hand = new Vector3(s * Hand.x, Hand.y, Hand.z);
                 var elbow = SolveJoint(shoulder, hand, 0.3f, 0.31f, new Vector3(s * 0.6f, -1f, 0f));
-                var upper = new[] { shoulder, Vector3.Lerp(shoulder, elbow, 0.3f), Vector3.Lerp(shoulder, elbow, 0.55f) };
-                p.Builder(p.Jersey).Sweep(upper, new[] { new Vector2(0.055f, 0.055f), new Vector2(0.05f, 0.052f), new Vector2(0.047f, 0.048f) }, Side, 12);
-                skin.Sweep(new[] { Vector3.Lerp(shoulder, elbow, 0.5f), elbow }, new[] { new Vector2(0.043f, 0.043f), new Vector2(0.036f, 0.038f) }, Side, 12, false, false);
-                skin.Ellipsoid(elbow, Vector3.one * 0.037f, Quaternion.identity, 10, 6);
+                var arm = elbow - shoulder;
+                p.Builder(p.Jersey).Ellipsoid(shoulder + (arm * 0.12f), new Vector3(0.06f, 0.085f, 0.06f), Quaternion.FromToRotation(Vector3.up, arm), 16, 10); // deltoid
+                p.Builder(p.Jersey).Sweep(
+                    new[] { shoulder, shoulder + (arm * 0.3f), shoulder + (arm * 0.55f) },
+                    new[] { new Vector2(0.058f, 0.058f), new Vector2(0.055f, 0.056f), new Vector2(0.05f, 0.052f) },
+                    Side, 14);
                 skin.Sweep(
-                    new[] { elbow, Vector3.Lerp(elbow, hand, 0.3f), Vector3.Lerp(elbow, hand, 0.85f) },
-                    new[] { new Vector2(0.036f, 0.038f), new Vector2(0.04f, 0.042f), new Vector2(0.026f, 0.022f) },
-                    Side, 12, false, false);
+                    new[] { shoulder + (arm * 0.5f), shoulder + (arm * 0.8f), elbow },
+                    new[] { new Vector2(0.046f, 0.047f), new Vector2(0.042f, 0.043f), new Vector2(0.037f, 0.039f) },
+                    Side, 14, false, false);
+                skin.Ellipsoid(elbow, Vector3.one * 0.038f, Quaternion.identity, 12, 8);
+                var fore = hand - elbow;
+                skin.Sweep(
+                    new[] { elbow, elbow + (fore * 0.25f), elbow + (fore * 0.6f), elbow + (fore * 0.88f) },
+                    new[] { new Vector2(0.037f, 0.039f), new Vector2(0.043f, 0.046f), new Vector2(0.035f, 0.034f), new Vector2(0.027f, 0.023f) },
+                    Side, 14, false, false);
                 var glove = p.Builder(p.Glove);
                 glove.Ellipsoid(hand + new Vector3(0, 0.012f, -0.01f), new Vector3(0.03f, 0.04f, 0.052f), Quaternion.Euler(30, 0, 0), 10, 8);
                 glove.Ellipsoid(hand + new Vector3(0, -0.012f, 0.03f), new Vector3(0.026f, 0.035f, 0.03f), Quaternion.Euler(60, 0, 0), 10, 6); // fingers around the hood
