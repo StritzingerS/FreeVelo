@@ -347,14 +347,12 @@ namespace FreeVelo.Core.Avatar
                 float shape = MathF.Min(MathF.Min(outer, inner), bridge);
                 shape = MathF.Max(shape, -MathF.Max(MathF.Abs(q.X) - 0.0022f, q.Y - 0.0085f)); // rotor slot
 
-                float dome = MathF.Max(new Vector2(q.Y + 0.001f, q.Z).Length() - 0.0115f, MathF.Abs(lx - 0.0165f) - 0.0025f); // piston dome
-                shape = SmoothMin(shape, dome, 0.003f);
 
                 // Pad fins above the bridge (plates across the rotor).
                 float fins = float.MaxValue;
                 for (int i = -3; i <= 3; i++)
                 {
-                    fins = MathF.Min(fins, Box(q - new Vector3(0, 0.0165f, i * 0.0048f), new Vector3(0.0075f, 0.0035f, 0.0009f), 0.0004f));
+                    fins = MathF.Min(fins, Box(q - new Vector3(0, 0.0145f, i * 0.0048f), new Vector3(0.0065f, 0.0022f, 0.0009f), 0.0004f));
                 }
 
                 // Hose fitting on the inboard half, bleed nipple at the top of the outboard half.
@@ -374,10 +372,14 @@ namespace FreeVelo.Core.Avatar
                 var seat = L(o * 0.0095f, -0.0105f, 0); // front face of the outboard half
                 float h0 = seat.Y - axle.Y;
                 var legPoint = new Vector3(memberX, seat.Y, axle.Z + ForkZ(h0));
-                var seatOnPlane = new Vector3(memberX, seat.Y, seat.Z);
-                var tabCenter = (legPoint + seatOnPlane) / 2f;
-                float tabHalf = (Vector3.Distance(legPoint, seatOnPlane) / 2f) + 0.004f;
-                mount = SdfShapes.RoundBox(tabCenter, new Vector3(0.0048f, 0.019f, tabHalf), 0.0045f, Rot.LookRotation(Vector3.Normalize(seatOnPlane - legPoint), leg)); // mounting tab
+                // Mounting lug of the caliper body: fills the gap to the back of the leg, flat face parallel to the leg.
+                var legBack = legPoint - new Vector3(0, 0, 0.0105f) + new Vector3(0, leg.Y * 0, 0);
+                var lugCenter = new Vector3(rotorX + (o * 0.0095f), center.Y, (legBack.Z + seat.Z) / 2f - 0.002f);
+                float lugHalf = (MathF.Abs(seat.Z - legBack.Z) / 2f) + 0.006f;
+                var lug = SdfShapes.RoundBox(lugCenter, new Vector3(0.0072f, 0.02f, lugHalf), 0.005f, Rot.LookRotation(Vector3.UnitZ, leg));
+                var caliperBody = body;
+                body = p => SdfShapes.SMin(caliperBody(p), lug(p), 0.008f); // cast in one piece with the body
+                mount = p => 1f;
                 for (int i = -1; i <= 1; i += 2)
                 {
                     var b = legPoint + (leg * (i * 0.011f)) + new Vector3(0, 0, 0.0085f);
@@ -401,8 +403,8 @@ namespace FreeVelo.Core.Avatar
 
             var min = center - new Vector3(0.05f);
             var max = center + new Vector3(0.05f);
-            Sculpt(AvatarNode.Bike, body, min, max, 0.0009f, 2200, blackMat);
-            Sculpt(AvatarNode.Bike, mount, min - new Vector3(0, 0.02f, 0), max + new Vector3(0, 0, 0.03f), 0.0012f, 700, frameMat);
+            Sculpt(AvatarNode.Bike, body, min - new Vector3(0, 0, 0.0f), max + new Vector3(0, 0, 0.03f), 0.0009f, 2400, blackMat);
+            if (!front) Sculpt(AvatarNode.Bike, mount, min - new Vector3(0, 0.02f, 0), max + new Vector3(0, 0, 0.03f), 0.0012f, 700, frameMat);
             Sculpt(AvatarNode.Bike, SdfShapes.Union(bolts.ToArray()), min - new Vector3(0, 0.03f, 0), max, 0.0008f, 300, metalMat);
         }
 
