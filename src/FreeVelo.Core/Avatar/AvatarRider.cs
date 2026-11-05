@@ -511,39 +511,94 @@ namespace FreeVelo.Core.Avatar
                 var cuff = SmoothIntersect(Grow(shin, 0.002f), p => MathF.Abs(p.Y - (sockTop + 0.012f)) - 0.012f, 0.004f);
                 Sculpt(shinNode, Union(shin, cuff), V(-0.08f, -0.06f, -0.09f), V(0.08f, sl + 0.05f, 0.08f), 0.005f, 2200, skin, (Plane(V(0, sockTop, 0), -Vector3.UnitY), socks));
 
-                // Shoe (local: origin at the cleat, +z toes, +y up).
-                var upperBlend = Blend(
-                    0.03f,
-                    Ellipsoid(V(0, 0.048f, -0.122f), V(0.033f, 0.05f, 0.042f)), // heel
-                    Ellipsoid(V(0, 0.036f, -0.045f), V(0.04f, 0.044f, 0.08f)), // midfoot
-                    Ellipsoid(V(s * 0.004f, 0.024f, 0.035f), V(0.043f, 0.032f, 0.06f)), // forefoot
-                    Ellipsoid(V(s * 0.002f, 0.019f, 0.07f), V(0.034f, 0.025f, 0.031f))); // toe box
-                var upper = Intersect(upperBlend, Plane(V(0, 0.014f, 0), -Vector3.UnitY));
-                upper = SmoothSubtract(upper, Ellipsoid(V(0, 0.1f, -0.108f), V(0.028f, 0.034f, 0.04f)), 0.01f); // collar opening
-                var footprint = Grow(upperBlend, 0.003f);
-                Sdf sole = p => SmoothMax(footprint(new Vector3(p.X, 0.014f, p.Z)), MathF.Abs(p.Y - 0.007f) - 0.0075f, 0.004f);
-                var dialCenter = V(s * 0.012f, 0.077f, -0.042f);
-                var dialRot = Rot.Euler(-28, 0, s * 12f);
-                var dial = Transformed(p => SmoothMax(new Vector2(p.X, p.Z).Length() - 0.015f, MathF.Abs(p.Y) - 0.006f, 0.003f), dialCenter, dialRot);
-                var strap = Intersect(Shell(Grow(upper, 0.0015f), 0.003f), p => MathF.Max(MathF.Abs(p.Z - 0.02f) - 0.011f, 0.02f - p.Y));
-                var cleat = RoundBox(V(0, -0.002f, 0.002f), V(0.03f, 0.007f, 0.04f), 0.004f);
-                var shoe = Union(Blend(0.004f, upper, sole), dial, strap, cleat);
-                Sdf stripe = p => MathF.Max(MathF.Abs(p.Z + (p.Y * 0.9f) + 0.03f) - 0.007f, -(p.X * s) + 0.025f);
+                // Road shoe (local: origin at the cleat under the ball of the foot, +z toes, +y up): low, sleek
+                // upper from a side profile, narrowing towards the top; thin carbon sole with toe spring and heel pad,
+                // BOA dial on the instep with wire lacing, three-bolt cleat.
+                float sx = s;
+                Sdf upperShape = p => ShoeUpper(p, sx);
+                var opening = Ellipsoid(V(0, 0.103f, -0.113f), V(0.026f, 0.03f, 0.036f), Rot.Euler(-12, 0, 0));
+                var upper = SmoothSubtract(upperShape, opening, 0.007f);
+                Sdf sole = p => SmoothMax(ShoeUpper(new Vector3(p.X, 0.012f, p.Z), sx) - 0.0016f, MathF.Abs(p.Y - 0.0042f) - 0.0052f, 0.0025f);
+                var heelPad = RoundBox(V(0, 0.0005f, -0.152f), V(0.016f, 0.004f, 0.012f), 0.003f);
+                var dialCenter = V(s * 0.017f, 0.084f, -0.05f);
+                var dialRot = Rot.Euler(-30, 0, -s * 22f);
+                var dial = Transformed(p => SmoothMax(new Vector2(p.X, p.Z).Length() - 0.0135f, MathF.Abs(p.Y) - 0.0055f, 0.003f), dialCenter, dialRot);
+                var cleat = Blend(
+                    0.004f,
+                    RoundBox(V(0, -0.0035f, 0.012f), V(0.03f, 0.0055f, 0.026f), 0.006f),
+                    RoundBox(V(0, -0.0035f, -0.02f), V(0.016f, 0.0055f, 0.012f), 0.005f)); // three-bolt cleat, narrow at the back
+                var shoe = Union(Blend(0.003f, upper, sole), Blend(0.002f, sole, heelPad), dial, cleat);
+
+                // Colour regions: swoosh accent on the outside, wire lacing across the instep, black sole/collar/dial.
+                Sdf stripe = p => MathF.Max(MathF.Abs(p.Z + (p.Y * 0.8f) + 0.045f) - 0.006f, -(p.X * s) + 0.026f);
+                Sdf lacing = p =>
+                {
+                    float band = float.MaxValue;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        float z0 = -0.03f + (k * 0.022f);
+                        band = MathF.Min(band, MathF.Abs(p.Z - z0 - (p.X * s * 0.35f)) - 0.0012f);
+                    }
+
+                    return MathF.Max(band, MathF.Max(0.045f - p.Y - (p.Z * 0.2f), MathF.Abs(p.X) - 0.024f));
+                };
+                Sdf collar = p => MathF.Max(opening(p) - 0.006f, 0.06f - p.Y);
                 Sculpt(
                     footNode,
                     shoe,
-                    V(-0.075f, -0.02f, -0.175f),
-                    V(0.075f, 0.13f, 0.175f),
-                    0.0035f,
-                    2600,
+                    V(-0.065f, -0.016f, -0.19f),
+                    V(0.065f, 0.12f, 0.115f),
+                    0.0028f,
+                    3200,
                     shoes,
                     (stripe, shoeAccent),
-                    (p => MathF.Min(p.Y - 0.0142f, Vector3.Distance(p, dialCenter) - 0.019f), black),
-                    (p => MathF.Max(MathF.Abs(p.Z - 0.02f) - 0.011f, MathF.Max(0.0145f - p.Y, -(Grow(upper, 0.0006f)(p)))), black));
+                    (lacing, black),
+                    (collar, black),
+                    (p => MathF.Min(p.Y - 0.0095f, Vector3.Distance(p, dialCenter) - 0.0165f), black));
             }
         }
 
         private static float SmoothMax(float a, float b, float k) => -SMin(-a, -b, k);
+
+        private static readonly Vector2[] ShoeProfile =
+        {
+            new Vector2(0.1f, 0.012f), new Vector2(0.086f, 0.0035f), new Vector2(0.03f, 0.0f), new Vector2(-0.06f, 0.0f),
+            new Vector2(-0.152f, 0.002f), new Vector2(-0.169f, 0.013f), new Vector2(-0.173f, 0.042f), new Vector2(-0.168f, 0.077f),
+            new Vector2(-0.15f, 0.094f), new Vector2(-0.118f, 0.1f), new Vector2(-0.085f, 0.1f), new Vector2(-0.05f, 0.087f),
+            new Vector2(-0.01f, 0.071f), new Vector2(0.03f, 0.055f), new Vector2(0.062f, 0.042f), new Vector2(0.085f, 0.034f), new Vector2(0.097f, 0.024f),
+        };
+
+        /// <summary>Shoe upper: side profile extruded with a width that follows the foot and narrows towards the top.</summary>
+        private static float ShoeUpper(Vector3 p, float side)
+        {
+            const float round = 0.0095f;
+            float d2 = PolygonDistance(ShoeProfile, new Vector2(p.Z, p.Y)) + round;
+            float z = p.Z;
+            float hw = z < -0.06f ? 0.031f + ((z + 0.16f) / 0.1f * 0.005f)
+                : z < 0.02f ? 0.036f + ((z + 0.06f) / 0.08f * 0.01f)
+                : 0.046f - (MathF.Pow(Math.Clamp((z - 0.02f) / 0.08f, 0f, 1f), 1.6f) * 0.032f);
+            hw *= 1f - (0.3f * Math.Clamp((p.Y - 0.02f) / 0.08f, 0f, 1f));
+            float cx = side * Math.Clamp((z + 0.02f) / 0.1f, 0f, 1f) * 0.004f; // forefoot slightly outboard
+            float dx = MathF.Abs(p.X - cx) - (hw - round);
+            return new Vector2(MathF.Max(d2, 0f), MathF.Max(dx, 0f)).Length() + MathF.Min(MathF.Max(d2, dx), 0f) - round;
+        }
+
+        private static float PolygonDistance(Vector2[] v, Vector2 p)
+        {
+            float d = Vector2.DistanceSquared(p, v[0]);
+            float sign = 1f;
+            for (int i = 0, j = v.Length - 1; i < v.Length; j = i, i++)
+            {
+                var e = v[j] - v[i];
+                var w = p - v[i];
+                var b = w - (e * Math.Clamp(Vector2.Dot(w, e) / Vector2.Dot(e, e), 0f, 1f));
+                d = MathF.Min(d, Vector2.Dot(b, b));
+                bool c1 = p.Y >= v[i].Y, c2 = p.Y < v[j].Y, c3 = (e.X * w.Y) > (e.Y * w.X);
+                if ((c1 && c2 && c3) || (!c1 && !c2 && !c3)) sign = -sign;
+            }
+
+            return sign * MathF.Sqrt(d);
+        }
 
         /// <summary>Thin dark line between the lips (colour, not geometry: too fine to sculpt).</summary>
         private static Sdf MouthLine() => p =>

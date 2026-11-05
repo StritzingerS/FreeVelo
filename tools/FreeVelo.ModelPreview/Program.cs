@@ -115,6 +115,10 @@ var cameras = new Dictionary<string, Camera>
     ["handfront"] = new() { Name = "handfront", Position = new Vector3(-0.15f, 0.95f, 1.3f), Target = new Vector3(-0.2f, 0.89f, 0.58f), FieldOfView = 16 },
     ["droprear"] = new() { Name = "droprear", Position = new Vector3(-0.32f, 0.42f, -0.3f), Target = new Vector3(-0.07f, 0.34f, -0.4f), FieldOfView = 26 },
     ["droprear2"] = new() { Name = "droprear2", Position = new Vector3(0.32f, 0.42f, -0.3f), Target = new Vector3(0.07f, 0.34f, -0.4f), FieldOfView = 26 },
+    ["shoeside"] = new() { Name = "shoeside", Position = new Vector3(0.75f, 0.3f, 0.1f), Target = new Vector3(0.13f, 0.25f, 0.05f), FieldOfView = 22 },
+    ["shoe34"] = new() { Name = "shoe34", Position = new Vector3(0.6f, 0.55f, 0.55f), Target = new Vector3(0.13f, 0.25f, 0.05f), FieldOfView = 24 },
+    ["shoeback"] = new() { Name = "shoeback", Position = new Vector3(0.3f, 0.5f, -0.6f), Target = new Vector3(0.13f, 0.27f, 0.0f), FieldOfView = 24 },
+    ["shoeflat"] = new() { Name = "shoeflat", Position = new Vector3(1.4f, 0.17f, 0.08f), Target = new Vector3(0.12f, 0.17f, 0.08f), FieldOfView = 12 },
     ["back"] = new() { Name = "back", Position = new Vector3(0, 1.25f, -2.4f), Target = new Vector3(0, 1.0f, 0), FieldOfView = 34 },
 };
 

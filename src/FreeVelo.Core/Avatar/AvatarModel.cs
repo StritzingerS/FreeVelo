@@ -238,7 +238,7 @@ namespace FreeVelo.Core.Avatar
                 var hip = new Vector3(sign * Hip.X, Hip.Y, Hip.Z);
                 var knee = SolveJoint(hip, ankle, ThighLength, ShinLength, new Vector3(sign * 0.1f, 0, 1f));
 
-                pose[right ? AvatarNode.PedalRight : AvatarNode.PedalLeft] = new NodePose(pedal, Rot.Identity);
+                pose[right ? AvatarNode.PedalRight : AvatarNode.PedalLeft] = new NodePose(pedal, foot); // clipped in: pedal follows the shoe
                 pose[right ? AvatarNode.ThighRight : AvatarNode.ThighLeft] = Bone(hip, knee);
                 pose[right ? AvatarNode.ShinRight : AvatarNode.ShinLeft] = Bone(knee, ankle);
                 pose[right ? AvatarNode.FootRight : AvatarNode.FootLeft] = new NodePose(cleat, foot);
