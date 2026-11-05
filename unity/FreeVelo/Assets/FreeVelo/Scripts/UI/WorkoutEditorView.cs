@@ -49,6 +49,9 @@ namespace FreeVelo.UI
             ("Z1", 50), ("Z2", 68), ("Z3", 83), ("Z4", 98), ("Z5", 113), ("Z6", 135),
         };
 
+        /// <summary>Intensity of a zone button: typical value of the rider's own zone.</summary>
+        private static double PalettePercent(int item) => AppSettings.Zones.TypicalPercent(item, AppSettings.FtpW);
+
         private const int RampItem = 6;
         private const int FreeItem = 7;
         private const int IntervalItem = 8;
@@ -235,9 +238,9 @@ namespace FreeVelo.UI
             Icon? icon = null;
             if (item < Palette.Length)
             {
-                color = ZoneColor(Palette[item].Percent / 100.0 * AppSettings.FtpW, AppSettings.FtpW);
+                color = ZoneColor(PalettePercent(item) / 100.0 * AppSettings.FtpW, AppSettings.FtpW);
                 title = Palette[item].Label;
-                sub = $"{Palette[item].Percent:0} %";
+                sub = $"{PalettePercent(item):0} %";
             }
             else
             {
@@ -601,7 +604,7 @@ namespace FreeVelo.UI
         private void AddPaletteItem(int item, int? index)
         {
             var ed = _editor;
-            if (item < Palette.Length) ed.AddSteady(Palette[item].Percent, 300, index);
+            if (item < Palette.Length) ed.AddSteady(PalettePercent(item), 300, index);
             else if (item == RampItem) ed.AddRamp(50, 75, 600, index);
             else if (item == FreeItem) ed.AddFreeRide(300, index);
             else if (item == IntervalItem && ed.OpenRepeat == null) ed.AddIntervals(4, 180, 113, 180, 55, index);

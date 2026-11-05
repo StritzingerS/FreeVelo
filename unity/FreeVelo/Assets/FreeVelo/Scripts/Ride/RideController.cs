@@ -130,6 +130,8 @@ namespace FreeVelo.Ride
             // Failing is the goal of a ramp test: no ERG reduction at low cadence.
             _ble.Hub.LowCadenceProtectionEnabled = _ftpTest != FtpTestKind.Ramp;
             State = RideState.Riding;
+            RideKeepAlive.Start(_recording.Name, L.Get("ride_running"));
+            _notificationTimer = 0;
         }
 
         public void TogglePause() => IsPaused = !IsPaused;
@@ -142,6 +144,7 @@ namespace FreeVelo.Ride
         {
             if (State != RideState.Riding) return;
             State = RideState.Finished;
+            RideKeepAlive.Stop();
             _physics.SpeedMps = 0; // the rider stops: no more wheel/world movement after the ride
             _ble.Hub.SetSimulation(0); // release ERG resistance
             _ble.Hub.LowCadenceProtectionEnabled = true;
@@ -190,6 +193,7 @@ namespace FreeVelo.Ride
         public void Close()
         {
             State = RideState.Idle;
+            RideKeepAlive.Stop();
             Engine = null;
             WorkoutState = null;
         }
@@ -251,6 +255,14 @@ namespace FreeVelo.Ride
                 }
             }
 
+            // Notification text (distance, 3 s power) every 5 s.
+            _notificationTimer -= dt;
+            if (_notificationTimer <= 0)
+            {
+                _notificationTimer = 5f;
+                RideKeepAlive.Update($"{RideDistanceM / 1000:0.0} km · {Power3s:0} W");
+            }
+
             // Trainer: ERG from the workout, otherwise simulate the road.
             if (WorkoutState != null && WorkoutState.TargetW.HasValue && !WorkoutState.IsFinished)
             {
@@ -266,6 +278,69 @@ namespace FreeVelo.Ride
                 ShowCue(L.Get("finished"));
                 EndRide();
             }
+        }
+
+        private float _notificationTimer;
+        private DateTime? _backgroundSinceUtc;
+
+        /// <summary>
+        /// Unity stops updating while the app is in the background (screen off, other app). The foreground service
+        /// keeps Bluetooth and the trainer's ERG target alive meanwhile; on return the ride is caught up: workout
+        /// time, distance and 1 s samples (last known power/cadence/heart rate) for the gap.
+        /// </summary>
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused)
+            {
+                if (State == RideState.Riding) _backgroundSinceUtc = DateTime.UtcNow;
+                return;
+            }
+
+            if (_backgroundSinceUtc.HasValue && State == RideState.Riding)
+            {
+                double gap = (DateTime.UtcNow - _backgroundSinceUtc.Value).TotalSeconds;
+                if (gap > 1.5) CatchUp(_backgroundSinceUtc.Value, Math.Min(gap, 6 * 3600));
+            }
+
+            _backgroundSinceUtc = null;
+        }
+
+        private void CatchUp(DateTime fromUtc, double seconds)
+        {
+            if (IsPaused || Route == null) return;
+            var live = _ble.Hub.Live;
+            int? heartRate = live.HeartRateBpm;
+            int? cadence = live.CadenceRpm.HasValue ? (int?)Mathf.RoundToInt((float)live.CadenceRpm.Value) : null;
+            double lastPower = Power3s;
+            if (lastPower <= 0 && (cadence ?? 0) <= 0) return; // the rider had stopped: auto pause covers the gap
+
+            var samples = _recording.Samples;
+            var time = fromUtc;
+            for (int i = 0; i < (int)seconds; i++)
+            {
+                // In ERG the trainer holds the target, so it is the best estimate of the power ridden.
+                double power = WorkoutState != null && WorkoutState.TargetW.HasValue && !WorkoutState.IsFinished ? WorkoutState.TargetW.Value : lastPower;
+                var position = Route.Sample(DistanceM);
+                _physics.Step(power, position.GradePercent, RoadSurfaces.RollingResistance(position.Surface), 1f);
+                DistanceM += _physics.SpeedMps;
+                ElapsedS += 1;
+
+                if (Engine != null && !Engine.IsFinished)
+                {
+                    WorkoutState = Engine.Update(1);
+                    if (Engine.CurrentIndex != _lastSegmentIndex && !Engine.IsFinished)
+                    {
+                        if (_lastSegmentIndex >= 0) _recording.StartLap();
+                        _lastSegmentIndex = Engine.CurrentIndex;
+                    }
+                }
+
+                time = time.AddSeconds(1);
+                if (samples.Count > 0 && time <= samples[samples.Count - 1].TimeUtc) time = samples[samples.Count - 1].TimeUtc.AddSeconds(1);
+                _recording.Add(new RideSample(time, (int)Math.Round(power), heartRate, cadence, _physics.SpeedMps, RideDistanceM, position.Y, WorkoutState?.TargetW));
+            }
+
+            Debug.Log($"FreeVelo: caught up {seconds:0} s after the app was in the background");
         }
 
         private static FtpTestKind? FtpTestOf(Workout workout)

@@ -352,3 +352,35 @@ public class FtpTestTests
         Assert.Equal(261, FtpTests.EstimateFtp(FtpTestKind.TwoByEight, watts, test)); // 290 × 0.9
     }
 }
+
+public class PowerZoneEditingTests
+{
+    [Fact]
+    public void BoundariesStayOrderedAndRoundTrip()
+    {
+        var zones = FreeVelo.Core.Training.PowerZoneModel.Coggan();
+        Assert.Equal("%;55;75;90;105;120;150", zones.Serialize());
+        Assert.Equal(74, zones.SetBoundary(0, 80)); // cannot pass the next boundary (75)
+        Assert.Equal(75, zones.SetBoundary(1, 70)); // nor the previous one (74)
+        Assert.Equal(75, zones.Zones[1].Upper!.Value.Value);
+        Assert.Equal(75, zones.Zones[2].Lower.Value);
+
+        var copy = FreeVelo.Core.Training.PowerZoneModel.Parse(zones.Serialize());
+        Assert.Equal(zones.Serialize(), copy.Serialize());
+        Assert.Equal(FreeVelo.Core.Training.PowerZoneModel.Coggan().Serialize(), FreeVelo.Core.Training.PowerZoneModel.Parse("garbage").Serialize());
+    }
+
+    [Fact]
+    public void WattZonesFollowTheirOwnBoundsAndConvert()
+    {
+        var zones = FreeVelo.Core.Training.PowerZoneModel.Coggan();
+        zones.SetUnit(watts: true, ftpW: 200);
+        Assert.True(zones.UsesWatts);
+        Assert.Equal("W;110;150;180;210;240;300", zones.Serialize());
+        zones.SetBoundary(3, 220);
+        var parsed = FreeVelo.Core.Training.PowerZoneModel.Parse(zones.Serialize());
+        Assert.Equal(4, parsed.ZoneFor(215, 400).Number); // absolute watts: independent of FTP
+        Assert.Equal(68, FreeVelo.Core.Training.PowerZoneModel.Coggan().TypicalPercent(1, 250) + 3);
+        Assert.Equal(50, FreeVelo.Core.Training.PowerZoneModel.Coggan().TypicalPercent(0, 250));
+    }
+}

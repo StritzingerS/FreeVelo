@@ -8,6 +8,10 @@ namespace FreeVelo.App
         private static readonly Dictionary<string, (string En, string De)> Texts = new Dictionary<string, (string, string)>
         {
             ["devices"] = ("Devices", "Geräte"),
+            ["ride_running"] = ("Ride in progress", "Fahrt läuft"),
+            ["zones"] = ("Power zones", "Leistungszonen"),
+            ["watts"] = ("Watts", "Watt"),
+            ["zones_reset"] = ("Zones reset to default (Coggan)", "Zonen auf Standard (Coggan) zurückgesetzt"),
             ["ride"] = ("Ride", "Fahren"),
             ["quick_start"] = ("Quick start", "Schnellstart"),
             ["manage"] = ("Manage", "Verwalten"),

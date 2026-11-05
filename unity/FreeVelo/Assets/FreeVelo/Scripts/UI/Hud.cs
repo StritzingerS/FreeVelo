@@ -44,7 +44,6 @@ namespace FreeVelo.UI
         private float _w;
         private float _h;
         private Rect _full;
-        private readonly PowerZoneModel _zones = PowerZoneModel.Coggan();
         private readonly Dictionary<Workout, (int Ftp, double Tss, IReadOnlyList<WorkoutSegment> Segments)> _workoutInfo =
             new Dictionary<Workout, (int, double, IReadOnlyList<WorkoutSegment>)>();
 
@@ -326,7 +325,7 @@ namespace FreeVelo.UI
 
         private Color ZoneColor(double watts, int ftp)
         {
-            var zone = _zones.ZoneFor(watts, ftp);
+            var zone = AppSettings.Zones.ZoneFor(watts, ftp);
             return ColorUtility.TryParseHtmlString(zone.ColorHex, out var c) ? c : Color.gray;
         }
 
@@ -586,15 +585,21 @@ namespace FreeVelo.UI
 
         // ------------------------------------------------------------------ settings
 
+        private bool _confirmZoneReset;
+
         private void DrawSettings(Rect c)
         {
             Header(c, L.Get("settings"));
+            var view = new Rect(c.x - 8, c.y + 64, c.width + 16, c.height - 64);
             float colW = (c.width - 24) / 2f;
-            var left = new Rect(c.x, c.y + 70, colW, 0);
-            var right = new Rect(c.x + colW + 24, c.y + 70, colW, 0);
+            var zones = AppSettings.Zones;
+            float zonesH = 92 + (zones.Zones.Count * 58);
+            float contentH = 8 + 280 + 24 + 160 + 24 + zonesH + 24;
+            Ui.BeginScroll(3000, view, contentH);
+            float x0 = 8, y0 = 8;
 
             // Rider
-            var rider = new Rect(left.x, left.y, colW, 280);
+            var rider = new Rect(x0, y0, colW, 280);
             Ui.Card(rider);
             SectionTitle(rider, L.Get("rider"), Icon.Bike);
             GUI.Label(new Rect(rider.x + 24, rider.y + 68, 300, 22), L.Get("ftp"), Theme.Caption);
@@ -606,7 +611,7 @@ namespace FreeVelo.UI
             GUI.Label(new Rect(rider.x + 24, rider.yMax - 40, rider.width - 48, 24), $"{AppSettings.FtpW / Mathf.Max(1f, AppSettings.RiderWeightKg):0.00} W/kg", Theme.With(Theme.Caption, Theme.Accent));
 
             // Trainer
-            var trainer = new Rect(right.x, right.y, colW, 280);
+            var trainer = new Rect(x0 + colW + 24, y0, colW, 280);
             Ui.Card(trainer);
             SectionTitle(trainer, L.Get("trainer"), Icon.Trainer);
             GUI.Label(new Rect(trainer.x + 24, trainer.y + 68, 300, 22), L.Get("difficulty"), Theme.Caption);
@@ -620,7 +625,7 @@ namespace FreeVelo.UI
             if (newSource != AppSettings.PowerSource) AppSettings.PowerSource = newSource;
 
             // App
-            var app = new Rect(left.x, rider.yMax + 24, colW, 160);
+            var app = new Rect(x0, rider.yMax + 24, colW, 160);
             Ui.Card(app);
             SectionTitle(app, L.Get("app"), Icon.Gear);
             GUI.Label(new Rect(app.x + 24, app.y + 68, 300, 22), L.Get("language"), Theme.Caption);
@@ -630,11 +635,77 @@ namespace FreeVelo.UI
 
             if (_ble.BackendName == "Simulator")
             {
-                var sim = new Rect(right.x, trainer.yMax + 24, colW, 160);
+                var sim = new Rect(trainer.x, trainer.yMax + 24, colW, 160);
                 Ui.Card(sim);
                 SectionTitle(sim, L.Get("sim_power"), Icon.Bolt);
                 GUI.Label(new Rect(sim.xMax - 124, sim.y + 22, 100, 26), $"{SimulatedBleBackend.RiderPowerW:0} W", Theme.With(Theme.H3, anchor: TextAnchor.MiddleRight));
                 SimulatedBleBackend.RiderPowerW = Mathf.Round(Ui.Slider(new Rect(sim.x + 16, sim.y + 88, sim.width - 32, 44), SimulatedBleBackend.RiderPowerW, 0f, 500f) / 5) * 5;
+            }
+
+            DrawZonesCard(new Rect(x0, app.yMax + 24, c.width, zonesH));
+            Ui.EndScroll(3000, view, contentH);
+        }
+
+        /// <summary>Power zones: colour, name, range; the boundary between two zones is moved with the stepper.</summary>
+        private void DrawZonesCard(Rect card)
+        {
+            var model = AppSettings.Zones;
+            int ftp = AppSettings.FtpW;
+            bool watts = model.UsesWatts;
+            Ui.Card(card);
+            SectionTitle(card, L.Get("zones"), Icon.Target);
+
+            int unit = Ui.Segmented(new Rect(card.xMax - 24 - 470, card.y + 18, 230, 44), new[] { "% FTP", L.Get("watts") }, watts ? 1 : 0);
+            if ((unit == 1) != watts)
+            {
+                model.SetUnit(unit == 1, ftp);
+                AppSettings.SaveZones();
+            }
+
+            if (Ui.Button(new Rect(card.xMax - 24 - 228, card.y + 18, 228, 44), _confirmZoneReset ? L.Get("confirm_reset") : L.Get("reset_default"), _confirmZoneReset ? ButtonKind.Danger : ButtonKind.Secondary, Icon.Reset))
+            {
+                if (_confirmZoneReset)
+                {
+                    AppSettings.ResetZones();
+                    _confirmZoneReset = false;
+                    Ui.Toast("✓ " + L.Get("zones_reset"));
+                    return;
+                }
+
+                _confirmZoneReset = true;
+            }
+
+            string u = watts ? "W" : "%";
+            float y = card.y + 80;
+            for (int i = 0; i < model.Zones.Count; i++)
+            {
+                var z = model.Zones[i];
+                var row = new Rect(card.x + 24, y, card.width - 48, 50);
+                var color = ColorUtility.TryParseHtmlString(z.ColorHex, out var zc) ? zc : Color.gray;
+                Ui.Rect(new Rect(row.x, row.y + 6, 8, 38), color, 4);
+                GUI.Label(new Rect(row.x + 22, row.y, 54, row.height), $"Z{z.Number}", Theme.With(Theme.H3, size: 18));
+                GUI.Label(new Rect(row.x + 72, row.y, 260, row.height), z.Name.Get(AppSettings.Language), Theme.Body);
+
+                double lower = z.Lower.Value;
+                string range = z.Upper.HasValue ? $"{lower:0} – {z.Upper.Value.Value:0} {u}" : $"≥ {lower:0} {u}";
+                string wattsHint = watts ? string.Empty : z.Upper.HasValue ? $"  ·  {z.Lower.ToWatts(ftp):0}–{z.Upper.Value.ToWatts(ftp):0} W" : $"  ·  ≥ {z.Lower.ToWatts(ftp):0} W";
+                GUI.Label(new Rect(row.x + 340, row.y, 320, row.height), range + $"<color=#76828F><size=15>{wattsHint}</size></color>", Theme.With(Theme.Body, Theme.Muted));
+
+                // Stepper for the upper bound (= lower bound of the next zone).
+                if (z.Upper.HasValue)
+                {
+                    int small = watts ? 5 : 1, large = watts ? 25 : 5;
+                    int current = Mathf.RoundToInt((float)z.Upper.Value.Value);
+                    int next = Ui.Stepper(new Rect(row.xMax - 430, row.y, 430, 50), current, u, small, large, 1, watts ? 3000 : 400);
+                    if (next != current)
+                    {
+                        model.SetBoundary(i, next);
+                        AppSettings.SaveZones();
+                        _confirmZoneReset = false;
+                    }
+                }
+
+                y += 58;
             }
         }
 

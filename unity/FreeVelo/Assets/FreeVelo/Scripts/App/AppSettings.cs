@@ -44,6 +44,24 @@ namespace FreeVelo.App
             }
         }
 
+        private static FreeVelo.Core.Training.PowerZoneModel _zones;
+
+        /// <summary>The rider's power zones (Coggan by default; bounds in % FTP or watts).</summary>
+        public static FreeVelo.Core.Training.PowerZoneModel Zones => _zones ??= FreeVelo.Core.Training.PowerZoneModel.Parse(PlayerPrefs.GetString("zones", string.Empty));
+
+        public static void SaveZones()
+        {
+            PlayerPrefs.SetString("zones", Zones.Serialize());
+            PlayerPrefs.Save();
+        }
+
+        public static void ResetZones()
+        {
+            PlayerPrefs.DeleteKey("zones");
+            PlayerPrefs.Save();
+            _zones = null;
+        }
+
         /// <summary>Devices that are connected automatically when found.</summary>
         public static IReadOnlyCollection<string> RememberedDevices =>
             PlayerPrefs.GetString("devices", string.Empty).Split(',').Where(s => s.Length > 0).ToList();
