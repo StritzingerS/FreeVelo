@@ -74,6 +74,77 @@ namespace FreeVelo.World
             }
         }
 
+        /// <summary>
+        /// Sweeps an elliptical cross-section along <paramref name="centers"/>. radii[i].x lies along
+        /// <paramref name="side"/> (projected perpendicular to the path), radii[i].y perpendicular to both.
+        /// Used for organic shapes (limbs, torso, saddle) and aero tubes.
+        /// </summary>
+        public void Sweep(IList<Vector3> centers, IList<Vector2> radii, Vector3 side, int sides = 12, bool capStart = true, bool capEnd = true)
+        {
+            int n = centers.Count;
+            if (n < 2) return;
+            var us = new Vector3[n];
+            var ws = new Vector3[n];
+            for (int i = 0; i < n; i++)
+            {
+                Vector3 dir = (centers[Mathf.Min(n - 1, i + 1)] - centers[Mathf.Max(0, i - 1)]).normalized;
+                Vector3 u = side - (Vector3.Dot(side, dir) * dir);
+                if (u.sqrMagnitude < 1e-8f) Basis(dir, out u, out _);
+                u.Normalize();
+                us[i] = u;
+                ws[i] = Vector3.Cross(dir, u);
+            }
+
+            int start = _vertices.Count;
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = 0; j <= sides; j++)
+                {
+                    float angle = j * Mathf.PI * 2f / sides;
+                    _vertices.Add(centers[i] + (us[i] * (Mathf.Cos(angle) * radii[i].x)) + (ws[i] * (Mathf.Sin(angle) * radii[i].y)));
+                }
+            }
+
+            int row = sides + 1;
+            for (int i = 0; i < n - 1; i++)
+            {
+                for (int j = 0; j < sides; j++)
+                {
+                    int a = start + (i * row) + j;
+                    int b = a + 1;
+                    int c = a + row;
+                    int d = c + 1;
+                    Tri(a, b, c);
+                    Tri(c, b, d);
+                }
+            }
+
+            if (capStart) Cap(centers[0], us[0], ws[0], radii[0], sides, reverse: false);
+            if (capEnd) Cap(centers[n - 1], us[n - 1], ws[n - 1], radii[n - 1], sides, reverse: true);
+        }
+
+        /// <summary>Straight tube with elliptical ends (e.g. aero frame tubes).</summary>
+        public void EllipticTube(Vector3 a, Vector3 b, Vector2 radiiA, Vector2 radiiB, Vector3 side, int sides = 12) =>
+            Sweep(new[] { a, b }, new[] { radiiA, radiiB }, side, sides);
+
+        private void Cap(Vector3 center, Vector3 u, Vector3 w, Vector2 r, int sides, bool reverse)
+        {
+            int c = _vertices.Count;
+            _vertices.Add(center);
+            int ring = _vertices.Count;
+            for (int j = 0; j <= sides; j++)
+            {
+                float angle = j * Mathf.PI * 2f / sides;
+                _vertices.Add(center + (u * (Mathf.Cos(angle) * r.x)) + (w * (Mathf.Sin(angle) * r.y)));
+            }
+
+            for (int j = 0; j < sides; j++)
+            {
+                if (reverse) Tri(c, ring + j, ring + j + 1);
+                else Tri(c, ring + j + 1, ring + j);
+            }
+        }
+
         /// <summary>Tube through several points.</summary>
         public void Path(Vector3[] points, float radius, int sides = 8)
         {
