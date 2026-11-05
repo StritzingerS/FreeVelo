@@ -195,11 +195,14 @@ namespace FreeVelo.Core.Avatar
         internal void Sculpt(AvatarNode node, Sdf shape, Vector3 min, Vector3 max, float cell, int triangles, AvatarMaterial baseMaterial, params (Sdf Region, AvatarMaterial Material)[] regions)
         {
             var mesh = Polygonizer.Mesh(shape, min, max, cell);
-            mesh = Decimator.Simplify(mesh, (int)(triangles * Detail), 0.0025f, shape);
+            mesh = Decimator.Simplify(mesh, (int)(triangles * Detail), _sculptError, shape);
             var parts = Polygonizer.Split(mesh, regions.Select(r => r.Region).ToList());
             B(node, baseMaterial).Append(parts[0]);
             for (int i = 0; i < regions.Length; i++) B(node, regions[i].Material).Append(parts[i + 1]);
         }
+
+        /// <summary>Allowed deviation of simplified sculpts (metres); tighter for faces.</summary>
+        private float _sculptError = 0.0025f;
 
         /// <summary>Mesh resolution factor (1 = default; lower for distant riders).</summary>
         public float Detail { get; private set; } = 1f;

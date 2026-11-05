@@ -60,8 +60,15 @@ namespace FreeVelo.Core.Avatar
         public static Sdf Chain(IList<Vector3> points, IList<float> radii)
         {
             var parts = new List<Sdf>();
-            for (int i = 0; i < points.Count - 1; i++) parts.Add(RoundCone(points[i], points[i + 1], radii[i], radii[i + 1]));
-            return Union(parts.ToArray());
+            float minRadius = float.MaxValue;
+            for (int i = 0; i < points.Count - 1; i++)
+            {
+                parts.Add(RoundCone(points[i], points[i + 1], radii[i], radii[i + 1]));
+                minRadius = MathF.Min(minRadius, MathF.Min(radii[i], radii[i + 1]));
+            }
+
+            // Smooth joints (no creases where segments meet).
+            return parts.Count == 1 ? parts[0] : Blend(minRadius * 0.5f, parts.ToArray());
         }
 
         /// <summary>Chain with elliptical cross-section: scaled by <paramref name="squash"/> along <paramref name="axis"/> (≤ 1 flattens).</summary>
