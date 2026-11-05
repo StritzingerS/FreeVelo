@@ -88,7 +88,7 @@ namespace FreeVelo.Core.Avatar
 
         public Vector3 Shorts { get; set; } = new Vector3(0.05f, 0.05f, 0.06f);
 
-        public Vector3 Skin { get; set; } = new Vector3(0.9f, 0.72f, 0.58f);
+        public Vector3 Skin { get; set; } = new Vector3(0.87f, 0.66f, 0.54f);
 
         public Vector3 Hair { get; set; } = new Vector3(0.25f, 0.18f, 0.12f);
 

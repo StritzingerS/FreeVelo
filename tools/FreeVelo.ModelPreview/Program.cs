@@ -28,7 +28,9 @@ var sw = Stopwatch.StartNew();
 float previewDetail = float.Parse(Environment.GetEnvironmentVariable("FREEVELO_DETAIL") ?? "1", System.Globalization.CultureInfo.InvariantCulture);
 var model = File.Exists(Environment.GetEnvironmentVariable("FREEVELO_BAKED") ?? "")
     ? AvatarModel.Deserialize(File.ReadAllBytes(Environment.GetEnvironmentVariable("FREEVELO_BAKED")!))
-    : AvatarModel.Build(detail: previewDetail);
+    : Environment.GetEnvironmentVariable("FREEVELO_HEAD") is { } headMode
+        ? AvatarModel.BuildHeadStudy(glasses: !headMode.Contains("noglasses"), helmet: !headMode.Contains("nohelmet"))
+        : AvatarModel.Build(detail: previewDetail);
 var pose = AvatarModel.Pose(crank, 37f);
 var meshes = new List<SceneMesh>();
 foreach (var part in model.Parts)
@@ -76,6 +78,9 @@ var cameras = new Dictionary<string, Camera>
     ["profile"] = new() { Name = "profile", Position = new Vector3(-0.75f, 1.5f, 0.45f), Target = new Vector3(0, 1.48f, 0.42f), FieldOfView = 22 },
     ["nose"] = new() { Name = "nose", Position = new Vector3(-0.32f, 1.47f, 0.72f), Target = new Vector3(0, 1.47f, 0.5f), FieldOfView = 18 },
     ["nose2"] = new() { Name = "nose2", Position = new Vector3(-0.38f, 1.38f, 0.62f), Target = new Vector3(0, 1.47f, 0.5f), FieldOfView = 18 },
+    ["zw"] = new() { Name = "zw", Position = new Vector3(0.2f, 1.44f, 0.86f), Target = new Vector3(0, 1.47f, 0.42f), FieldOfView = 24 },
+    ["zwfront"] = new() { Name = "zwfront", Position = new Vector3(0, 1.43f, 0.9f), Target = new Vector3(0, 1.47f, 0.42f), FieldOfView = 24 },
+    ["zwside"] = new() { Name = "zwside", Position = new Vector3(0.55f, 1.47f, 0.5f), Target = new Vector3(0, 1.47f, 0.42f), FieldOfView = 26 },
     ["back"] = new() { Name = "back", Position = new Vector3(0, 1.25f, -2.4f), Target = new Vector3(0, 1.0f, 0), FieldOfView = 34 },
 };
 

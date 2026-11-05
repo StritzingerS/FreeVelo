@@ -26,6 +26,17 @@ namespace FreeVelo.Core.Avatar
 
         private static Vector3 HeadToWorld(Vector3 local) => HeadCenter + (HeadRot * local);
 
+        /// <summary>Only torso and head (fast preview for face work).</summary>
+        public static AvatarModel BuildHeadStudy(bool glasses = true, bool helmet = true)
+        {
+            var model = new AvatarModel(AvatarStyle.Default);
+            model.BuildTorso();
+            model.BuildHead();
+            if (helmet) model.BuildHelmet();
+            if (glasses) model.BuildGlasses();
+            return model;
+        }
+
         private void BuildRider()
         {
             BuildTorso();
@@ -237,26 +248,48 @@ namespace FreeVelo.Core.Avatar
             // adult head proportions, blended into the cranium. Small features are added gently on top.
             var head = Blend(0.02f, Ellipsoid(V(0, 0.02f, -0.01f), V(0.074f, 0.09f, 0.098f)), FaceLoft());
 
+            // Brow ridge and cheekbones (zygomatic) as soft ridges.
             head = Blend(
-                0.006f,
+                0.012f,
                 head,
-                Capsule(V(-0.03f, 0.03f, 0.084f), V(0.03f, 0.03f, 0.084f), 0.008f), // brow ridge
-                Ellipsoid(V(0, -0.006f, 0.095f), V(0.0112f, 0.032f, 0.019f), Rot.Euler(-18, 0, 0)), // nose
-                Sphere(V(0, -0.029f, 0.111f), 0.0076f), // nose tip
-                Ellipsoid(V(0.0098f, -0.034f, 0.099f), V(0.0072f, 0.0068f, 0.0082f)), // nostril wings
-                Ellipsoid(V(-0.0098f, -0.034f, 0.099f), V(0.0072f, 0.0068f, 0.0082f)),
-                Ellipsoid(V(0, -0.0575f, 0.0925f), V(0.0175f, 0.0062f, 0.0062f)), // upper lip
-                Ellipsoid(V(0, -0.07f, 0.0905f), V(0.0155f, 0.0068f, 0.0065f)), // lower lip
-                Ellipsoid(V(0, -0.104f, 0.085f), V(0.02f, 0.012f, 0.009f))); // chin point
+                Capsule(V(-0.026f, 0.026f, 0.086f), V(0.026f, 0.026f, 0.086f), 0.009f));
 
-            head = SmoothSubtract(head, Capsule(V(-0.019f, -0.065f, 0.103f), V(0.019f, -0.065f, 0.103f), 0.0013f), 0.0025f); // mouth line
-                        for (int s = -1; s <= 1; s += 2)
+            // Eyes: socket, eyeball set back, upper lid fold.
+            for (int s = -1; s <= 1; s += 2)
             {
-                head = SmoothSubtract(head, Ellipsoid(V(s * 0.033f, 0.008f, 0.094f), V(0.0145f, 0.011f, 0.008f)), 0.009f); // eye sockets (shallow, so the nose stays attached)
-                head = Blend(0.006f, head, Ellipsoid(V(s * 0.032f, 0.007f, 0.088f), V(0.0115f, 0.0105f, 0.0105f))); // eyeball under the lids
+                var eye = V(s * 0.032f, 0.006f, 0.07f);
+                head = SmoothSubtract(head, Ellipsoid(eye + V(0.002f * s, 0.002f, 0.017f), V(0.0145f, 0.009f, 0.007f)), 0.009f);
+                head = Blend(0.003f, head, Sphere(eye, 0.0118f)); // eyeball, cornea at z ≈ 0.082
+                head = Blend(0.004f, head, Intersect(Shell(Sphere(eye, 0.0128f), 0.0018f), Plane(eye + V(0, 0.003f, 0), -Vector3.UnitY))); // upper lid
+            }
+
+            // Nose: bridge from the brow to a defined tip, wide base, nostril wings.
+            var nose = Blend(
+                0.006f,
+                RoundCone(V(0, 0.012f, 0.088f), V(0, -0.024f, 0.109f), 0.0058f, 0.0072f), // dorsum
+                Ellipsoid(V(0, -0.02f, 0.094f), V(0.014f, 0.019f, 0.012f)), // base on the maxilla
+                Sphere(V(0, -0.028f, 0.109f), 0.0078f), // tip
+                Sphere(V(0.0115f, -0.033f, 0.098f), 0.0068f), // alae
+                Sphere(V(-0.0115f, -0.033f, 0.098f), 0.0068f));
+            head = Blend(0.007f, head, nose);
+            for (int s = -1; s <= 1; s += 2) head = SmoothSubtract(head, Ellipsoid(V(s * 0.0062f, -0.0385f, 0.103f), V(0.0042f, 0.0022f, 0.0055f)), 0.0015f); // nostrils
+
+            // Philtrum, lips with a cupid's bow, closed mouth.
+            head = Blend(
+                0.005f,
+                head,
+                Ellipsoid(V(0, -0.045f, 0.094f), V(0.008f, 0.007f, 0.004f)), // philtrum
+                Ellipsoid(V(0.008f, -0.0545f, 0.0925f), V(0.011f, 0.0048f, 0.0048f), Rot.Euler(0, 0, -8)), // upper lip halves
+                Ellipsoid(V(-0.008f, -0.0545f, 0.0925f), V(0.011f, 0.0048f, 0.0048f), Rot.Euler(0, 0, 8)),
+                Ellipsoid(V(0, -0.0635f, 0.0915f), V(0.0135f, 0.0058f, 0.0052f))); // lower lip
+            head = SmoothSubtract(head, Ellipsoid(V(0, -0.075f, 0.093f), V(0.013f, 0.0032f, 0.005f)), 0.006f); // mentolabial fold
+
+            // Ears: helix, concha.
+            for (int s = -1; s <= 1; s += 2)
+            {
                 var ear = SmoothSubtract(
-                    Ellipsoid(V(s * 0.074f, -0.006f, -0.012f), V(0.011f, 0.03f, 0.018f), Rot.Euler(-10, s * 15f, 0)),
-                    Ellipsoid(V(s * 0.082f, -0.008f, -0.009f), V(0.006f, 0.017f, 0.01f)),
+                    Ellipsoid(V(s * 0.074f, -0.008f, -0.014f), V(0.0105f, 0.03f, 0.018f), Rot.Euler(-14, s * 18f, 0)),
+                    Ellipsoid(V(s * 0.083f, -0.012f, -0.01f), V(0.006f, 0.015f, 0.0095f)),
                     0.004f);
                 head = Blend(0.006f, head, ear);
             }
@@ -269,21 +302,32 @@ namespace FreeVelo.Core.Avatar
             Sdf hairRegion = p =>
             {
                 var q = HeadRot.Transposed * (p - HeadCenter);
-                float backAndTop = MathF.Max(-(q.Y + 0.012f), q.Z - 0.045f);
-                float nape = MathF.Max(-(q.Y + 0.05f), q.Z + 0.035f);
-                float above = MathF.Max(-(q.Y - 0.05f), q.Z - 0.085f);
-                float notEars = -(Ellipsoid(V(MathF.Sign(q.X) * 0.076f, -0.004f, -0.008f), V(0.02f, 0.036f, 0.026f))(q));
-                return MathF.Max(MathF.Min(MathF.Min(backAndTop, nape), above), notEars);
+
+                // Hairline: high on the forehead, down over the temples to short sideburns, low at the nape.
+                float t = Math.Clamp((0.075f - q.Z) / 0.17f, 0f, 1f);
+                float line = 0.066f - (0.12f * t) + (MathF.Abs(q.X) > 0.06f && q.Z > -0.03f ? -0.02f * Math.Clamp((q.Z + 0.03f) / 0.04f, 0f, 1f) : 0f);
+                float hair = line - q.Y;
+                float notEars = -(Ellipsoid(V(MathF.Sign(q.X) * 0.076f, -0.008f, -0.014f), V(0.018f, 0.036f, 0.026f))(q));
+                float face = MathF.Max(0.06f - q.Z, q.Y - 0.055f); // negative on the face below the forehead line
+                return MathF.Max(MathF.Max(hair, notEars), -face);
+            };
+
+            Sdf browRegion = p =>
+            {
+                var q = HeadRot.Transposed * (p - HeadCenter);
+                float ax = MathF.Abs(q.X);
+                float arch = 0.029f + (0.004f * MathF.Sin(Math.Clamp((ax - 0.012f) / 0.042f, 0f, 1f) * MathF.PI)) - (ax > 0.045f ? (ax - 0.045f) * 0.3f : 0f);
+                return MathF.Max(MathF.Max(MathF.Abs(q.Y - arch) - 0.0032f, MathF.Max(0.011f - ax, ax - 0.054f)), 0.07f - q.Z);
             };
 
             Sdf lipsRegion = p =>
             {
                 var q = HeadRot.Transposed * (p - HeadCenter);
-                return MathF.Max(Ellipsoid(V(0, -0.065f, 0.098f), V(0.02f, 0.0135f, 0.016f))(q), 0.093f - q.Z);
+                return MathF.Max(Ellipsoid(V(0, -0.0588f, 0.095f), V(0.0185f, 0.0092f, 0.014f))(q), 0.0898f - q.Z);
             };
 
             _sculptError = 0.0006f; // faces show every lump
-            Sculpt(AvatarNode.Rider, Transformed(head, HeadCenter, HeadRot), V(-0.11f, 1.27f, 0.15f), V(0.11f, 1.65f, 0.56f), 0.0024f, 12000, skin, (hairRegion, hair), (lipsRegion, Mat("lips", LipColor(Style.Skin), 0.45f)));
+            Sculpt(AvatarNode.Rider, Transformed(head, HeadCenter, HeadRot), V(-0.11f, 1.27f, 0.15f), V(0.11f, 1.65f, 0.56f), 0.0024f, 12000, skin, (hairRegion, hair), (browRegion, hair), (lipsRegion, Mat("lips", LipColor(Style.Skin), 0.45f)), (MouthLine(), Mat("mouthline", LipColor(Style.Skin) * 0.45f, 0.3f)));
             _sculptError = 0.0025f;
         }
 
@@ -295,7 +339,7 @@ namespace FreeVelo.Core.Avatar
                 Ellipsoid(V(0, 0.016f, -0.085f), V(0.083f, 0.072f, 0.085f)));
 
             // Lower edge: high over the forehead, low at the back.
-            var rimPoint = V(0, 0.045f, 0.12f);
+            var rimPoint = V(0, 0.056f, 0.12f);
             var rimNormal = Vector3.Normalize(V(0, 0.95f, -0.31f));
             return SmoothIntersect(outer, Plane(rimPoint, -rimNormal), 0.01f);
         }
@@ -364,7 +408,7 @@ namespace FreeVelo.Core.Avatar
                 var below = V(s * 0.07f, -0.062f, 0.004f);
                 straps.Add(Chain(new[] { V(s * 0.08f, 0.0f, 0.04f), below }, new[] { 0.0032f, 0.0032f }));
                 straps.Add(Chain(new[] { V(s * 0.082f, 0.0f, -0.045f), below }, new[] { 0.0032f, 0.0032f }));
-                straps.Add(Chain(new[] { below, V(s * 0.047f, -0.108f, 0.035f), V(0, -0.126f, 0.06f) }, new[] { 0.0035f, 0.0035f, 0.0035f }));
+                straps.Add(Chain(new[] { below, V(s * 0.047f, -0.094f, 0.022f), V(s * 0.016f, -0.111f, 0.044f), V(0, -0.112f, 0.047f) }, new[] { 0.0033f, 0.0033f, 0.0033f, 0.0033f })); // along the jaw to the buckle under the chin
                 straps.Add(Chain(new[] { V(s * 0.07f, -0.02f, -0.07f), V(s * 0.04f, -0.045f, -0.098f), V(0, -0.05f, -0.105f) }, new[] { 0.004f, 0.004f, 0.004f }));
             }
 
@@ -376,24 +420,24 @@ namespace FreeVelo.Core.Avatar
 
         private void BuildGlasses()
         {
-            var lens = Mat("lens", V(0.05f, 0.08f, 0.15f), 0.95f);
+            var lens = Mat("lens", V(0.17f, 0.18f, 0.21f), 0.92f, 0.3f); // grey tinted, reflective
             var black = Mat("black", V(0.06f, 0.06f, 0.07f), 0.35f);
 
             var shield = Ellipsoid(V(0, 0.012f, 0.0f), V(0.088f, 0.1f, 0.113f));
-            var outline = Ellipsoid(V(0, 0.012f, 0.06f), V(0.093f, 0.026f, 0.12f));
+            var outline = Ellipsoid(V(0, 0.003f, 0.06f), V(0.092f, 0.021f, 0.12f)); // sits on the nose, brows visible above
             var lensShape = Intersect(Intersect(Shell(shield, 0.003f), outline), Plane(V(0, 0, 0.03f), -Vector3.UnitZ));
-            lensShape = SmoothSubtract(lensShape, Ellipsoid(V(0, -0.016f, 0.11f), V(0.013f, 0.02f, 0.04f)), 0.004f); // nose cut-out
-            var frame = Intersect(Intersect(Shell(Grow(shield, 0.0015f), 0.005f), Ellipsoid(V(0, 0.034f, 0.06f), V(0.094f, 0.006f, 0.12f))), Plane(V(0, 0, 0.03f), -Vector3.UnitZ));
+            lensShape = SmoothSubtract(lensShape, Ellipsoid(V(0, -0.021f, 0.11f), V(0.0115f, 0.019f, 0.04f)), 0.004f); // nose cut-out
+            var frame = Intersect(Intersect(Shell(shield, 0.0048f), Grow(outline, 0.0012f)), Intersect(Plane(V(0, 0.0165f, 0), -Vector3.UnitY), Plane(V(0, 0, 0.03f), -Vector3.UnitZ))); // top rim along the lens edge
             var parts = new List<Sdf> { lensShape, frame };
-            for (int s = -1; s <= 1; s += 2) parts.Add(Chain(new[] { V(s * 0.083f, 0.03f, 0.035f), V(s * 0.083f, 0.018f, -0.02f), V(s * 0.078f, 0.004f, -0.045f) }, new[] { 0.0028f, 0.0026f, 0.0024f }));
+            for (int s = -1; s <= 1; s += 2) parts.Add(Chain(new[] { V(s * 0.083f, 0.021f, 0.035f), V(s * 0.082f, 0.014f, -0.02f), V(s * 0.077f, 0.0f, -0.045f) }, new[] { 0.0026f, 0.0024f, 0.0022f }));
 
             Sdf frameRegion = p =>
             {
                 var q = HeadRot.Transposed * (p - HeadCenter);
-                return MathF.Min(0.0305f - q.Y, 0.033f - q.Z);
+                return MathF.Min(0.0185f - q.Y, 0.033f - q.Z);
             };
 
-            Sculpt(AvatarNode.Rider, Transformed(Union(parts.ToArray()), HeadCenter, HeadRot), V(-0.11f, 1.45f, 0.33f), V(0.11f, 1.6f, 0.56f), 0.0018f, 900, lens, (frameRegion, black));
+            Sculpt(AvatarNode.Rider, Transformed(Union(parts.ToArray()), HeadCenter, HeadRot), V(-0.11f, 1.45f, 0.33f), V(0.11f, 1.6f, 0.56f), 0.0015f, 1800, lens, (frameRegion, black));
         }
 
         // ------------------------------------------------------------------ legs and shoes
@@ -492,13 +536,21 @@ namespace FreeVelo.Core.Avatar
 
         private static float SmoothMax(float a, float b, float k) => -SMin(-a, -b, k);
 
+        /// <summary>Thin dark line between the lips (colour, not geometry: too fine to sculpt).</summary>
+        private static Sdf MouthLine() => p =>
+        {
+            var q = HeadRot.Transposed * (p - HeadCenter);
+            float y = -0.0588f - (q.X * q.X * 5f);
+            return MathF.Max(MathF.Max(MathF.Abs(q.Y - y) - 0.0007f, MathF.Abs(q.X) - 0.0195f), 0.088f - q.Z);
+        };
+
         /// <summary>Smooth face/jaw loft (head-local: y up, z forward, origin mid-cranium).</summary>
         private static Sdf FaceLoft()
         {
             // y from forehead to under the chin; half width; front depth (face surface without nose/lips); back depth.
-            float[] ys = { 0.07f, 0.04f, 0.012f, -0.012f, -0.035f, -0.058f, -0.08f, -0.1f, -0.114f, -0.124f };
-            float[] w = { 0.068f, 0.07f, 0.07f, 0.07f, 0.061f, 0.058f, 0.054f, 0.042f, 0.028f, 0.012f }; // cheekbones, slight hollow, square jaw
-            float[] front = { 0.084f, 0.088f, 0.082f, 0.087f, 0.088f, 0.087f, 0.085f, 0.085f, 0.08f, 0.064f }; // strong chin
+            float[] ys = { 0.07f, 0.04f, 0.012f, -0.012f, -0.035f, -0.054f, -0.072f, -0.089f, -0.101f, -0.11f };
+            float[] w = { 0.068f, 0.07f, 0.07f, 0.068f, 0.064f, 0.058f, 0.05f, 0.039f, 0.027f, 0.012f }; // gradual taper to the jaw
+            float[] front = { 0.084f, 0.088f, 0.08f, 0.084f, 0.09f, 0.092f, 0.089f, 0.088f, 0.083f, 0.066f }; // muzzle under the lips, chin projection
             float[] back = { 0.08f, 0.075f, 0.065f, 0.05f, 0.035f, 0.02f, 0.008f, -0.002f, -0.01f, -0.016f };
 
             float Sample(float[] values, float y)
@@ -529,6 +581,6 @@ namespace FreeVelo.Core.Avatar
             };
         }
 
-        internal static Vector3 LipColor(Vector3 skin) => skin * new Vector3(0.95f, 0.85f, 0.84f);
+        internal static Vector3 LipColor(Vector3 skin) => skin * new Vector3(0.95f, 0.83f, 0.87f);
     }
 }

@@ -121,6 +121,7 @@ namespace FreeVelo.Core.Avatar
                 case "shorts": return Style.Shorts;
                 case "skin": return Style.Skin;
                 case "lips": return LipColor(Style.Skin);
+                case "mouthline": return LipColor(Style.Skin) * 0.45f;
                 case "hair": return Style.Hair;
                 case "helmet": return Style.Helmet;
                 case "shoes": return Style.Shoes;
