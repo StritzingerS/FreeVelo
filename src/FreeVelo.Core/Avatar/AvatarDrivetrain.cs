@@ -15,8 +15,8 @@ namespace FreeVelo.Core.Avatar
         private const float ChainLineX = 0.07f;
         private static readonly int[] CassetteTeeth = { 28, 25, 23, 21, 19, 17, 15, 14, 13, 12, 11 };
         private const int ChainCog = 7; // 14T, in line with the big ring
-        private static Vector3 UpperJockey => RearAxle + new Vector3(0, -0.052f, 0.014f);
-        private static Vector3 LowerJockey => RearAxle + new Vector3(0, -0.108f, 0.036f);
+        private static Vector3 UpperJockey => RearAxle + new Vector3(0, -0.058f, 0.012f);
+        private static Vector3 LowerJockey => RearAxle + new Vector3(0, -0.126f, -0.012f);
 
         private static float PitchRadius(int teeth) => ChainPitch / (2f * MathF.Sin(MathF.PI / teeth));
 
@@ -120,8 +120,8 @@ namespace FreeVelo.Core.Avatar
             {
                 (new Vector2(BottomBracket.Z, BottomBracket.Y), PitchRadius(50), 1),
                 (new Vector2(RearAxle.Z, RearAxle.Y), PitchRadius(CassetteTeeth[ChainCog]), 1),
-                (new Vector2(UpperJockey.Z, UpperJockey.Y), PitchRadius(11), -1),
-                (new Vector2(LowerJockey.Z, LowerJockey.Y), PitchRadius(11), -1),
+                (new Vector2(UpperJockey.Z, UpperJockey.Y), PitchRadius(11), -1), // chain runs down its front side
+                (new Vector2(LowerJockey.Z, LowerJockey.Y), PitchRadius(11), 1), // and around the back and bottom of the tension pulley
             };
 
             static Vector2 Rot90(Vector2 v) => new Vector2(-v.Y, v.X);
@@ -215,16 +215,25 @@ namespace FreeVelo.Core.Avatar
             {
                 var pa = new Vector2(p.Z - a.Z, p.Y - a.Y);
                 var ba = new Vector2(b.Z - a.Z, b.Y - a.Y);
-                float h = Math.Clamp(Vector2.Dot(pa, ba) / ba.LengthSquared(), 0f, 1f);
+                float l2 = ba.LengthSquared();
+                float h = l2 < 1e-12f ? 0f : Math.Clamp(Vector2.Dot(pa, ba) / l2, 0f, 1f);
                 return (pa - (ba * h)).Length() - r;
             }
 
-            Sdf Plate(float x, float thickness, float radius) => p => MathF.Max(Capsule2D(p, UpperJockey, LowerJockey, radius), MathF.Abs(p.X - x) - (thickness / 2f));
+            // Cage plate: round ends around the pulleys, narrower waist, two lightening holes.
+            Sdf Plate(float x, float thickness, float radius) => p =>
+            {
+                float ends = MathF.Min(Capsule2D(p, UpperJockey, UpperJockey, radius * 0.95f), Capsule2D(p, LowerJockey, LowerJockey, radius));
+                float outline = SMin(ends, Capsule2D(p, UpperJockey, LowerJockey, radius * 0.62f), 0.012f);
+                var mid = Vector3.Lerp(UpperJockey, LowerJockey, 0.5f);
+                float holes = MathF.Min(Capsule2D(p, Vector3.Lerp(UpperJockey, mid, 0.55f), Vector3.Lerp(mid, LowerJockey, 0.2f), 0.0045f), Capsule2D(p, LowerJockey, LowerJockey, 0.006f));
+                return MathF.Max(MathF.Max(outline, -holes), MathF.Abs(p.X - x) - (thickness / 2f));
+            };
             var rd = Blend(
                 0.006f,
-                RoundBox(RearAxle + V(0.076f, -0.018f, -0.006f), V(0.008f, 0.02f, 0.012f), 0.005f), // hanger knuckle
-                Transformed(RoundBox(Vector3.Zero, V(0.011f, 0.024f, 0.009f), 0.005f), RearAxle + V(0.082f, -0.038f, 0.014f), Rot.Euler(-35, 0, 0)), // parallelogram
-                RoundBox(UpperJockey + V(0.08f, 0.006f, -0.004f), V(0.008f, 0.012f, 0.012f), 0.005f)); // cage pivot
+                RoundBox(RearAxle + V(0.078f, -0.02f, -0.014f), V(0.009f, 0.018f, 0.013f), 0.005f), // hanger knuckle (B-knuckle behind the axle)
+                Transformed(RoundBox(Vector3.Zero, V(0.011f, 0.022f, 0.012f), 0.006f), RearAxle + V(0.084f, -0.04f, -0.002f), Rot.Euler(-25, 0, 0)), // parallelogram body
+                RoundBox(UpperJockey + V(0.08f, 0.004f, 0f), V(0.009f, 0.013f, 0.013f), 0.006f)); // cage pivot, coaxial with the upper pulley
             rd = Union(rd, Plate(ChainLineX + 0.0085f, 0.0025f, 0.017f), Plate(ChainLineX - 0.008f, 0.002f, 0.0135f));
             var rdMin = Vector3.Min(UpperJockey, LowerJockey) - V(0, 0.04f, 0.05f);
             var rdMax = RearAxle + V(0, 0.01f, 0.07f);
