@@ -37,7 +37,7 @@ namespace FreeVelo.Core.Avatar
                 stays.Add(Blend(0.01f, Aero(BottomBracket + V(s * 0.035f, -0.005f, -0.035f), csBend, 0.017f, 0.011f, 0.7f, s * 0.055f), Aero(csBend, RearAxle + V(s * 0.0735f, -0.004f, 0.012f), 0.011f, 0.0095f, 0.7f, s * 0.0735f))); // chain stay
                 var ssBend = RearAxle + V(s * 0.072f, 0.115f, 0.06f);
                 stays.Add(Blend(0.01f, Aero(stayTop + V(s * 0.016f, 0, -0.012f), ssBend, 0.012f, 0.009f, 0.75f, s * 0.045f), Aero(ssBend, RearAxle + V(s * 0.0725f, 0.018f, 0.004f), 0.009f, 0.008f, 0.75f, s * 0.0725f))); // dropped seat stay
-                stays.Add(RoundBox(RearAxle + V(s * 0.0745f, 0.006f, 0.002f), V(0.0045f, 0.024f, 0.022f), 0.004f)); // rear dropout (142 mm spacing)
+                stays.Add(Squashed(Sphere(RearAxle + V(s * 0.0735f, 0.002f, 0.002f), 0.0135f), RearAxle + V(s * 0.0735f, 0, 0), Vector3.UnitX, 0.5f)); // small rounded dropout around the thru-axle (142 mm)
 stays.Add(Aero(V(s * 0.042f, 0.655f, 0.452f), FrontAxle + V(s * 0.0565f, 0.012f, -0.002f), 0.018f, 0.0095f, 0.6f, s * 0.05f)); // straight fork blade, flaring outwards past the rotor
                 stays.Add(Squashed(Sphere(FrontAxle + V(s * 0.0565f, 0.001f, -0.001f), 0.0125f), FrontAxle + V(s * 0.0565f, 0, 0), Vector3.UnitX, 0.5f)); // rounded fork tip around the axle (100 mm)
             }

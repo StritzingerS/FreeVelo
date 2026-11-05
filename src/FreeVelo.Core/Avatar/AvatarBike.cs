@@ -76,7 +76,7 @@ namespace FreeVelo.Core.Avatar
             // Thru-axle ends
             metal.Tube(FrontAxle + V(-0.062f, 0, 0), FrontAxle + V(0.062f, 0, 0), 0.0065f, 0.0065f, 10);
             var capMat = Mat("axlecap", V(0.05f, 0.05f, 0.055f), 0.55f);
-            foreach (var (axle, half) in new[] { (FrontAxle, 0.0625f), (RearAxle, 0.0795f) })
+            foreach (var (axle, half) in new[] { (FrontAxle, 0.0625f), (RearAxle, 0.0822f) })
             {
                 for (int s = -1; s <= 1; s += 2)
                 {
@@ -92,7 +92,7 @@ namespace FreeVelo.Core.Avatar
                         capMat);
                 }
             }
-            metal.Tube(RearAxle + V(-0.078f, 0, 0), RearAxle + V(0.078f, 0, 0), 0.0065f, 0.0065f, 10);
+            metal.Tube(RearAxle + V(-0.08f, 0, 0), RearAxle + V(0.08f, 0, 0), 0.0065f, 0.0065f, 10);
 
             BuildDrivetrain(blackMat, metalMat, chainMat, crankMat, seatDir);
             BuildWheel(AvatarNode.RearWheel, rear: true);
