@@ -64,33 +64,36 @@ namespace FreeVelo.Core.Avatar
             var inv = stemRot.Transposed;
             float len = Vector3.Distance(steerer, BarClamp);
 
+            // Column from the head tube to the stem: same aero footprint as the head tube at the bottom (seamless
+            // transition), D-shaped steerer section on top, spacer line and top cap.
+            float colBottom = HeadTop.Y + 0.004f, colTop = steerer.Y + 0.021f;
+            Sdf column = p =>
+            {
+                float t = Math.Clamp((p.Y - colBottom) / (colTop - colBottom), 0f, 1f);
+                float hx = 0.0178f + (0.0007f * t), hz = 0.0245f - (0.0025f * t);
+                var c = new Vector2(p.X, p.Z - (0.386f - (0.002f * t)));
+                var d = new Vector2(MathF.Abs(c.X), MathF.Abs(c.Y)) - new Vector2(hx - 0.012f, hz - 0.012f);
+                float d2 = new Vector2(MathF.Max(d.X, 0f), MathF.Max(d.Y, 0f)).Length() + MathF.Min(MathF.Max(d.X, d.Y), 0f) - 0.012f;
+                float dy = MathF.Abs(p.Y - ((colBottom + colTop) / 2f)) - ((colTop - colBottom) / 2f);
+                float shape = new Vector2(MathF.Max(d2, 0f), MathF.Max(dy, 0f)).Length() + MathF.Min(MathF.Max(d2, dy), 0f);
+                float groove = MathF.Max(MathF.Abs(p.Y - (colBottom + 0.011f)) - 0.0006f, -d2 - 0.0008f); // spacer seam
+                return MathF.Max(shape, -groove);
+            };
+
             Sdf stem = p =>
             {
-                // Steerer clamp (vertical cylinder), tapered square body, bar clamp (cylinder along x).
-                var q = p - steerer;
-                float clamp = MathF.Max(new Vector2(q.X, q.Z).Length() - 0.0205f, MathF.Abs(q.Y + 0.002f) - 0.0215f);
                 var l = inv * (p - steerer);
                 float t = Math.Clamp(l.Z / len, 0f, 1f);
                 float body = RoundedBox2(l - new Vector3(0, 0, len / 2f), new Vector3(0.0165f - (0.003f * t), 0.0155f - (0.002f * t), len / 2f), 0.006f);
                 var b = p - BarClamp;
-                float barClamp = MathF.Max(new Vector2(b.Y, b.Z).Length() - 0.0215f, MathF.Abs(b.X) - 0.0225f);
-                float shape = SMin(SMin(clamp, body, 0.006f), barClamp, 0.006f);
-
-                // Faceplate seam groove, top cap.
-                float cap = MathF.Max(new Vector2(q.X, q.Z).Length() - 0.019f, MathF.Abs(q.Y - 0.0225f) - 0.0022f);
+                float barClamp = MathF.Max(new Vector2(b.Y, b.Z).Length() - 0.019f, MathF.Abs(b.X) - 0.02f);
+                float shape = SMin(SMin(column(p), body, 0.008f), barClamp, 0.006f);
+                var q = p - steerer;
+                float cap = MathF.Max(new Vector2(q.X, q.Z - 0.001f).Length() - 0.0165f, MathF.Abs(q.Y - 0.0218f) - 0.0016f);
                 return MathF.Min(shape, cap);
             };
 
-            var head = new Vector3(0, HeadTop.Y + 0.006f, HeadTop.Z - 0.002f);
-            Sdf headset = p =>
-            {
-                var q = p - head;
-                float cover = MathF.Max(new Vector2(q.X, q.Z).Length() - (0.0235f - (q.Y * 0.15f)), MathF.Abs(q.Y) - 0.008f); // tapered headset cover
-                float spacer = MathF.Max(new Vector2(q.X, q.Z - 0.001f).Length() - 0.0205f, MathF.Abs(q.Y - 0.0135f) - 0.0055f);
-                return MathF.Min(cover, spacer);
-            };
-
-            Sculpt(AvatarNode.Bike, Union(stem, headset), V(-0.04f, 0.81f, 0.34f), V(0.04f, 0.92f, 0.52f), 0.0012f, 2600, carbonMat);
+            Sculpt(AvatarNode.Bike, stem, V(-0.04f, 0.81f, 0.34f), V(0.04f, 0.92f, 0.52f), 0.0011f, 2800, carbonMat);
 
             // Bolts: two on each side of the steerer clamp, four on the faceplate, one in the top cap.
             var bolts = new List<Sdf>();
@@ -98,14 +101,14 @@ namespace FreeVelo.Core.Avatar
             {
                 for (int k = -1; k <= 1; k += 2)
                 {
-                    var bolt = steerer + new Vector3(s * 0.0185f, k * 0.0095f, -0.012f);
-                    bolts.Add(RoundCone(bolt, bolt + new Vector3(s * 0.0035f, 0, 0), 0.0032f, 0.0032f));
-                    var face = BarClamp + new Vector3(s * 0.013f, k * 0.0125f, 0.0205f);
+                    var bolt = steerer + new Vector3(s * 0.009f, k * 0.0085f, -0.0225f);
+                    bolts.Add(RoundCone(bolt, bolt - new Vector3(0, 0, 0.003f), 0.0028f, 0.0028f)); // clamp bolts at the back
+                    var face = BarClamp + new Vector3(s * 0.012f, k * 0.011f, 0.018f);
                     bolts.Add(RoundCone(face, face + new Vector3(0, 0, 0.003f), 0.003f, 0.003f));
                 }
             }
 
-            var top = steerer + new Vector3(0, 0.0245f, 0);
+            var top = steerer + new Vector3(0, 0.0236f, 0.001f);
             bolts.Add(RoundCone(top, top + new Vector3(0, 0.002f, 0), 0.0045f, 0.0045f));
             Sculpt(AvatarNode.Bike, Union(bolts.ToArray()), V(-0.035f, 0.84f, 0.36f), V(0.035f, 0.9f, 0.51f), 0.0007f, 700, metalMat);
         }
@@ -275,8 +278,9 @@ namespace FreeVelo.Core.Avatar
             // Blade: from the pivot inside the body front, S-curve in front of the drop, flaring outwards at the tip.
             var path = new[]
             {
-                V(x0, 0.888f, 0.628f), V(x0, 0.862f, 0.637f), V(x0 + (s * 0.001f), 0.832f, 0.645f), V(x0 + (s * 0.003f), 0.802f, 0.647f),
-                V(x0 + (s * 0.006f), 0.774f, 0.643f), V(x0 + (s * 0.009f), 0.752f, 0.634f), V(x0 + (s * 0.011f), 0.741f, 0.625f),
+                // Slight S: forward below the pivot, back in the middle (finger rest), forward again to the tip.
+                V(x0, 0.888f, 0.628f), V(x0, 0.86f, 0.64f), V(x0 + (s * 0.001f), 0.83f, 0.643f), V(x0 + (s * 0.003f), 0.8f, 0.636f),
+                V(x0 + (s * 0.006f), 0.774f, 0.638f), V(x0 + (s * 0.009f), 0.753f, 0.649f), V(x0 + (s * 0.011f), 0.739f, 0.662f),
             };
             float[] halfW = { 0.0105f, 0.0098f, 0.0088f, 0.008f, 0.0072f, 0.0064f, 0.0055f };
             float[] halfT = { 0.0085f, 0.0068f, 0.0052f, 0.0044f, 0.0039f, 0.0036f, 0.0034f };
