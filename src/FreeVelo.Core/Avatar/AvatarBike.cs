@@ -45,14 +45,31 @@ namespace FreeVelo.Core.Avatar
             for (int s = -1; s <= 1; s += 2)
             {
                 tape.Path(new[] { V(s * 0.2f, 0.877f, 0.48f), V(s * 0.204f, 0.882f, 0.545f), V(s * 0.21f, 0.855f, 0.6f), V(s * 0.212f, 0.79f, 0.608f), V(s * 0.212f, 0.735f, 0.575f), V(s * 0.212f, 0.726f, 0.505f) }, 0.0125f, 10);
-                black.Sweep(
-                    new[] { V(s * 0.205f, 0.878f, 0.545f), V(s * 0.205f, 0.893f, 0.565f), V(s * 0.205f, 0.905f, 0.588f), V(s * 0.205f, 0.915f, 0.603f), V(s * 0.205f, 0.912f, 0.615f) },
-                    new[] { R(0.016f, 0.016f), R(0.019f, 0.022f), R(0.018f, 0.022f), R(0.013f, 0.016f), R(0.008f, 0.009f) },
-                    Side, 12); // hood
-                lever.Sweep(
-                    new[] { V(s * 0.206f, 0.9f, 0.612f), V(s * 0.207f, 0.87f, 0.627f), V(s * 0.208f, 0.83f, 0.634f), V(s * 0.208f, 0.79f, 0.632f), V(s * 0.207f, 0.755f, 0.622f) },
-                    new[] { R(0.008f, 0.011f), R(0.008f, 0.013f), R(0.0075f, 0.012f), R(0.007f, 0.011f), R(0.006f, 0.009f) },
-                    Side, 8); // lever blade
+                // Hood (rubber body with the peak at the front) and lever blade with the shift paddle behind it.
+                float x0 = s * 0.205f;
+                var hood = SdfShapes.Squashed(
+                    SdfShapes.Blend(
+                        0.012f,
+                        SdfShapes.RoundCone(V(x0, 0.878f, 0.543f), V(x0, 0.895f, 0.576f), 0.0165f, 0.0205f),
+                        SdfShapes.RoundCone(V(x0, 0.895f, 0.576f), V(x0, 0.91f, 0.601f), 0.0205f, 0.0135f),
+                        SdfShapes.Sphere(V(x0, 0.917f, 0.607f), 0.0095f)),
+                    V(x0, 0, 0),
+                    Vector3.UnitX,
+                    0.88f);
+                Sculpt(AvatarNode.Bike, hood, V(x0 - 0.04f, 0.85f, 0.51f), V(x0 + 0.04f, 0.94f, 0.64f), 0.0018f, 700, blackMat);
+                var blade = SdfShapes.Squashed(
+                    SdfShapes.Chain(
+                        new[] { V(x0, 0.902f, 0.611f), V(x0, 0.872f, 0.626f), V(x0, 0.832f, 0.633f), V(x0, 0.792f, 0.631f), V(x0, 0.757f, 0.621f) },
+                        new[] { 0.011f, 0.0115f, 0.0105f, 0.0095f, 0.0085f }),
+                    V(x0, 0, 0),
+                    Vector3.UnitX,
+                    0.62f);
+                var paddle = SdfShapes.Squashed(
+                    SdfShapes.Chain(new[] { V(x0 - (s * 0.003f), 0.884f, 0.612f), V(x0 - (s * 0.006f), 0.845f, 0.618f), V(x0 - (s * 0.008f), 0.81f, 0.614f) }, new[] { 0.0065f, 0.006f, 0.0055f }),
+                    V(x0, 0, 0),
+                    Vector3.UnitX,
+                    0.5f);
+                Sculpt(AvatarNode.Bike, SdfShapes.Union(blade, paddle), V(x0 - 0.03f, 0.73f, 0.58f), V(x0 + 0.03f, 0.93f, 0.66f), 0.0016f, 700, leverMat);
             }
 
             // Bottle cage and bottle on the down tube
@@ -137,13 +154,41 @@ namespace FreeVelo.Core.Avatar
                 spokes.Tube(hub, rimPoint, 0.0011f, 0.0011f, 4, false);
             }
 
-            // Disc brake rotor on the left, with spider
-            metal.Torus(V(-0.05f, 0, 0), Vector3.UnitX, 0.07f, 0.011f, 0.001f, 40, 4);
-            for (int i = 0; i < 6; i++)
+            // Disc brake rotor (160 mm) on the left: braking track with cooling holes, six-arm spider.
+            var rotorX = -0.05f;
+            Sdf rotor = p =>
             {
-                float a = i * MathF.PI / 3f;
-                metal.Tube(V(-0.05f, MathF.Cos(a) * 0.018f, MathF.Sin(a) * 0.018f), V(-0.05f, MathF.Cos(a + 0.3f) * 0.062f, MathF.Sin(a + 0.3f) * 0.062f), 0.003f, 0.003f, 4, false);
-            }
+                float r = MathF.Sqrt((p.Y * p.Y) + (p.Z * p.Z));
+                float a = MathF.Atan2(p.Z, p.Y);
+                float track = MathF.Abs(r - 0.07f) - 0.01f;
+                float hole = float.MaxValue;
+                for (int ring = 0; ring < 2; ring++)
+                {
+                    float hr = ring == 0 ? 0.066f : 0.074f;
+                    float step = MathF.PI * 2f / 24f;
+                    float offset = ring * step / 2f;
+                    float ha = (MathF.Round((a - offset) / step) * step) + offset;
+                    var hc = new Vector2(MathF.Cos(ha) * hr, MathF.Sin(ha) * hr);
+                    hole = MathF.Min(hole, Vector2.Distance(new Vector2(p.Y, p.Z), hc) - 0.0022f);
+                }
+
+                float arms = float.MaxValue;
+                for (int i = 0; i < 6; i++)
+                {
+                    float aa = i * MathF.PI / 3f;
+                    var from = new Vector2(MathF.Cos(aa) * 0.018f, MathF.Sin(aa) * 0.018f);
+                    var to = new Vector2(MathF.Cos(aa + 0.35f) * 0.064f, MathF.Sin(aa + 0.35f) * 0.064f);
+                    var q = new Vector2(p.Y, p.Z) - from;
+                    var d = to - from;
+                    float h = Math.Clamp(Vector2.Dot(q, d) / d.LengthSquared(), 0f, 1f);
+                    arms = MathF.Min(arms, (q - (d * h)).Length() - 0.0045f);
+                }
+
+                float hub = r - 0.022f;
+                float plane = MathF.Min(MathF.Max(track, -hole), MathF.Min(arms, hub));
+                return MathF.Max(plane, MathF.Abs(p.X - rotorX) - 0.0009f);
+            };
+            Sculpt(node, rotor, V(rotorX - 0.004f, -0.085f, -0.085f), V(rotorX + 0.004f, 0.085f, 0.085f), 0.0009f, 1600, metalMat);
         }
     }
 }
