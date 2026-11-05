@@ -195,44 +195,53 @@ namespace FreeVelo.Core.Avatar
             var glove = Mat("glove", V(0.08f, 0.08f, 0.09f), 0.25f);
             var skin = Mat("skin", Style.Skin, 0.35f);
             ArmJoints(s, out _, out _, out var wrist);
-            float x0 = s * 0.205f;
+            float x0 = s * 0.206f; // hood centre line
+            Vector3 H(float x, float y, float z) => V(x0 + (s * x), y, z); // x > 0 = outboard
 
+            // Grip on the hoods: palm lies on the hood behind the horn (horn in the web between thumb and index
+            // finger), thumb along the inside, fingers wrap around the outside and front of the hood, index and
+            // middle finger resting on the brake blade.
             var parts = new List<Sdf>
             {
-                RoundBox(V(x0, 0.94f, 0.572f), V(0.04f, 0.016f, 0.045f), 0.014f, Rot.Euler(12, 0, 0)), // palm
-                Ellipsoid(V(x0, 0.952f, 0.566f), V(0.036f, 0.012f, 0.04f)), // back of the hand
-                RoundCone(wrist, V(x0, 0.946f, 0.536f), 0.026f, 0.029f), // wrist
+                Ellipsoid(H(0.01f, 0.912f, 0.571f), V(0.022f, 0.019f, 0.036f), Rot.Euler(-8, 0, -s * 38f)), // palm / back of the hand
+                Ellipsoid(H(0.016f, 0.906f, 0.597f), V(0.019f, 0.017f, 0.016f), Rot.Euler(0, 0, -s * 50f)), // knuckle pad
+                RoundCone(wrist, H(0.006f, 0.918f, 0.543f), 0.025f, 0.024f), // wrist
             };
 
-            // Fingers wrap around the hood and over the lever blade; index finger on the inside (−s).
-            float[] offsets = { -0.027f, -0.009f, 0.009f, 0.026f };
-            float[] lengths = { 0.95f, 1f, 0.96f, 0.82f };
-            float[] radii = { 0.0095f, 0.0098f, 0.0092f, 0.0082f };
+            var knuckles = new[] { H(0.017f, 0.919f, 0.611f), H(0.025f, 0.903f, 0.603f), H(0.028f, 0.887f, 0.594f), H(0.027f, 0.872f, 0.585f) };
+            var fingers = new[]
+            {
+                new[] { knuckles[0], H(0.012f, 0.902f, 0.643f), H(0.0f, 0.882f, 0.653f), H(-0.01f, 0.87f, 0.649f) }, // index on the blade
+                new[] { knuckles[1], H(0.018f, 0.886f, 0.642f), H(0.004f, 0.866f, 0.653f), H(-0.008f, 0.853f, 0.648f) }, // middle on the blade
+                new[] { knuckles[2], H(0.021f, 0.869f, 0.633f), H(0.009f, 0.851f, 0.645f), H(-0.003f, 0.84f, 0.642f) },
+                new[] { knuckles[3], H(0.021f, 0.857f, 0.62f), H(0.011f, 0.844f, 0.631f), H(0.002f, 0.835f, 0.629f) },
+            };
+            float[] radii = { 0.0092f, 0.0096f, 0.009f, 0.0078f };
+            var bare = new List<Sdf>();
             for (int k = 0; k < 4; k++)
             {
-                float o = s * offsets[k];
-                float l = lengths[k];
-                var knuckle = V(x0 + o, 0.94f, 0.606f);
-                var p1 = knuckle + (V(o * 0.08f, -0.008f, 0.03f) * l);
-                var p2 = p1 + (V(0, -0.026f, 0.014f) * l);
-                var tip = p2 + (V(-o * 0.08f, -0.026f, -0.006f) * l);
-                parts.Add(Chain(new[] { knuckle, p1, p2, tip }, new[] { radii[k] * 1.08f, radii[k], radii[k] * 0.93f, radii[k] * 0.85f }));
+                var f = fingers[k];
+                float r = radii[k];
+                parts.Add(Chain(f, new[] { r * 1.08f, r, r * 0.92f, r * 0.82f }));
+                var cuff = Vector3.Lerp(f[0], f[1], 0.62f);
+                bare.Add(Chain(new[] { cuff, f[1], f[2], f[3] }, new[] { r + 0.004f, r + 0.004f, r + 0.004f, r + 0.004f }));
             }
 
-            var thumbTip = V(x0 - (s * 0.03f), 0.905f, 0.602f);
-            parts.Add(Chain(new[] { V(x0 - (s * 0.028f), 0.936f, 0.548f), V(x0 - (s * 0.037f), 0.917f, 0.578f), thumbTip }, new[] { 0.0125f, 0.0105f, 0.0088f }));
+            var thumbTip = H(-0.02f, 0.921f, 0.604f);
+            parts.Add(Chain(new[] { H(-0.01f, 0.916f, 0.552f), H(-0.021f, 0.913f, 0.58f), thumbTip }, new[] { 0.012f, 0.0102f, 0.0086f })); // thumb along the inside of the hood
 
-            var shape = Blend(0.01f, parts.ToArray());
+            var shape = Blend(0.008f, parts.ToArray());
+            var bareFingers = Union(bare.ToArray());
             Sculpt(
                 AvatarNode.Rider,
                 shape,
-                V(x0 - 0.075f, 0.84f, Math.Min(wrist.Z, 0.5f) - 0.04f),
-                V(x0 + 0.075f, 1.0f, 0.68f),
-                0.0026f,
-                1800,
+                V(x0 - 0.075f, 0.81f, Math.Min(wrist.Z, 0.5f) - 0.04f),
+                V(x0 + 0.075f, 0.98f, 0.68f),
+                0.0024f,
+                2200,
                 glove,
-                (p => 0.632f - p.Z, skin), // fingerless gloves
-                (Sphere(thumbTip, 0.013f), skin));
+                (bareFingers, skin), // fingerless gloves
+                (Sphere(thumbTip, 0.012f), skin));
         }
 
         // ------------------------------------------------------------------ head
