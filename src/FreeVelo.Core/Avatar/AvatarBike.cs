@@ -103,7 +103,7 @@ namespace FreeVelo.Core.Avatar
             Sculpt(AvatarNode.Bike, cage, bmin, bmax, 0.0016f, 700, blackMat);
 
             // Thru-axle ends
-            metal.Tube(FrontAxle + V(-0.07f, 0, 0), FrontAxle + V(0.07f, 0, 0), 0.008f, 0.008f, 8);
+            metal.Tube(FrontAxle + V(-0.068f, 0, 0), FrontAxle + V(0.068f, 0, 0), 0.008f, 0.008f, 8);
             metal.Tube(RearAxle + V(-0.075f, 0, 0), RearAxle + V(0.075f, 0, 0), 0.008f, 0.008f, 8);
 
             BuildDrivetrain(blackMat, metalMat, chainMat, crankMat, seatDir);
@@ -157,41 +157,7 @@ namespace FreeVelo.Core.Avatar
                 spokes.Tube(hub, rimPoint, 0.0011f, 0.0011f, 4, false);
             }
 
-            // Disc brake rotor (160 mm) on the left: braking track with cooling holes, six-arm spider.
-            var rotorX = rear ? -0.058f : -0.046f;
-            Sdf rotor = p =>
-            {
-                float r = MathF.Sqrt((p.Y * p.Y) + (p.Z * p.Z));
-                float a = MathF.Atan2(p.Z, p.Y);
-                float track = MathF.Abs(r - 0.07f) - 0.01f;
-                float hole = float.MaxValue;
-                for (int ring = 0; ring < 2; ring++)
-                {
-                    float hr = ring == 0 ? 0.066f : 0.074f;
-                    float step = MathF.PI * 2f / 24f;
-                    float offset = ring * step / 2f;
-                    float ha = (MathF.Round((a - offset) / step) * step) + offset;
-                    var hc = new Vector2(MathF.Cos(ha) * hr, MathF.Sin(ha) * hr);
-                    hole = MathF.Min(hole, Vector2.Distance(new Vector2(p.Y, p.Z), hc) - 0.0022f);
-                }
-
-                float arms = float.MaxValue;
-                for (int i = 0; i < 6; i++)
-                {
-                    float aa = i * MathF.PI / 3f;
-                    var from = new Vector2(MathF.Cos(aa) * 0.018f, MathF.Sin(aa) * 0.018f);
-                    var to = new Vector2(MathF.Cos(aa + 0.35f) * 0.064f, MathF.Sin(aa + 0.35f) * 0.064f);
-                    var q = new Vector2(p.Y, p.Z) - from;
-                    var d = to - from;
-                    float h = Math.Clamp(Vector2.Dot(q, d) / d.LengthSquared(), 0f, 1f);
-                    arms = MathF.Min(arms, (q - (d * h)).Length() - 0.0045f);
-                }
-
-                float hub = r - 0.022f;
-                float plane = MathF.Min(MathF.Max(track, -hole), MathF.Min(arms, hub));
-                return MathF.Max(plane, MathF.Abs(p.X - rotorX) - 0.0009f);
-            };
-            Sculpt(node, rotor, V(rotorX - 0.004f, -0.085f, -0.085f), V(rotorX + 0.004f, 0.085f, 0.085f), 0.0009f, 1600, metalMat);
+            BuildRotor(node, rear ? RearRotorX : FrontRotorX, metalMat);
         }
     }
 }

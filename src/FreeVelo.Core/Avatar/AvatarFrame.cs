@@ -29,11 +29,15 @@ namespace FreeVelo.Core.Avatar
             var stayTop = BottomBracket + (seatDir * 0.47f);
             for (int s = -1; s <= 1; s += 2)
             {
-                stays.Add(Aero(BottomBracket + V(s * 0.035f, -0.005f, -0.035f), RearAxle + V(s * 0.07f, -0.004f, 0.012f), 0.017f, 0.0095f, 0.7f, s * 0.055f)); // chain stay
-                stays.Add(Aero(stayTop + V(s * 0.016f, 0, -0.012f), RearAxle + V(s * 0.068f, 0.018f, 0.004f), 0.012f, 0.008f, 0.75f, s * 0.045f)); // dropped seat stay
+                // Stays and fork blades run outside the rotor plane within the rotor radius (≈ 9 cm around the axle).
+                var csBend = RearAxle + V(s * 0.0735f, 0.004f, 0.13f);
+                stays.Add(Blend(0.01f, Aero(BottomBracket + V(s * 0.035f, -0.005f, -0.035f), csBend, 0.017f, 0.011f, 0.7f, s * 0.055f), Aero(csBend, RearAxle + V(s * 0.0735f, -0.004f, 0.012f), 0.011f, 0.0095f, 0.7f, s * 0.0735f))); // chain stay
+                var ssBend = RearAxle + V(s * 0.072f, 0.115f, 0.06f);
+                stays.Add(Blend(0.01f, Aero(stayTop + V(s * 0.016f, 0, -0.012f), ssBend, 0.012f, 0.009f, 0.75f, s * 0.045f), Aero(ssBend, RearAxle + V(s * 0.0725f, 0.018f, 0.004f), 0.009f, 0.008f, 0.75f, s * 0.0725f))); // dropped seat stay
                 stays.Add(RoundBox(RearAxle + V(s * 0.0745f, 0.006f, 0.002f), V(0.0045f, 0.024f, 0.022f), 0.004f)); // rear dropout (142 mm spacing)
-                stays.Add(Aero(V(s * 0.036f, 0.655f, 0.45f), FrontAxle + V(s * 0.052f, 0.012f, -0.002f), 0.018f, 0.009f, 0.6f, s * 0.045f)); // fork blade
-                stays.Add(RoundBox(FrontAxle + V(s * 0.053f, 0.004f, 0f), V(0.006f, 0.02f, 0.018f), 0.005f)); // fork dropout
+                var forkBend = FrontAxle + V(s * 0.0565f, 0.12f, -0.024f);
+                stays.Add(Blend(0.012f, Aero(V(s * 0.036f, 0.655f, 0.45f), forkBend, 0.018f, 0.012f, 0.6f, s * 0.047f), Aero(forkBend, FrontAxle + V(s * 0.0565f, 0.012f, -0.002f), 0.012f, 0.009f, 0.6f, s * 0.0565f))); // fork blade
+                stays.Add(RoundBox(FrontAxle + V(s * 0.056f, 0.004f, 0f), V(0.0055f, 0.02f, 0.018f), 0.005f)); // fork dropout (100 mm)
             }
 
             var frame = Blend(0.015f, stays.ToArray());

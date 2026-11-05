@@ -84,6 +84,10 @@ var cameras = new Dictionary<string, Camera>
     ["fc1"] = new() { Name = "fc1", Position = new Vector3(0.16f, 1.44f, 0.72f), Target = new Vector3(0, 1.465f, 0.44f), FieldOfView = 26 },
     ["fc2"] = new() { Name = "fc2", Position = new Vector3(-0.2f, 1.42f, 0.7f), Target = new Vector3(0, 1.465f, 0.44f), FieldOfView = 26 },
     ["fc3"] = new() { Name = "fc3", Position = new Vector3(0.34f, 1.46f, 0.47f), Target = new Vector3(0, 1.465f, 0.43f), FieldOfView = 30 },
+    ["brakefront"] = new() { Name = "brakefront", Position = new Vector3(-0.42f, 0.55f, 0.42f), Target = new Vector3(-0.045f, 0.36f, 0.56f), FieldOfView = 34 },
+    ["brakerear"] = new() { Name = "brakerear", Position = new Vector3(-0.42f, 0.55f, -0.18f), Target = new Vector3(-0.06f, 0.36f, -0.38f), FieldOfView = 34 },
+    ["braketop"] = new() { Name = "braketop", Position = new Vector3(-0.12f, 0.75f, -0.3f), Target = new Vector3(-0.06f, 0.34f, -0.4f), FieldOfView = 34 },
+    ["forktop"] = new() { Name = "forktop", Position = new Vector3(-0.12f, 0.8f, 0.68f), Target = new Vector3(-0.045f, 0.34f, 0.56f), FieldOfView = 34 },
     ["back"] = new() { Name = "back", Position = new Vector3(0, 1.25f, -2.4f), Target = new Vector3(0, 1.0f, 0), FieldOfView = 34 },
 };
 

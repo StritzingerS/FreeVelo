@@ -73,15 +73,9 @@ namespace FreeVelo.Core.Avatar
             BuildChain(chainMat);
             BuildDerailleurs(blackMat, metalMat, seatDir);
 
-            // Brake calipers (flat mount) with a bit of shape
-            Sdf Caliper(Vector3 c, float pitch) => Transformed(
-                Blend(0.006f, RoundBox(Vector3.Zero, V(0.012f, 0.021f, 0.031f), 0.007f), RoundBox(V(0.004f, 0.008f, 0), V(0.01f, 0.012f, 0.02f), 0.005f)),
-                c,
-                Rot.Euler(pitch, 0, 0));
-            var front = FrontAxle + V(-0.058f, 0.07f, -0.045f);
-            var rear = RearAxle + V(-0.066f, 0.045f, 0.06f);
-            Sculpt(AvatarNode.Bike, Caliper(front, -35f), front - V(0.04f, 0.05f, 0.05f), front + V(0.04f, 0.05f, 0.05f), 0.002f, 350, blackMat);
-            Sculpt(AvatarNode.Bike, Caliper(rear, 25f), rear - V(0.04f, 0.05f, 0.05f), rear + V(0.04f, 0.05f, 0.05f), 0.002f, 350, blackMat);
+            // Flat-mount calipers straddling the rotors: front behind the fork leg, rear on top of the chain stay.
+            BuildCaliper(FrontAxle, FrontRotorX, -62f, FrontAxle + V(-0.0565f, 0.05f, -0.018f), blackMat, metalMat);
+            BuildCaliper(RearAxle, RearRotorX, 72f, RearAxle + V(-0.0735f, 0.004f, 0.07f), blackMat, metalMat);
 
             // Pedals (local to the pedal axle): road pedal body, steel spindle towards the crank.
             for (int side = 0; side < 2; side++)
@@ -260,5 +254,122 @@ namespace FreeVelo.Core.Avatar
                 Transformed(RoundBox(Vector3.Zero, V(0.016f, 0.012f, 0.014f), 0.005f), mount + V(0.03f, 0.0f, -0.012f), Rot.LookRotation(Vector3.Cross(Vector3.UnitX, seatDir), seatDir)));
             Sculpt(AvatarNode.Bike, fd, V(ChainLineX - 0.02f, 0.33f, -0.12f), V(0.1f, 0.47f, 0.0f), 0.0015f, 700, blackMat);
         }
+
+        /// <summary>Rotor plane (x) – inboard of fork legs and stays, as on a real disc bike.</summary>
+        internal static float FrontRotorX => -0.044f;
+
+        internal static float RearRotorX => -0.056f;
+
+        private const float RotorRadius = 0.08f; // 160 mm
+
+        /// <summary>Two-piece rotor: steel braking ring with angled cooling slots on a black spider (local to the wheel).</summary>
+        private void BuildRotor(AvatarNode node, float x, AvatarMaterial metalMat)
+        {
+            var carrierMat = Mat("rotorcarrier", V(0.07f, 0.07f, 0.08f), 0.45f, 0.3f);
+            const int slots = 30;
+            const int arms = 5;
+            Sdf rotor = p =>
+            {
+                float r = MathF.Sqrt((p.Y * p.Y) + (p.Z * p.Z));
+                float a = MathF.Atan2(p.Z, p.Y);
+
+                // Braking ring with slots that lean in the direction of rotation.
+                float ring = MathF.Abs(r - 0.0715f) - 0.0085f;
+                float step = MathF.PI * 2f / slots;
+                float ak = MathF.Round(a / step) * step;
+                var local = new Vector2(r, (a - ak) * r);
+                var s0 = new Vector2(0.0685f, -0.0016f);
+                var s1 = new Vector2(0.0768f, 0.0022f);
+                var d = s1 - s0;
+                float h = Math.Clamp(Vector2.Dot(local - s0, d) / d.LengthSquared(), 0f, 1f);
+                float slot = (local - s0 - (d * h)).Length() - 0.0012f;
+                float braking = MathF.Max(ring, -slot);
+
+                // Spider: hub disc and five arms to rivets on the inner edge of the ring.
+                float spider = r - 0.026f;
+                float armStep = MathF.PI * 2f / arms;
+                float aa = MathF.Round(a / armStep) * armStep;
+                var arm = new Vector2(r, (a - aa) * r);
+                float armWidth = 0.0075f - (0.002f * Math.Clamp((r - 0.026f) / 0.04f, 0f, 1f));
+                spider = MathF.Min(spider, MathF.Max(MathF.Abs(arm.Y) - armWidth, r - 0.067f));
+                spider = MathF.Min(spider, MathF.Abs(r - 0.0635f) - 0.0035f); // inner band under the ring
+
+                float plane = MathF.Min(braking, spider);
+                float thickness = r < 0.062f ? 0.0016f : 0.0009f;
+                float slab = MathF.Max(plane, MathF.Abs(p.X - x) - thickness);
+
+                // Rivets and centre-lock ring.
+                float rivet = MathF.Max((arm - new Vector2(0.0635f, 0f)).Length() - 0.0026f, MathF.Abs(p.X - x) - 0.0024f);
+                float lockring = MathF.Max(MathF.Abs(r - 0.019f) - 0.004f, MathF.Abs(p.X - x + (MathF.Sign(x) * 0.002f)) - 0.003f);
+                return MathF.Min(slab, MathF.Min(rivet, lockring));
+            };
+
+            Sdf carrier = p =>
+            {
+                float r = MathF.Sqrt((p.Y * p.Y) + (p.Z * p.Z));
+                return r - 0.0612f;
+            };
+
+            Sculpt(node, rotor, V(x - 0.008f, -0.085f, -0.085f), V(x + 0.008f, 0.085f, 0.085f), 0.0008f, 3200, metalMat, (carrier, carrierMat));
+        }
+
+        /// <summary>
+        /// Flat-mount two-piston caliper. <paramref name="angle"/> is the position around the axle in degrees
+        /// (0 = above, 90 = forward); the body straddles the rotor and a bracket reaches the frame at <paramref name="frameAttach"/>.
+        /// </summary>
+        private void BuildCaliper(Vector3 axle, float rotorX, float angle, Vector3 frameAttach, AvatarMaterial blackMat, AvatarMaterial metalMat)
+        {
+            float rad = angle * MathF.PI / 180f;
+            var radial = new Vector3(0, MathF.Cos(rad), MathF.Sin(rad));
+            var tangent = new Vector3(0, -MathF.Sin(rad), MathF.Cos(rad));
+            var rot = Rot.LookRotation(tangent, radial); // local: x across, y radial outwards, z along the rotor
+            var center = axle + new Vector3(rotorX, 0, 0) + (radial * 0.074f);
+            var inv = rot.Transposed;
+            float outward = MathF.Sign(rotorX); // towards the outside of the bike
+
+            Sdf body = p =>
+            {
+                var q = inv * (p - center);
+                // Two halves around the rotor, joined over its outer edge (bridge).
+                float halves = Box(q - new Vector3(0, 0.002f, 0), new Vector3(0.0125f, 0.0115f, 0.024f), 0.005f);
+                float slot = MathF.Max(MathF.Abs(q.X) - 0.0024f, q.Y - 0.0085f); // rotor gap, open towards the hub
+                float shape = MathF.Max(halves, -slot);
+
+                // Cooling fins on the pads (sticking out radially), outboard piston bulge, banjo/hose stub.
+                float fins = float.MaxValue;
+                for (int i = -3; i <= 3; i++)
+                {
+                    fins = MathF.Min(fins, Box(q - new Vector3(0, 0.016f, i * 0.0055f), new Vector3(0.006f, 0.0045f, 0.0011f), 0.0005f));
+                }
+
+                float piston = Cyl(q - new Vector3(outward * 0.011f, 0.0f, 0), 0.009f, 0.004f);
+                float hose = Cyl2(q - new Vector3(outward * -0.004f, 0.006f, -0.026f), 0.0035f, 0.008f);
+                return MathF.Min(MathF.Min(shape, fins), MathF.Min(piston, hose));
+            };
+
+            // Mounting bracket from the inboard half to the frame member.
+            var bracketEnd = frameAttach;
+            var bracketStart = center + (inv.Transposed * new Vector3(-outward * 0.009f, -0.006f, 0));
+            Sdf bracket = SdfShapes.Squashed(SdfShapes.RoundCone(bracketStart, bracketEnd, 0.007f, 0.008f), bracketStart, radial, 0.45f);
+            var bolt = SdfShapes.RoundCone(center + (inv.Transposed * new Vector3(outward * 0.017f, -0.004f, 0.012f)), center + (inv.Transposed * new Vector3(outward * 0.017f, -0.004f, -0.012f)), 0.0028f, 0.0028f);
+
+            var min = Vector3.Min(center, bracketEnd) - new Vector3(0.04f);
+            var max = Vector3.Max(center, bracketEnd) + new Vector3(0.04f);
+            Sculpt(AvatarNode.Bike, SdfShapes.Union(SdfShapes.Blend(0.004f, body, bracket), bolt), min, max, 0.0011f, 1400, blackMat, (bolt, metalMat));
+        }
+
+        private static float Box(Vector3 q, Vector3 half, float radius)
+        {
+            var d = Vector3.Abs(q) - (half - new Vector3(radius));
+            return Vector3.Max(d, Vector3.Zero).Length() + MathF.Min(MathF.Max(d.X, MathF.Max(d.Y, d.Z)), 0f) - radius;
+        }
+
+        /// <summary>Cylinder along x (radius, half length).</summary>
+        private static float Cyl(Vector3 q, float radius, float half) =>
+            MathF.Max(new Vector2(q.Y, q.Z).Length() - radius, MathF.Abs(q.X) - half);
+
+        /// <summary>Cylinder along z (radius, half length).</summary>
+        private static float Cyl2(Vector3 q, float radius, float half) =>
+            MathF.Max(new Vector2(q.X, q.Y).Length() - radius, MathF.Abs(q.Z) - half);
     }
 }
