@@ -1,5 +1,7 @@
 #if UNITY_ANDROID && !UNITY_EDITOR
 using System;
+using FreeVelo.Devices.Session;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using FreeVelo.Devices.Logging;
@@ -62,6 +64,15 @@ namespace FreeVelo.Ble
 
         public void Write(string address, Guid characteristic, byte[] data) =>
             _bridge?.Call<bool>("write", address, characteristic.ToString(), BleLogEntry.ToHex(data));
+
+        public void ScheduleWrites(IReadOnlyList<ScheduledWrite> writes)
+        {
+            if (_bridge == null || writes.Count == 0) return;
+            string spec = string.Join(";", writes.Select(w => $"{w.OffsetMs}|{w.Address}|{w.Characteristic}|{BleLogEntry.ToHex(w.Data)}"));
+            _bridge.Call<int>("scheduleWrites", spec);
+        }
+
+        public void CancelScheduledWrites() => _bridge?.Call("cancelScheduledWrites");
 
         public void Update(float deltaTime)
         {

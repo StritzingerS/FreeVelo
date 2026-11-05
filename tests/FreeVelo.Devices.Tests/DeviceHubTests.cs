@@ -47,6 +47,21 @@ public class DeviceHubTests
 
     private void ConnectNeo() => _hub.OnReady("NEO", new[] { Cps, GattUuids.FromShort(GattUuids.CyclingSpeedCadenceService), TacxFec.Service });
 
+    [Fact]
+    public void ErgScheduleForTheBackgroundUsesTheTrainerProtocol()
+    {
+        ConnectNeo();
+        Assert.Empty(_hub.BuildErgSchedule(new (double, int?)[] { (0, 200) })); // not in ERG mode yet
+
+        _hub.SetErgTarget(150);
+        Advance(500);
+        var schedule = _hub.BuildErgSchedule(new (double, int?)[] { (0, 150), (12.5, 300), (60, null), (90, 120) });
+        Assert.Equal(new long[] { 0, 12500, 90000 }, schedule.Select(w => w.OffsetMs).ToArray());
+        Assert.All(schedule, w => Assert.Equal("NEO", w.Address));
+        Assert.All(schedule, w => Assert.Equal(TacxFec.TxCharacteristic, w.Characteristic));
+        Assert.Equal(TacxFec.SetTargetPower(300), schedule[1].Data);
+    }
+
     private void ConnectFtmsTrainer()
     {
         _hub.OnReady("KICKR", new[] { Ftms, Cps });

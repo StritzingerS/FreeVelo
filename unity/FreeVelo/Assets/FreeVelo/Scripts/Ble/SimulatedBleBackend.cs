@@ -79,6 +79,15 @@ namespace FreeVelo.Ble
             Notify(TrainerAddress, ControlPoint, new byte[] { 0x80, data[0], 0x01 });
         }
 
+        // The editor never runs in the background: nothing to schedule.
+        public void ScheduleWrites(System.Collections.Generic.IReadOnlyList<FreeVelo.Devices.Session.ScheduledWrite> writes)
+        {
+        }
+
+        public void CancelScheduledWrites()
+        {
+        }
+
         public void Update(float deltaTime)
         {
             _timer += deltaTime;

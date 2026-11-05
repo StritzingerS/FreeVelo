@@ -126,4 +126,27 @@ public class WorkoutEditorTests
         editor.Undo();
         Assert.Equal(PowerTarget.Percent(90), ((SteadyBlock)editor.Blocks[1]).Target);
     }
+
+    [Fact]
+    public void TargetsAheadFollowTheWorkoutWithoutAdvancingIt()
+    {
+        var w = new Workout("t", "t");
+        w.Blocks.Add(new SteadyBlock(60, PowerTarget.Percent(50)));
+        w.Blocks.Add(new RepeatBlock(2, new WorkoutBlock[] { new SteadyBlock(30, PowerTarget.Percent(120)), new SteadyBlock(30, PowerTarget.Percent(60)) }));
+        w.Blocks.Add(new RampBlock(20, PowerTarget.Percent(60), PowerTarget.Percent(40)));
+        var engine = new WorkoutEngine(w, 200);
+        engine.Update(45);
+        engine.AdjustCurrentSegmentIntensity(0.1);
+
+        var ahead = engine.TargetsAhead(3600);
+        Assert.Equal(45, engine.ElapsedS); // unchanged
+        Assert.Equal((0.0, (int?)110), ahead[0]); // 50 % × 1.1 of 200 W
+        Assert.Equal((15.0, (int?)240), ahead[1]);
+        Assert.Equal((45.0, (int?)120), ahead[2]);
+        Assert.Equal((75.0, (int?)240), ahead[3]);
+        Assert.Equal((105.0, (int?)120), ahead[4]); // ramp at 135 s starts at 60 % = the same → no extra entry
+        Assert.Equal((140.0, (int?)110), ahead[5]); // ramp sampled every 5 s
+        Assert.True(ahead[ahead.Count - 1].TargetW < 120);
+        Assert.Equal(2, engine.TargetsAhead(20).Count); // horizon
+    }
 }

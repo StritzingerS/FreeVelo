@@ -292,9 +292,21 @@ namespace FreeVelo.Ride
         {
             if (paused)
             {
-                if (State == RideState.Riding) _backgroundSinceUtc = DateTime.UtcNow;
+                if (State == RideState.Riding)
+                {
+                    _backgroundSinceUtc = DateTime.UtcNow;
+
+                    // Keep the workout going on the trainer: the plugin sends the coming ERG targets on time.
+                    if (Engine != null && !Engine.IsFinished && !IsPaused)
+                    {
+                        _ble.ScheduleBackgroundWrites(_ble.Hub.BuildErgSchedule(Engine.TargetsAhead(6 * 3600)));
+                    }
+                }
+
                 return;
             }
+
+            _ble.CancelBackgroundWrites();
 
             if (_backgroundSinceUtc.HasValue && State == RideState.Riding)
             {
@@ -303,6 +315,7 @@ namespace FreeVelo.Ride
             }
 
             _backgroundSinceUtc = null;
+            _ble.Hub.ResendOnNextTick(); // the trainer may hold a scheduled target: send ours again
         }
 
         private void CatchUp(DateTime fromUtc, double seconds)

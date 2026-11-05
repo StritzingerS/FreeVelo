@@ -15,6 +15,26 @@ namespace FreeVelo.Devices.Session
         bool Write(string address, Guid characteristic, byte[] data);
     }
 
+    /// <summary>A write to send <see cref="OffsetMs"/> after the schedule starts.</summary>
+    public readonly struct ScheduledWrite
+    {
+        public ScheduledWrite(long offsetMs, string address, Guid characteristic, byte[] data)
+        {
+            OffsetMs = offsetMs;
+            Address = address;
+            Characteristic = characteristic;
+            Data = data;
+        }
+
+        public long OffsetMs { get; }
+
+        public string Address { get; }
+
+        public Guid Characteristic { get; }
+
+        public byte[] Data { get; }
+    }
+
     public enum TrainerProtocol
     {
         None,
@@ -354,6 +374,32 @@ namespace FreeVelo.Devices.Session
             _simCrr = rollingResistance;
             _simCw = windResistanceKgPerM;
         }
+
+        /// <summary>
+        /// Trainer commands for a list of ERG targets (offset in seconds, watts), e.g. from
+        /// WorkoutEngine.TargetsAhead: what the platform sends on its own while the app is in the background.
+        /// Free-ride entries (null) keep the last target. Empty if no trainer is in ERG mode and ready.
+        /// </summary>
+        public IReadOnlyList<ScheduledWrite> BuildErgSchedule(IEnumerable<(double OffsetS, int? TargetW)> targets)
+        {
+            var result = new List<ScheduledWrite>();
+            string? trainer = TrainerAddress;
+            if (trainer == null || !_ergMode) return result;
+            if (TrainerProtocol == TrainerProtocol.Ftms && !_ftmsControlGranted) return result;
+            foreach (var (offset, watts) in targets)
+            {
+                if (!watts.HasValue) continue;
+                byte[] command = TrainerProtocol == TrainerProtocol.Ftms
+                    ? FtmsControlPoint.SetTargetPower(watts.Value)
+                    : TacxFec.SetTargetPower(watts.Value);
+                result.Add(new ScheduledWrite((long)Math.Round(offset * 1000), trainer, CommandCharacteristic, command));
+            }
+
+            return result;
+        }
+
+        /// <summary>Sends the current target again on the next tick (after the platform controlled the trainer).</summary>
+        public void ResendOnNextTick() => _resendNeeded = true;
 
         /// <summary>Sends pending commands. Call regularly (e.g. every 250 ms).</summary>
         public void Tick()

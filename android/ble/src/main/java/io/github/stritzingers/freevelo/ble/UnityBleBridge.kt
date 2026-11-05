@@ -3,6 +3,7 @@ package io.github.stritzingers.freevelo.ble
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -88,6 +89,30 @@ class UnityBleBridge(context: Context, private val unity: UnityBleListener, logD
         return true
     }
 
+    private val scheduleToken = Any()
+
+    /**
+     * Sends writes at fixed times while Unity is paused (app in the background): [spec] is
+     * "offsetMs|address|characteristic|hex" entries separated by ';'. Replaces any earlier schedule.
+     * The ride foreground service holds a wake lock, so the main looper keeps running.
+     */
+    fun scheduleWrites(spec: String): Int {
+        val entries = parseSchedule(spec)
+        val start = SystemClock.uptimeMillis()
+        main.post {
+            main.removeCallbacksAndMessages(scheduleToken)
+            for (e in entries) {
+                main.postAtTime({ write(e.address, e.characteristic, e.hex) }, scheduleToken, start + e.offsetMs)
+            }
+        }
+        return entries.size
+    }
+
+    /** Drops writes that have not been sent yet (Unity is back in control). */
+    fun cancelScheduledWrites() {
+        main.post { main.removeCallbacksAndMessages(scheduleToken) }
+    }
+
     fun close() = run {
         manager.stopScan()
         manager.disconnectAll()
@@ -98,7 +123,18 @@ class UnityBleBridge(context: Context, private val unity: UnityBleListener, logD
         if (Looper.myLooper() == Looper.getMainLooper()) action() else main.post { action() }
     }
 
+    data class ScheduledEntry(val offsetMs: Long, val address: String, val characteristic: String, val hex: String)
+
     companion object {
+        /** Parses the [scheduleWrites] format; malformed entries are skipped. */
+        fun parseSchedule(spec: String): List<ScheduledEntry> = spec.split(';').mapNotNull { item ->
+            val parts = item.split('|')
+            val offset = parts.getOrNull(0)?.toLongOrNull()
+            if (parts.size != 4 || offset == null || offset < 0 || parts[3].length % 2 != 0) null
+            else ScheduledEntry(offset, parts[1], parts[2], parts[3])
+        }
+
+
         fun fromHex(hex: String): ByteArray = ByteArray(hex.length / 2) {
             ((Character.digit(hex[it * 2], 16) shl 4) or Character.digit(hex[it * 2 + 1], 16)).toByte()
         }

@@ -134,6 +134,15 @@ namespace FreeVelo.Ble
 
         // ------------------------------------------------------------------ user actions
 
+        /// <summary>Lets the platform send these writes on its own (app in the background).</summary>
+        public void ScheduleBackgroundWrites(IReadOnlyList<ScheduledWrite> writes)
+        {
+            _backend?.ScheduleWrites(writes);
+            if (writes.Count > 0) AddLog($"Background: {writes.Count} trainer commands scheduled");
+        }
+
+        public void CancelBackgroundWrites() => _backend?.CancelScheduledWrites();
+
         public void StartScan(float seconds = 20f)
         {
             _scanUntil = Time.time + seconds;

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using FreeVelo.Devices.Session;
 
 namespace FreeVelo.Ble
 {
@@ -36,6 +38,12 @@ namespace FreeVelo.Ble
         void Disconnect(string address);
 
         void Write(string address, Guid characteristic, byte[] data);
+
+        /// <summary>Sends these writes at their offsets on its own (while the app is in the background).</summary>
+        void ScheduleWrites(IReadOnlyList<ScheduledWrite> writes);
+
+        /// <summary>Drops scheduled writes that have not been sent yet.</summary>
+        void CancelScheduledWrites();
 
         /// <summary>Called every frame on the Unity thread.</summary>
         void Update(float deltaTime);

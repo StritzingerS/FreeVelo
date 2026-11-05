@@ -162,6 +162,40 @@ namespace FreeVelo.Core.Workouts
             Advance(Math.Max(0, elapsedS), new List<TextCue>());
         }
 
+        /// <summary>
+        /// ERG targets of the coming <paramref name="horizonS"/> seconds without advancing the workout: one entry
+        /// per change (offset in seconds from now, watts; null = free-ride block). Ramps are sampled every
+        /// <paramref name="rampStepS"/> seconds. Used to keep the trainer on schedule while the app is in the background.
+        /// </summary>
+        public IReadOnlyList<(double OffsetS, int? TargetW)> TargetsAhead(double horizonS, double rampStepS = 5)
+        {
+            var result = new List<(double, int?)>();
+            if (IsFinished || IsPaused) return result;
+            double offset = 0;
+            int? last = int.MinValue;
+            for (int i = _index; i < _segments.Count && offset < horizonS; i++)
+            {
+                var segment = _segments[i];
+                double duration = _durations[i];
+                double startInSegment = i == _index ? _segmentElapsed : 0;
+                double intensity = Clamp(_globalIntensity * SegmentIntensity(i));
+                bool ramp = segment.Block is RampBlock;
+                for (double t = startInSegment; t < duration && offset + (t - startInSegment) < horizonS; t += ramp ? rampStepS : duration)
+                {
+                    double progress = segment.DurationS * (t / duration);
+                    double? baseW = segment.BaseTargetW(progress, FtpW);
+                    int? target = baseW.HasValue ? (int?)Math.Max(0, (int)Math.Round(baseW.Value * intensity)) : null;
+                    if (target != last) result.Add((offset + (t - startInSegment), target));
+                    last = target;
+                    if (!ramp) break;
+                }
+
+                offset += duration - startInSegment;
+            }
+
+            return result;
+        }
+
         /// <summary>Current state without advancing time.</summary>
         public WorkoutState Current => BuildState(Array.Empty<TextCue>());
 
