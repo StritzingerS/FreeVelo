@@ -137,8 +137,9 @@ namespace FreeVelo.World
                     for (int s = -1; s <= 1; s += 2)
                     {
                         var foot = c + (right * (s * (half + ShoulderWidth + 0.4f))) + new Vector3(0, -0.35f, 0);
-                        posts.EllipticTube(foot, foot + (Vector3.up * 1.35f), new Vector2(0.06f, 0.08f), new Vector2(0.05f, 0.07f), right, 6);
-                        postBands.EllipticTube(foot + (Vector3.up * 1.05f), foot + (Vector3.up * 1.25f), new Vector2(0.062f, 0.082f), new Vector2(0.056f, 0.074f), right, 6);
+                        // ~1 m above the ground, ~10 cm wide, black band near the top.
+                        posts.EllipticTube(foot, foot + (Vector3.up * 1.35f), new Vector2(0.04f, 0.055f), new Vector2(0.035f, 0.048f), right, 6);
+                        postBands.EllipticTube(foot + (Vector3.up * 1.08f), foot + (Vector3.up * 1.24f), new Vector2(0.038f, 0.052f), new Vector2(0.037f, 0.05f), right, 6);
                     }
                 }
             }

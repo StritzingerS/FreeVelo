@@ -301,7 +301,7 @@ namespace FreeVelo.World
             // Torso along a rounded back: bib shorts (pelvis → waist) and jersey (waist → shoulders).
             var spine = new[]
             {
-                new Vector3(0, 1.02f, -0.2f),
+                new Vector3(0, 1.03f, -0.18f),
                 new Vector3(0, 1.1f, -0.125f),
                 new Vector3(0, 1.2f, -0.02f),
                 new Vector3(0, 1.3f, 0.1f),
@@ -310,15 +310,15 @@ namespace FreeVelo.World
             };
             var torsoRadii = new[]
             {
-                new Vector2(0.155f, 0.125f),
-                new Vector2(0.142f, 0.112f),
+                new Vector2(0.14f, 0.1f),
+                new Vector2(0.138f, 0.105f),
                 new Vector2(0.15f, 0.118f),
                 new Vector2(0.168f, 0.12f),
                 new Vector2(0.178f, 0.105f),
                 new Vector2(0.085f, 0.07f),
             };
             p.Builder(p.Shorts).Sweep(new[] { spine[0], spine[1] }, new[] { torsoRadii[0], torsoRadii[1] }, Side, 16, true, false);
-            p.Builder(p.Shorts).Ellipsoid(spine[0] + new Vector3(0, -0.01f, 0.01f), new Vector3(0.15f, 0.09f, 0.13f), Quaternion.identity, 14, 8);
+            p.Builder(p.Shorts).Ellipsoid(new Vector3(0, 1.0f, -0.165f), new Vector3(0.13f, 0.07f, 0.1f), Quaternion.identity, 14, 8); // seat
             p.Builder(p.Jersey).Sweep(spine.Skip(1).ToList(), torsoRadii.Skip(1).ToList(), Side, 16, false, true);
             p.Builder(p.Accent).Sweep(
                 new[] { Vector3.Lerp(spine[2], spine[3], 0.45f), Vector3.Lerp(spine[2], spine[3], 0.7f) },
@@ -406,7 +406,7 @@ namespace FreeVelo.World
             float l = ThighLength;
             p.Builder(p.Shorts).Sweep(
                 new[] { new Vector3(0, -0.02f, -0.01f), new Vector3(0, l * 0.15f, 0.005f), new Vector3(0, l * 0.5f, 0.01f), new Vector3(0, l * 0.78f, 0.005f) },
-                new[] { new Vector2(0.085f, 0.09f), new Vector2(0.08f, 0.088f), new Vector2(0.069f, 0.074f), new Vector2(0.058f, 0.06f) },
+                new[] { new Vector2(0.072f, 0.078f), new Vector2(0.074f, 0.082f), new Vector2(0.066f, 0.072f), new Vector2(0.057f, 0.06f) },
                 Side, 14);
             p.Builder(p.Skin).Sweep(
                 new[] { new Vector3(0, l * 0.77f, 0.005f), new Vector3(0, l * 0.92f, 0f), new Vector3(0, l + 0.01f, 0f) },
