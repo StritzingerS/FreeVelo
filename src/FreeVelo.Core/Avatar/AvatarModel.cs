@@ -113,7 +113,7 @@ namespace FreeVelo.Core.Avatar
         // Bike geometry (metres) – roughly a size 56 road bike with 700×25c tyres.
         public const float CrankLength = 0.17f;
         public const float WheelRadius = 0.336f;
-        public const float PedalOffsetX = 0.125f;
+        public const float PedalOffsetX = 0.135f; // pedal centre from the bike centre (Q-factor + spindle)
         public static readonly Vector3 BottomBracket = new Vector3(0, 0.27f, 0);
         public static readonly Vector3 RearAxle = new Vector3(0, WheelRadius, -0.405f);
         public static readonly Vector3 FrontAxle = new Vector3(0, WheelRadius, 0.6f); // ~2 cm tyre clearance to the down tube
@@ -233,7 +233,7 @@ namespace FreeVelo.Core.Avatar
 
                 // Ankling: toes drop on the back of the stroke, foot nearly flat at the front.
                 var foot = Rot.Euler(10f - (8f * MathF.Sin(angle)), 0, 0);
-                var cleat = pedal + new Vector3(-sign * 0.02f, 0.012f, 0);
+                var cleat = pedal + new Vector3(sign * 0.003f, 0.012f, 0); // shoe centred on the pedal, clear of the crank arm
                 var ankle = cleat + (foot * AnkleInFoot);
                 var hip = new Vector3(sign * Hip.X, Hip.Y, Hip.Z);
                 var knee = SolveJoint(hip, ankle, ThighLength, ShinLength, new Vector3(sign * 0.1f, 0, 1f));

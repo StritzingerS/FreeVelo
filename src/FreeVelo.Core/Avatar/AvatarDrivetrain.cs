@@ -88,7 +88,7 @@ namespace FreeVelo.Core.Avatar
                     Ellipsoid(V(0, -0.006f, 0.03f), V(0.022f, 0.008f, 0.025f)),
                     RoundCone(V(-sx * 0.03f, 0, 0), V(sx * 0.03f, 0, 0), 0.011f, 0.011f));
                 Sculpt(node, body, V(-0.05f, -0.025f, -0.06f), V(0.05f, 0.015f, 0.065f), 0.002f, 450, blackMat);
-                B(node, metalMat).Tube(V(-sx * 0.045f, 0, 0), V(-sx * 0.02f, 0, 0), 0.0065f, 0.0065f, 8);
+                B(node, metalMat).Tube(V(-sx * 0.046f, 0, 0), V(-sx * 0.02f, 0, 0), 0.0065f, 0.0065f, 8); // spindle into the crank eye
             }
 
             // Bike computer on an out-front mount.
