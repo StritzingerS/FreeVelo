@@ -543,18 +543,23 @@ namespace FreeVelo.Core.Avatar
                     return MathF.Max(band, MathF.Max(0.045f - p.Y - (p.Z * 0.2f), MathF.Abs(p.X) - 0.024f));
                 };
                 Sdf collar = p => MathF.Max(opening(p) - 0.006f, 0.06f - p.Y);
+                Sdf dialRegion = p => MathF.Min(p.Y - 0.0095f, Vector3.Distance(p, dialCenter) - 0.0165f);
+
+                // Whole shoe scaled about the cleat (size ~41/42: about 25 cm long).
+                const float shoeScale = 0.9f;
+                Sdf Scaled(Sdf f) => q => f(q / shoeScale) * shoeScale;
                 Sculpt(
                     footNode,
-                    shoe,
-                    V(-0.065f, -0.016f, -0.19f),
-                    V(0.065f, 0.12f, 0.115f),
-                    0.0028f,
+                    Scaled(shoe),
+                    V(-0.06f, -0.015f, -0.172f),
+                    V(0.06f, 0.11f, 0.105f),
+                    0.0026f,
                     3200,
                     shoes,
-                    (stripe, shoeAccent),
-                    (lacing, black),
-                    (collar, black),
-                    (p => MathF.Min(p.Y - 0.0095f, Vector3.Distance(p, dialCenter) - 0.0165f), black));
+                    (Scaled(stripe), shoeAccent),
+                    (Scaled(lacing), black),
+                    (Scaled(collar), black),
+                    (Scaled(dialRegion), black));
             }
         }
 
