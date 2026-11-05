@@ -323,7 +323,7 @@ namespace FreeVelo.Core.Avatar
             var frameMat = Mat("frame", Style.Frame, 0.75f);
             var axle = front ? FrontAxle : RearAxle;
             float rotorX = front ? FrontRotorX : RearRotorX;
-            float angle = front ? -60f : 64f; // around the axle (0 = up, 90 = forward); rear between seat stay and chain stay
+            float angle = front ? -52f : 64f; // around the axle (0 = up, 90 = forward); rear between seat stay and chain stay
             float rad = angle * MathF.PI / 180f;
             var radial = new Vector3(0, MathF.Cos(rad), MathF.Sin(rad));
             var tangent = new Vector3(0, -MathF.Sin(rad), MathF.Cos(rad));
@@ -378,7 +378,8 @@ namespace FreeVelo.Core.Avatar
                 float lugHalf = (MathF.Abs(seat.Z - legBack.Z) / 2f) + 0.006f;
                 var lug = SdfShapes.RoundBox(lugCenter, new Vector3(0.0045f, 0.009f, lugHalf), 0.003f, Rot.LookRotation(Vector3.UnitZ, leg)); // small lug
                 var caliperBody = body;
-                body = p => SdfShapes.SMin(caliperBody(p), lug(p), 0.004f); // cast in one piece with the body
+                var forkLeg = SdfShapes.Grow(Aero(V(-0.042f, 0.655f, 0.452f), FrontAxle + V(-0.0565f, 0.012f, -0.002f), 0.018f, 0.0095f, 0.6f, -0.05f), 0.0015f);
+                body = p => MathF.Max(SdfShapes.SMin(caliperBody(p), lug(p), 0.004f), -forkLeg(p)); // cast in one piece, contoured along the leg
                 mount = p => 1f;
                 for (int i = -1; i <= 1; i += 2)
                 {
