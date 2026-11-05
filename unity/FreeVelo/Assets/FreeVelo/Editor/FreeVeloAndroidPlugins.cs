@@ -111,6 +111,14 @@ namespace FreeVelo.EditorTools
             public void OnPreprocessBuild(BuildReport report)
             {
                 if (report.summary.platform != BuildTarget.Android) return;
+
+                // Landscape only: enforced on every build (project settings can be overwritten by an open editor).
+                PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
+                PlayerSettings.allowedAutorotateToPortrait = false;
+                PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
+                PlayerSettings.allowedAutorotateToLandscapeLeft = true;
+                PlayerSettings.allowedAutorotateToLandscapeRight = true;
+
                 if (!UpdateIfChanged(interactive: false))
                 {
                     throw new BuildFailedException("FreeVelo: freevelo-ble.aar is missing – menu FreeVelo → Update Android plugins.");

@@ -26,16 +26,30 @@ namespace FreeVelo.App
             if (FindAnyObjectByType<FreeVeloApp>() == null) new GameObject("FreeVeloApp").AddComponent<FreeVeloApp>();
         }
 
-        private void Awake()
+        /// <summary>
+        /// Landscape only (both directions): the interface is laid out for a wide screen. Runs before the splash
+        /// screen, so the app does not start in portrait; first forced to landscape, then free to turn by 180°.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
+        private static void LandscapeOnly()
         {
-            Application.targetFrameRate = 60;
-
-            // Landscape only (both directions): the interface is laid out for a wide screen.
             Screen.autorotateToPortrait = false;
             Screen.autorotateToPortraitUpsideDown = false;
             Screen.autorotateToLandscapeLeft = true;
             Screen.autorotateToLandscapeRight = true;
+            if (Screen.orientation == ScreenOrientation.Portrait || Screen.orientation == ScreenOrientation.PortraitUpsideDown)
+            {
+                Screen.orientation = ScreenOrientation.LandscapeLeft;
+            }
+
             Screen.orientation = ScreenOrientation.AutoRotation;
+        }
+
+        private void Awake()
+        {
+            Application.targetFrameRate = 60;
+
+            LandscapeOnly();
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Screen.autorotateToPortrait = false;
             Screen.autorotateToPortraitUpsideDown = false;
