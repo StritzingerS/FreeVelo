@@ -374,11 +374,11 @@ namespace FreeVelo.Core.Avatar
                 var legPoint = new Vector3(memberX, seat.Y, axle.Z + ForkZ(h0));
                 // Mounting lug of the caliper body: fills the gap to the back of the leg, flat face parallel to the leg.
                 var legBack = legPoint - new Vector3(0, 0, 0.0105f) + new Vector3(0, leg.Y * 0, 0);
-                var lugCenter = new Vector3(rotorX + (o * 0.0095f), center.Y, (legBack.Z + seat.Z) / 2f - 0.002f);
+                var lugCenter = new Vector3(rotorX + (o * 0.0105f), center.Y - 0.004f, (legBack.Z + seat.Z) / 2f - 0.002f);
                 float lugHalf = (MathF.Abs(seat.Z - legBack.Z) / 2f) + 0.006f;
-                var lug = SdfShapes.RoundBox(lugCenter, new Vector3(0.0072f, 0.02f, lugHalf), 0.005f, Rot.LookRotation(Vector3.UnitZ, leg));
+                var lug = SdfShapes.RoundBox(lugCenter, new Vector3(0.0045f, 0.009f, lugHalf), 0.003f, Rot.LookRotation(Vector3.UnitZ, leg)); // small lug
                 var caliperBody = body;
-                body = p => SdfShapes.SMin(caliperBody(p), lug(p), 0.008f); // cast in one piece with the body
+                body = p => SdfShapes.SMin(caliperBody(p), lug(p), 0.004f); // cast in one piece with the body
                 mount = p => 1f;
                 for (int i = -1; i <= 1; i += 2)
                 {
