@@ -1,8 +1,11 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using FreeVelo.App;
 using FreeVelo.Ble;
 using FreeVelo.Core.Physics;
+using FreeVelo.Core.Recording;
 using FreeVelo.Core.Training;
 using FreeVelo.Core.Workouts;
 using FreeVelo.Core.World;
@@ -30,6 +33,9 @@ namespace FreeVelo.Ride
         public double? AvgHeartRate;
         public int? EstimatedFtpW;
         public IReadOnlyDictionary<int, double> PowerCurve;
+
+        /// <summary>Saved FIT file (null if nothing was recorded or saving failed).</summary>
+        public string FitPath;
     }
 
     /// <summary>
@@ -41,9 +47,8 @@ namespace FreeVelo.Ride
         private const float AutoPauseAfterS = 3f;
 
         private readonly RiderPhysics _physics = new RiderPhysics();
-        private readonly List<double> _power = new List<double>();
-        private readonly List<double> _heartRate = new List<double>();
-        private readonly List<double> _cadence = new List<double>();
+        private RideRecording _recording;
+        private int _lastSegmentIndex = -1;
         private BleService _ble;
         private float _sampleTimer;
         private float _idleTime;
@@ -99,9 +104,9 @@ namespace FreeVelo.Ride
         public void StartRide(Workout workout)
         {
             _ble.ApplySettings();
-            _power.Clear();
-            _heartRate.Clear();
-            _cadence.Clear();
+            _recording = new RideRecording(DateTime.UtcNow, workout != null ? workout.Name.Get(AppSettings.Language) : L.Get("free_ride"));
+            _lastSegmentIndex = -1;
+            _sampleTimer = 0;
             _physics.SpeedMps = 0;
             _physics.RiderMassKg = AppSettings.RiderWeightKg;
             ElapsedS = 0;
@@ -132,21 +137,45 @@ namespace FreeVelo.Ride
             _ble.Hub.SetSimulation(0); // release ERG resistance
             _ble.Hub.LowCadenceProtectionEnabled = true;
 
-            double np = PowerMetrics.NormalizedPower(_power);
+            var power = _recording.PowerSeries();
+            var stats = _recording.Stats();
+            double np = PowerMetrics.NormalizedPower(power);
             int ftp = AppSettings.FtpW;
             Summary = new RideSummary
             {
-                Title = Engine != null ? Engine.Workout.Name.Get(AppSettings.Language) : L.Get("free_ride"),
-                DurationS = (int)ElapsedS,
+                Title = _recording.Name,
+                DurationS = stats.Seconds,
                 DistanceM = DistanceM,
-                AvgPowerW = PowerMetrics.Average(_power),
+                AvgPowerW = stats.AvgPowerW ?? 0,
                 NormalizedPowerW = np,
                 IntensityFactor = PowerMetrics.IntensityFactor(np, ftp),
-                Tss = PowerMetrics.TrainingStressScore(_power.Count, np, ftp),
-                AvgHeartRate = _heartRate.Count > 0 ? _heartRate.Average() : (double?)null,
-                PowerCurve = PowerMetrics.PowerCurve(_power),
-                EstimatedFtpW = _ftpTest.HasValue && Engine != null ? FtpTests.EstimateFtp(_ftpTest.Value, _power, Engine.Workout) : null,
+                Tss = PowerMetrics.TrainingStressScore(power.Count, np, ftp),
+                AvgHeartRate = stats.AvgHeartRate,
+                PowerCurve = PowerMetrics.PowerCurve(power),
+                EstimatedFtpW = _ftpTest.HasValue && Engine != null ? FtpTests.EstimateFtp(_ftpTest.Value, power, Engine.Workout) : null,
+                FitPath = SaveFit(ftp),
             };
+        }
+
+        /// <summary>Writes the ride as FIT file to persistentDataPath/rides; returns the path.</summary>
+        private string SaveFit(int ftp)
+        {
+            if (_recording == null || _recording.Samples.Count < 10) return null;
+            try
+            {
+                string folder = Path.Combine(Application.persistentDataPath, "rides");
+                Directory.CreateDirectory(folder);
+                string safeName = new string(_recording.Name.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
+                string path = Path.Combine(folder, $"{_recording.StartUtc.ToLocalTime():yyyy-MM-dd_HH-mm}_{safeName}.fit");
+                File.WriteAllBytes(path, FitActivityWriter.Write(_recording, FitActivityWriter.SessionInfo(_recording, ftp)));
+                Debug.Log("FreeVelo: ride saved to " + path);
+                return path;
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                return null;
+            }
         }
 
         public void Close()
@@ -184,15 +213,32 @@ namespace FreeVelo.Ride
                 {
                     WorkoutState = Engine.Update(dt);
                     foreach (var cue in WorkoutState.NewCues) ShowCue(cue.Text.Get(AppSettings.Language));
+
+                    // One FIT lap per workout block.
+                    if (Engine.CurrentIndex != _lastSegmentIndex && !Engine.IsFinished)
+                    {
+                        if (_lastSegmentIndex >= 0) _recording.StartLap();
+                        _lastSegmentIndex = Engine.CurrentIndex;
+                    }
                 }
 
                 _sampleTimer += dt;
                 while (_sampleTimer >= 1f)
                 {
                     _sampleTimer -= 1f;
-                    _power.Add(power);
-                    _cadence.Add(cadence);
-                    if (live.HeartRateBpm.HasValue) _heartRate.Add(live.HeartRateBpm.Value);
+                    // Whole seconds, strictly increasing (FIT records are 1 s apart).
+                    var now = DateTime.UtcNow;
+                    var samples = _recording.Samples;
+                    if (samples.Count > 0 && now < samples[samples.Count - 1].TimeUtc.AddSeconds(1)) now = samples[samples.Count - 1].TimeUtc.AddSeconds(1);
+                    _recording.Add(new RideSample(
+                        now,
+                        live.PowerW,
+                        live.HeartRateBpm,
+                        live.CadenceRpm.HasValue ? (int?)Mathf.RoundToInt((float)live.CadenceRpm.Value) : null,
+                        _physics.SpeedMps,
+                        DistanceM,
+                        position.Y,
+                        WorkoutState?.TargetW));
                 }
             }
 

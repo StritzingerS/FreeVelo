@@ -41,6 +41,7 @@ namespace FreeVelo.UI
         private GUIStyle _cue;
         private GUIStyle _panel;
         private readonly PowerZoneModel _zones = PowerZoneModel.Coggan();
+        private string _fileMessage;
 
         public void Initialize(BleService ble, RideController ride)
         {
@@ -413,9 +414,20 @@ namespace FreeVelo.UI
             }
 
             GUILayout.FlexibleSpace();
+            if (!string.IsNullOrEmpty(s.FitPath))
+            {
+                GUILayout.Label($"FIT: {System.IO.Path.GetFileName(s.FitPath)}", _small);
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button(L.Get("share"), _button, GUILayout.Height(60))) FileActions.Share(s.FitPath, L.Get("share"));
+                if (GUILayout.Button(L.Get("save_downloads"), _button, GUILayout.Height(60))) _fileMessage = FileActions.SaveToDownloads(s.FitPath);
+                GUILayout.EndHorizontal();
+                if (!string.IsNullOrEmpty(_fileMessage)) GUILayout.Label(_fileMessage, _small);
+            }
+
             if (GUILayout.Button(L.Get("back"), _button, GUILayout.Height(64)))
             {
                 _ride.Close();
+                _fileMessage = null;
                 _page = Page.Home;
             }
 

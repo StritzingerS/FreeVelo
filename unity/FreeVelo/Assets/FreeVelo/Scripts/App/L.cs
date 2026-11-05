@@ -52,6 +52,8 @@ namespace FreeVelo.App
             ["min"] = ("min", "Min."),
             ["intensity"] = ("Intensity", "Intensität"),
             ["finished"] = ("Workout finished!", "Workout geschafft!"),
+            ["share"] = ("Share FIT file", "FIT-Datei teilen"),
+            ["save_downloads"] = ("Save to Downloads", "In Downloads speichern"),
             ["no_trainer"] = ("No trainer connected – connect one under Devices.", "Kein Rollentrainer verbunden – unter Geräte verbinden."),
         };
 

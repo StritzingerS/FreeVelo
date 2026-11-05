@@ -17,8 +17,8 @@ Pure C# logic lives in `src/FreeVelo.Core` (tested with xUnit, no Unity needed);
 - [x] FTP tests (ramp, 20 min, 2×8 min) with evaluation
 - [ ] Workout JSON format (save/load, own workouts)
 - [ ] Import `.zwo`, `.erg`, `.mrc`; export `.zwo`
-- [ ] Ride recorder (1 s samples: power, HR, cadence, speed, distance, altitude, target)
-- [ ] FIT file writer (activity with records, laps per block, session)
+- [x] Ride recorder (1 s samples: power, HR, cadence, speed, distance, altitude, target; lap per workout block)
+- [x] FIT file writer (activity with records, laps per block, session incl. NP/IF/TSS/FTP; validated with fitparse)
 - [x] Trainer controller (`DeviceHub`): device roles, live data, ERG/SIM via FTMS or FE-C, ERG ramping (50 W/s),
       low-cadence protection, resend target after reconnect, FE-C user config with every grade change
 - [x] Simple procedural route (closed loop with hills)
@@ -32,7 +32,7 @@ Pure C# logic lives in `src/FreeVelo.Core` (tested with xUnit, no Unity needed);
 - [x] Ride scene: road, avatar, camera, HUD (power, HR, cadence, speed, workout graph, next block, cues) – first version
 - [x] Workout library screen, start / pause / skip / intensity buttons – first version
 - [x] Ride summary (NP, IF, TSS, power curve, FTP test result)
-- [ ] Save FIT, share file
+- [x] Save FIT automatically, share (Android share sheet) or save to Downloads/FreeVelo
 - [x] Settings: weight, FTP, trainer difficulty, power source, language de/en
 - [ ] Zone editor
 
