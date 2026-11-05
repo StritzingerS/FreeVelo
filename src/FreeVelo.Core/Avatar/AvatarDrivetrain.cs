@@ -384,7 +384,7 @@ namespace FreeVelo.Core.Avatar
                 for (int i = -1; i <= 1; i += 2)
                 {
                     var b = legPoint + (leg * (i * 0.011f)) + new Vector3(0, 0, 0.0085f);
-                    bolts.Add(HexBolt(b + new Vector3(0, 0, 0.0005f), Vector3.UnitZ, 0.005f, 0.0018f)); // hex bolt heads on the front of the leg
+                    bolts.Add(SocketBolt(b + new Vector3(0, 0, 0.0005f), Vector3.UnitZ, 0.0027f)); // Allen bolts, flush in the front of the leg
                 }
             }
             else
@@ -398,7 +398,7 @@ namespace FreeVelo.Core.Avatar
                 for (int i = -1; i <= 1; i += 2)
                 {
                     var b = new Vector3(memberX, axle.Y - 0.009f, under.Z + (i * 0.013f));
-                    bolts.Add(HexBolt(b - new Vector3(0, 0.003f, 0), -Vector3.UnitY, 0.005f, 0.002f)); // hex bolts from below the stay
+                    bolts.Add(SocketBolt(b - new Vector3(0, 0.0005f, 0), -Vector3.UnitY, 0.0027f)); // Allen bolts from below the stay
                 }
             }
 
@@ -406,7 +406,7 @@ namespace FreeVelo.Core.Avatar
             var max = center + new Vector3(0.05f);
             Sculpt(AvatarNode.Bike, body, min - new Vector3(0, 0, 0.0f), max + new Vector3(0, 0, 0.03f), 0.0009f, 2400, blackMat);
             if (!front) Sculpt(AvatarNode.Bike, mount, min - new Vector3(0, 0.02f, 0), max + new Vector3(0, 0, 0.03f), 0.0012f, 700, frameMat);
-            Sculpt(AvatarNode.Bike, SdfShapes.Union(bolts.ToArray()), min - new Vector3(0, 0.03f, 0), max, 0.0008f, 300, metalMat);
+            Sculpt(AvatarNode.Bike, SdfShapes.Union(bolts.ToArray()), min - new Vector3(0, 0.03f, 0), max, 0.0004f, 400, Mat("bolt", V(0.035f, 0.035f, 0.04f), 0.6f, 0.4f));
         }
 
         private static float SmoothMin(float a, float b, float k) => SdfShapes.SMin(a, b, k);

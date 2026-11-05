@@ -91,6 +91,19 @@ namespace FreeVelo.Core.Avatar
             };
             Sculpt(AvatarNode.Bike, spacers, V(-0.03f, HeadTubeTop - 0.005f, 0.35f), V(0.03f, colBottom + 0.004f, 0.43f), 0.0007f, 900, carbonMat);
 
+            // Socket head (Allen) bolts, sunk flush into counterbores: steerer clamp at the back, faceplate, top cap.
+            var boltSpots = new List<(Vector3 C, Vector3 N, float R)>();
+            for (int s = -1; s <= 1; s += 2)
+            {
+                for (int k = -1; k <= 1; k += 2)
+                {
+                    boltSpots.Add((steerer + new Vector3(s * 0.0055f, k * 0.0085f, -0.0268f), -Vector3.UnitZ, 0.0024f));
+                    boltSpots.Add((BarClamp + new Vector3(s * 0.012f, k * 0.011f, 0.0155f), Vector3.Normalize(new Vector3(0, k * 0.011f, 0.0155f)), 0.0026f));
+                }
+            }
+
+            boltSpots.Add((steerer + new Vector3(0, 0.0234f, 0.001f), Vector3.UnitY, 0.0034f));
+
             Sdf stem = p =>
             {
                 var l = inv * (p - steerer);
@@ -101,42 +114,47 @@ namespace FreeVelo.Core.Avatar
                 float shape = SMin(SMin(column(p), body, 0.012f), barClamp, 0.007f);
                 var q = p - steerer;
                 float cap = MathF.Max(new Vector2(q.X, q.Z - 0.001f).Length() - 0.0165f, MathF.Abs(q.Y - 0.0218f) - 0.0016f);
-                return MathF.Min(shape, cap);
+                float result = MathF.Min(shape, cap);
+                foreach (var (c, n, r) in boltSpots) result = MathF.Max(result, -Counterbore(p, c, n, r + 0.0004f));
+                return result;
             };
 
             Sculpt(AvatarNode.Bike, stem, V(-0.04f, 0.81f, 0.34f), V(0.04f, 0.92f, 0.52f), 0.0011f, 2800, carbonMat);
 
-            // Bolts: two on each side of the steerer clamp, four on the faceplate, one in the top cap.
-            var bolts = new List<Sdf>();
-            for (int s = -1; s <= 1; s += 2)
+            var boltMat = Mat("bolt", V(0.035f, 0.035f, 0.04f), 0.6f, 0.4f);
+            foreach (var (c, n, r) in boltSpots)
             {
-                for (int k = -1; k <= 1; k += 2)
-                {
-                    var bolt = steerer + new Vector3(s * 0.009f, k * 0.0085f, -0.0262f);
-                    bolts.Add(HexBolt(bolt, -Vector3.UnitZ, 0.004f, 0.0016f)); // clamp bolts at the back
-                    var face = BarClamp + new Vector3(s * 0.012f, k * 0.011f, 0.015f);
-                    bolts.Add(HexBolt(face, Vector3.UnitZ, 0.004f, 0.0018f)); // faceplate
-                }
+                Sculpt(AvatarNode.Bike, SocketBolt(c, n, r), c - new Vector3(0.008f), c + new Vector3(0.008f), 0.0003f, 160, boltMat);
             }
-
-            var top = steerer + new Vector3(0, 0.0236f, 0.001f);
-            bolts.Add(HexBolt(top - new Vector3(0, 0.0006f, 0), Vector3.UnitY, 0.005f, 0.0012f)); // top cap
-            Sculpt(AvatarNode.Bike, Union(bolts.ToArray()), V(-0.03f, 0.84f, 0.345f), V(0.03f, 0.895f, 0.51f), 0.0005f, 900, metalMat);
         }
 
-        /// <summary>Small hex bolt head: base at <paramref name="c"/> (just inside the surface), extending along <paramref name="axis"/>.</summary>
-        internal static Sdf HexBolt(Vector3 c, Vector3 axis, float acrossFlats, float height)
+        /// <summary>
+        /// Socket head cap screw (Allen bolt) seen in its counterbore: round head whose top lies 0.3 mm below the
+        /// surface point <paramref name="c"/>, hex socket in the middle. <paramref name="n"/> points out of the surface.
+        /// </summary>
+        internal static Sdf SocketBolt(Vector3 c, Vector3 n, float radius)
         {
-            var n = Vector3.Normalize(axis);
+            n = Vector3.Normalize(n);
             MeshBuilder.Basis(n, out var u, out var w);
             return p =>
             {
                 var d = p - c;
                 float a = Vector3.Dot(d, n);
-                float hex = HexDistance(Vector3.Dot(d, u), Vector3.Dot(d, w)) - (acrossFlats / 2f) + 0.0002f;
-                float slab = MathF.Abs(a - (height / 2f)) - (height / 2f) + 0.0002f;
-                return new Vector2(MathF.Max(hex, 0f), MathF.Max(slab, 0f)).Length() + MathF.Min(MathF.Max(hex, slab), 0f) - 0.0002f;
+                float x = Vector3.Dot(d, u), y = Vector3.Dot(d, w);
+                float head = MathF.Max(MathF.Sqrt((x * x) + (y * y)) - radius, MathF.Abs(a + 0.0023f) - 0.002f);
+                float socket = MathF.Max(HexDistance(x, y) - (radius * 0.45f), MathF.Abs(a + 0.0003f) - 0.0016f);
+                return MathF.Max(head, -socket);
             };
+        }
+
+        /// <summary>Cylindrical hole for a sunk bolt head (cuts 6 mm deep into the part).</summary>
+        private static float Counterbore(Vector3 p, Vector3 c, Vector3 n, float radius)
+        {
+            n = Vector3.Normalize(n);
+            var d = p - c;
+            float a = Vector3.Dot(d, n);
+            float r = (d - (n * a)).Length();
+            return MathF.Max(r - radius, MathF.Abs(a + 0.001f) - 0.005f);
         }
 
         private static float RoundedBox2(Vector3 q, Vector3 half, float radius)
