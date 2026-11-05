@@ -112,6 +112,30 @@ namespace FreeVelo.Core.World
                 f < 0.5 ? a.Surface : b.Surface);
         }
 
+        /// <summary>
+        /// Horizontal curvature (1/m, positive = right-hand bend) at <paramref name="distanceM"/>, from the heading
+        /// change over ±<paramref name="windowM"/> metres (smooths the polyline corners).
+        /// </summary>
+        public double CurvatureAt(double distanceM, double windowM = 10)
+        {
+            double h0 = Sample(distanceM - windowM).HeadingRad;
+            double h1 = Sample(distanceM + windowM).HeadingRad;
+            double dh = h1 - h0;
+            while (dh > Math.PI) dh -= 2 * Math.PI;
+            while (dh < -Math.PI) dh += 2 * Math.PI;
+            return dh / (2 * windowM);
+        }
+
+        /// <summary>
+        /// Lean angle (degrees, positive = into a right-hand bend) a rider needs at <paramref name="speedMps"/> in a
+        /// bend of curvature <paramref name="curvature"/>: tan(lean) = v²·κ / g, limited to ±35°.
+        /// </summary>
+        public static double LeanAngleDeg(double speedMps, double curvature)
+        {
+            double lean = Math.Atan(speedMps * speedMps * curvature / 9.81) * 180 / Math.PI;
+            return Math.Max(-35, Math.Min(35, lean));
+        }
+
         private static double Lerp(double a, double b, double f) => a + ((b - a) * f);
 
         private static double Mod(double x, double m) => ((x % m) + m) % m;

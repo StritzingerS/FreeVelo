@@ -34,6 +34,8 @@ var model = File.Exists(Environment.GetEnvironmentVariable("FREEVELO_BAKED") ?? 
 var pose = AvatarModel.Pose(crank, 37f);
 var meshes = new List<SceneMesh>();
 bool noRider = Environment.GetEnvironmentVariable("FREEVELO_NORIDER") == "1";
+// Optional lean (degrees, positive = into a right-hand bend), as the game applies it.
+var lean = Rot.AboutZ(-float.Parse(Environment.GetEnvironmentVariable("FREEVELO_LEAN") ?? "0", System.Globalization.CultureInfo.InvariantCulture));
 foreach (var part in model.Parts)
 {
     if (noRider && !AvatarModel.IsBikeNode(part.Node)) continue;
@@ -41,8 +43,8 @@ foreach (var part in model.Parts)
     var normals = part.Mesh.ComputeNormals();
     meshes.Add(new SceneMesh
     {
-        Positions = part.Mesh.Vertices.Select(v => p.Apply(v)).ToArray(),
-        Normals = normals.Select(n => Vector3.Normalize(p.Rotation * n)).ToArray(),
+        Positions = part.Mesh.Vertices.Select(v => lean * p.Apply(v)).ToArray(),
+        Normals = normals.Select(n => Vector3.Normalize(lean * (p.Rotation * n))).ToArray(),
         Triangles = part.Mesh.Triangles.ToArray(),
         Albedo = part.Material.Color,
         Smoothness = part.Material.Smoothness,

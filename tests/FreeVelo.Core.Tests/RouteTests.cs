@@ -70,4 +70,30 @@ public class RouteTests
         Assert.Equal(0, route.Sample(50).HeadingRad, 6); // heading +Z
         Assert.Equal(Physics.RoadSurface.Gravel, route.Sample(80).Surface);
     }
+
+    [Fact]
+    public void LeanAngleIsRealistic()
+    {
+        // 40 km/h through a 50 m radius bend: tan(lean) = v²/(gR) ≈ 0.25 → about 14°.
+        double v = 40 / 3.6;
+        Assert.InRange(Route.LeanAngleDeg(v, 1.0 / 50), 13.5, 14.5);
+        Assert.InRange(Route.LeanAngleDeg(v, -1.0 / 50), -14.5, -13.5);
+        Assert.Equal(0, Route.LeanAngleDeg(0, 1.0 / 10));
+        Assert.Equal(35, Route.LeanAngleDeg(20, 1.0 / 5)); // limited
+    }
+
+    [Fact]
+    public void CurvatureOfACircleIsOneOverRadius()
+    {
+        const double r = 100;
+        var points = new List<RoutePoint>();
+        for (int i = 0; i <= 720; i++)
+        {
+            double a = i * Math.PI * 2 / 720;
+            points.Add(new RoutePoint(r * a, r * (1 - Math.Cos(a)), r * Math.Sin(a), 0, 0, default));
+        }
+
+        var route = new Route("circle", points, isLoop: false);
+        Assert.InRange(route.CurvatureAt(200), 0.0097, 0.0103); // heading increases: right-hand bend
+    }
 }

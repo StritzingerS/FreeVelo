@@ -17,6 +17,7 @@ namespace FreeVelo.App
         private RideController _ride;
         private RiderAvatar _avatar;
         private Camera _camera;
+        private float _lean;
         private float _orbit;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -102,7 +103,12 @@ namespace FreeVelo.App
             var sample = _ride.Position;
             float heading = (float)sample.HeadingRad * Mathf.Rad2Deg;
             float pitch = -Mathf.Atan((float)sample.GradePercent / 100f) * Mathf.Rad2Deg;
-            var rotation = Quaternion.Euler(pitch, heading, 0);
+            // Lean into bends like a real rider: tan(lean) = v²·κ / g, eased in and out over ~0.4 s.
+            float targetLean = _ride.State == RideState.Riding
+                ? (float)Route.LeanAngleDeg(_ride.SpeedMps, _ride.Route.CurvatureAt(_ride.DistanceM))
+                : 0f;
+            _lean = Mathf.Lerp(_lean, targetLean, 1f - Mathf.Exp(-dt / 0.4f));
+            var rotation = Quaternion.Euler(pitch, heading, -_lean); // negative roll tilts the rider to the right
             var right = Quaternion.Euler(0, heading, 0) * Vector3.right;
 
             // Ride on the right half of the road.
