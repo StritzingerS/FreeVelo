@@ -73,7 +73,7 @@ namespace FreeVelo.UI
             {
                 case Page.Home: DrawHome(); break;
                 case Page.Devices: DrawDevices(); break;
-                case Page.Workouts: DrawWorkouts(BuiltInWorkouts.All.ToArray(), L.Get("workouts")); break;
+                case Page.Workouts: DrawWorkoutLibrary(); break;
                 case Page.FtpTests: DrawWorkouts(new[] { FtpTests.Create(FtpTestKind.Ramp), FtpTests.Create(FtpTestKind.TwentyMinute), FtpTests.Create(FtpTestKind.TwoByEight) }, L.Get("ftp_tests")); break;
                 case Page.Settings: DrawSettings(); break;
             }
@@ -190,6 +190,116 @@ namespace FreeVelo.UI
             }
 
             GUILayout.EndArea();
+        }
+
+        // ------------------------------------------------------------------ workout library
+
+        private bool _ownTab;
+        private int _libraryPage;
+        private string _confirmDelete;
+
+        private void DrawWorkoutLibrary()
+        {
+            var area = new Rect(30, 30, _w - 60, _h - 60);
+            GUI.Box(area, GUIContent.none, _panel);
+            GUILayout.BeginArea(new Rect(area.x + 20, area.y + 15, area.width - 40, area.height - 30));
+            GUILayout.BeginHorizontal();
+            GUILayout.Label($"{L.Get("workouts")}   <size=20>FTP {AppSettings.FtpW} W</size>", _title);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Toggle(!_ownTab, L.Get("templates"), _button, GUILayout.Width(200), GUILayout.Height(60)) && _ownTab) { _ownTab = false; _libraryPage = 0; }
+            if (GUILayout.Toggle(_ownTab, L.Get("my_workouts"), _button, GUILayout.Width(240), GUILayout.Height(60)) && !_ownTab) { _ownTab = true; _libraryPage = 0; }
+            if (GUILayout.Button(L.Get("back"), _button, GUILayout.Width(160), GUILayout.Height(60)))
+            {
+                _page = Page.Home;
+                WorkoutStore.LastMessage = null;
+            }
+
+            GUILayout.EndHorizontal();
+            GUILayout.Space(8);
+
+            if (_ownTab) DrawOwnWorkouts();
+            else DrawWorkoutGrid(BuiltInWorkouts.All.ToArray());
+
+            if (!string.IsNullOrEmpty(WorkoutStore.LastMessage))
+            {
+                GUILayout.FlexibleSpace();
+                GUILayout.Label(WorkoutStore.LastMessage, _small);
+            }
+
+            GUILayout.EndArea();
+        }
+
+        private void DrawWorkoutGrid(Workout[] workouts)
+        {
+            const int columns = 2;
+            for (int i = 0; i < workouts.Length; i += columns)
+            {
+                GUILayout.BeginHorizontal();
+                for (int c = 0; c < columns; c++)
+                {
+                    if (i + c >= workouts.Length)
+                    {
+                        GUILayout.FlexibleSpace();
+                        continue;
+                    }
+
+                    var w = workouts[i + c];
+                    string text = $"{w.Name.Get(AppSettings.Language)}\n<size=17>{w.TotalDurationS / 60} {L.Get("min")} · {w.Category}</size>";
+                    if (GUILayout.Button(text, _button, GUILayout.Height(workouts.Length > 6 ? 70 : 100))) _ride.StartRide(w);
+                }
+
+                GUILayout.EndHorizontal();
+            }
+        }
+
+        private void DrawOwnWorkouts()
+        {
+            var library = WorkoutStore.Library;
+            if (GUILayout.Button("＋ " + L.Get("import") + " (.zwo / .erg / .mrc)", _button, GUILayout.Height(56))) WorkoutStore.PickFiles();
+            GUILayout.Space(6);
+
+            var workouts = library.Workouts;
+            if (workouts.Count == 0)
+            {
+                GUILayout.Label(L.Get("no_own_workouts"), _label);
+            }
+
+            const int perPage = 6;
+            int pages = Mathf.Max(1, Mathf.CeilToInt(workouts.Count / (float)perPage));
+            _libraryPage = Mathf.Clamp(_libraryPage, 0, pages - 1);
+            foreach (var w in workouts.Skip(_libraryPage * perPage).Take(perPage).ToList())
+            {
+                GUILayout.BeginHorizontal(GUILayout.Height(58));
+                GUILayout.Label($"{w.Name.Get(AppSettings.Language)}   <size=17>{w.TotalDurationS / 60} {L.Get("min")}</size>", _label, GUILayout.ExpandWidth(true));
+                if (GUILayout.Button("▶ " + L.Get("start"), _button, GUILayout.Width(150), GUILayout.Height(52))) _ride.StartRide(w);
+                if (GUILayout.Button(L.Get("share_workout"), _button, GUILayout.Width(150), GUILayout.Height(52))) WorkoutStore.Share(w);
+                bool confirming = _confirmDelete == w.Id;
+                if (GUILayout.Button(confirming ? L.Get("confirm_delete") : L.Get("delete"), _button, GUILayout.Width(confirming ? 230 : 150), GUILayout.Height(52)))
+                {
+                    if (confirming)
+                    {
+                        WorkoutStore.Delete(w);
+                        _confirmDelete = null;
+                    }
+                    else
+                    {
+                        _confirmDelete = w.Id;
+                    }
+                }
+
+                GUILayout.EndHorizontal();
+            }
+
+            if (pages > 1)
+            {
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("◀", _button, GUILayout.Width(80), GUILayout.Height(50))) _libraryPage--;
+                GUILayout.Label($"{L.Get("page")} {_libraryPage + 1}/{pages}", _label, GUILayout.Width(160));
+                if (GUILayout.Button("▶", _button, GUILayout.Width(80), GUILayout.Height(50))) _libraryPage++;
+                GUILayout.EndHorizontal();
+            }
+
+            foreach (var error in library.Errors.Take(3)) GUILayout.Label("✗ " + error, _small);
         }
 
         private void DrawSettings()

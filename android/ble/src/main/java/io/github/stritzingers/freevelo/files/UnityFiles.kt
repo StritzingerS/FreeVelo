@@ -39,6 +39,13 @@ object UnityFiles {
         activity.runOnUiThread { activity.startActivity(chooser) }
     }
 
+    /** Opens the system file picker; chosen files are copied into [destDir]. */
+    @JvmStatic
+    fun pickFiles(activity: Activity, destDir: String) {
+        val intent = Intent(activity, FilePickerActivity::class.java).putExtra(FilePickerActivity.EXTRA_DEST, destDir)
+        activity.runOnUiThread { activity.startActivity(intent) }
+    }
+
     /**
      * Copies a file to Downloads/FreeVelo (no storage permission needed on Android 10+).
      * Returns the visible path ("Download/FreeVelo/…") or "" on failure.

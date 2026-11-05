@@ -58,6 +58,13 @@ namespace FreeVelo.App
             _camera.fieldOfView = 60f;
 
             SetUpAtmosphere();
+            WorkoutStore.ProcessImports();
+        }
+
+        /// <summary>Back from the file picker (or any other app): import waiting workout files.</summary>
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (hasFocus) WorkoutStore.ProcessImports();
         }
 
         /// <summary>Sun, ambient light and distance fog (hazy horizon, depth).</summary>

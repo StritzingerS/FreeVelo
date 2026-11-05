@@ -15,8 +15,8 @@ Pure C# logic lives in `src/FreeVelo.Core` (tested with xUnit, no Unity needed);
 - [x] Metrics: NP, IF, TSS, mean-max / power curve, time in zones
 - [x] Built-in workouts (recovery, endurance, tempo, sweet spot, threshold, over-unders, 4×4, 5×5, 40/20s, sprints)
 - [x] FTP tests (ramp, 20 min, 2×8 min) with evaluation
-- [ ] Workout JSON format (save/load, own workouts)
-- [ ] Import `.zwo`, `.erg`, `.mrc`; export `.zwo`
+- [x] Workout file format: ZWO-compatible XML with FreeVelo extensions (nested repeats, watts, de/en); workout library
+- [x] Import `.zwo`, `.erg`, `.mrc` (Android file picker); export/share as standard `.zwo`
 - [x] Ride recorder (1 s samples: power, HR, cadence, speed, distance, altitude, target; lap per workout block)
 - [x] FIT file writer (activity with records, laps per block, session incl. NP/IF/TSS/FTP; validated with fitparse)
 - [x] Trainer controller (`DeviceHub`): device roles, live data, ERG/SIM via FTMS or FE-C, ERG ramping (50 W/s),
@@ -35,6 +35,9 @@ Pure C# logic lives in `src/FreeVelo.Core` (tested with xUnit, no Unity needed);
 - [x] Save FIT automatically, share (Android share sheet) or save to Downloads/FreeVelo
 - [x] Settings: weight, FTP, trainer difficulty, power source, language de/en
 - [ ] Zone editor
+
+### Moved to phase 2
+- Strava auto-upload (OAuth handled by the FreeVelo server, so friends need no own Strava API app). Until then: share/save the FIT file and upload it manually.
 
 ### C. Done when
 - 4×4 workout ridden on the Neo 2 in the 3D world, ERG follows the blocks, FIT file opens in Garmin Connect / Strava.

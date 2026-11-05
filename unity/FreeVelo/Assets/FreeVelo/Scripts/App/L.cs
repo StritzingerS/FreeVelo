@@ -57,6 +57,17 @@ namespace FreeVelo.App
             ["file_missing"] = ("File not found", "Datei nicht gefunden"),
             ["save_failed"] = ("Saving failed", "Speichern fehlgeschlagen"),
             ["plugin_outdated"] = ("Android plugin outdated – in Unity: FreeVelo → Update Android plugins, then build again", "Android-Plugin veraltet – in Unity: FreeVelo → Update Android plugins, dann neu bauen"),
+            ["templates"] = ("Templates", "Vorlagen"),
+            ["my_workouts"] = ("My workouts", "Meine Workouts"),
+            ["import"] = ("Import", "Importieren"),
+            ["imported"] = ("Imported", "Importiert"),
+            ["deleted"] = ("Deleted", "Gelöscht"),
+            ["delete"] = ("Delete", "Löschen"),
+            ["confirm_delete"] = ("Really delete?", "Wirklich löschen?"),
+            ["start"] = ("Start", "Start"),
+            ["share_workout"] = ("Share", "Teilen"),
+            ["no_own_workouts"] = ("No own workouts yet – import .zwo, .erg or .mrc files (e.g. from Zwift, TrainerRoad, intervals.icu).", "Noch keine eigenen Workouts – importiere .zwo-, .erg- oder .mrc-Dateien (z. B. aus Zwift, TrainerRoad, intervals.icu)."),
+            ["page"] = ("Page", "Seite"),
             ["no_trainer"] = ("No trainer connected – connect one under Devices.", "Kein Rollentrainer verbunden – unter Geräte verbinden."),
         };
 
