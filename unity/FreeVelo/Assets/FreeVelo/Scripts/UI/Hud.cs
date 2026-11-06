@@ -144,6 +144,8 @@ namespace FreeVelo.UI
             }
         }
 
+        private Texture2D _logoBike;
+
         private void DrawRail()
         {
             Ui.Rect(new Rect(_full.x, _full.y, RailW - _full.x, _full.height), Theme.Background, 0);
@@ -152,7 +154,9 @@ namespace FreeVelo.UI
             // Logo
             var logo = new Rect((RailW - 56) / 2f, 24, 56, 56);
             Ui.Rect(logo, Theme.Accent, 16);
-            Ui.DrawIcon(new Rect(logo.x + 9, logo.y + 9, logo.width - 18, logo.height - 18), Icon.Bike, Color.white);
+            _logoBike ??= Resources.Load<Texture2D>("FreeVeloLogoBike"); // the bike of the app icon
+            if (_logoBike != null) GUI.DrawTexture(new Rect(logo.x + 4, logo.y + 4, logo.width - 8, logo.height - 8), _logoBike, ScaleMode.ScaleToFit, true);
+            else Ui.DrawIcon(new Rect(logo.x + 9, logo.y + 9, logo.width - 18, logo.height - 18), Icon.Bike, Color.white);
 
             var items = new (Page Page, Icon Icon, string Label)[]
             {

@@ -16,6 +16,8 @@ const svgs = {
   // Android adaptive layers (432 px, only the inner ~66 % is always visible).
   'icon_adaptive_bg.png': [432, 432, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="432" height="432">${grad}<rect width="100" height="100" fill="url(#g)"/><rect width="100" height="100" fill="url(#h)"/></svg>`],
   'icon_adaptive_fg.png': [432, 432, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="432" height="432"><g transform="${place(0.56)}">${bike()}</g></svg>`],
+  // In-app logo (menu rail): the white bike alone on transparent, drawn on the app's orange tile.
+  '../Resources/FreeVeloLogoBike.png': [256, 256, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256"><g transform="${place(1.0)}">${bike()}</g></svg>`],
   // Startup screen logo: badge + wordmark on transparent background.
   'splash_logo.png': [1200, 400, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 100" width="1200" height="400">${grad}
      <style>@font-face{font-family:Inter;src:url(${font});} text{font-family:Inter;font-weight:600}</style>

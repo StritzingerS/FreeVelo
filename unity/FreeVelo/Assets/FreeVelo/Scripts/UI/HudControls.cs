@@ -109,15 +109,16 @@ namespace FreeVelo.UI
             SectionTitle(card, L.Get("click_buttons"), Icon.Cadence);
             float x = card.x + 24;
 
-            GUI.Label(new Rect(x, card.y + 66, 240, 22), L.Get("gear_count"), Theme.Caption);
-            int gears = Ui.Stepper(new Rect(x, card.y + 90, 230, 52), AppSettings.GearCount, null, 1, 4, AppSettings.MinGears, AppSettings.MaxGears);
+            const float left = 330; // a stepper with ±4 buttons needs about 320
+            GUI.Label(new Rect(x, card.y + 66, left, 22), L.Get("gear_count"), Theme.Caption);
+            int gears = Ui.Stepper(new Rect(x, card.y + 90, left, 52), AppSettings.GearCount, null, 1, 4, AppSettings.MinGears, AppSettings.MaxGears);
             if (gears != AppSettings.GearCount) AppSettings.GearCount = gears;
-            GUI.Label(new Rect(x, card.y + 154, 240, 22), L.Get("erg_step"), Theme.Caption);
-            int step = Ui.Stepper(new Rect(x, card.y + 178, 230, 52), AppSettings.ErgStepPercent, "%", 1, 1, 1, 5);
+            GUI.Label(new Rect(x, card.y + 154, left, 22), L.Get("erg_step"), Theme.Caption);
+            int step = Ui.Stepper(new Rect(x, card.y + 178, left, 52), AppSettings.ErgStepPercent, "%", 1, 1, 1, 5);
             if (step != AppSettings.ErgStepPercent) AppSettings.ErgStepPercent = step;
 
             // Button tiles: tap cycles harder → easier → nothing
-            var grid = new Rect(x + 260, card.y + 66, card.width - 260 - 48, card.height - 90);
+            var grid = new Rect(x + left + 30, card.y + 66, card.width - left - 30 - 48, card.height - 90);
             var buttons = AppSettings.MappableButtons;
             int cols = 5;
             float tw = (grid.width - (cols - 1) * 10) / cols, th = (grid.height - 10 - 30) / 2f;
@@ -145,18 +146,19 @@ namespace FreeVelo.UI
             Ui.Card(card);
             SectionTitle(card, L.Get("hr_zones"), Icon.Heart);
             float x = card.x + 24;
-            int basis = Ui.Segmented(new Rect(x, card.y + 70, 300, 46), new[] { L.Get("max_hr"), "LTHR" }, (int)AppSettings.HrZoneBasis);
+            const float left = 370; // stepper with ±5 and "185 bpm" needs about 350
+            int basis = Ui.Segmented(new Rect(x, card.y + 70, left, 46), new[] { L.Get("max_hr_short"), "LTHR" }, (int)AppSettings.HrZoneBasis);
             if (basis != (int)AppSettings.HrZoneBasis) AppSettings.HrZoneBasis = (HeartRateZoneBasis)basis;
             bool lthr = AppSettings.HrZoneBasis == HeartRateZoneBasis.Lthr;
-            GUI.Label(new Rect(x, card.y + 128, 300, 22), lthr ? L.Get("lthr_long") : L.Get("max_hr"), Theme.Caption);
-            int value = Ui.Stepper(new Rect(x, card.y + 152, 300, 52), lthr ? AppSettings.Lthr : AppSettings.MaxHr, "bpm", 1, 5, lthr ? 100 : 120, lthr ? 220 : 230);
+            GUI.Label(new Rect(x, card.y + 128, left, 22), lthr ? L.Get("lthr_long") : L.Get("max_hr"), Theme.Caption);
+            int value = Ui.Stepper(new Rect(x, card.y + 152, left, 52), lthr ? AppSettings.Lthr : AppSettings.MaxHr, "bpm", 1, 5, lthr ? 100 : 120, lthr ? 220 : 230);
             if (lthr && value != AppSettings.Lthr) AppSettings.Lthr = value;
             if (!lthr && value != AppSettings.MaxHr) AppSettings.MaxHr = value;
-            GUI.Label(new Rect(x, card.y + 210, 300, 30), lthr ? L.Get("lthr_hint") : L.Get("max_hr_hint"), Theme.With(Theme.Caption, Theme.Muted, 12, wrap: true));
+            GUI.Label(new Rect(x, card.y + 210, left, 34), lthr ? L.Get("lthr_hint") : L.Get("max_hr_hint"), Theme.With(Theme.Caption, Theme.Muted, 12, wrap: true));
 
             // Zones list
             var zones = AppSettings.HrZones.Zones;
-            var list = new Rect(x + 340, card.y + 70, card.width - 340 - 48, card.height - 90);
+            var list = new Rect(x + left + 40, card.y + 70, card.width - left - 40 - 48, card.height - 90);
             float rh = Mathf.Min(30, list.height / zones.Count);
             for (int i = 0; i < zones.Count; i++)
             {

@@ -105,6 +105,7 @@ namespace FreeVelo.App
             ["training"] = ("Training", "Training"),
             ["hr_zones"] = ("Heart rate zones", "Herzfrequenzzonen"),
             ["max_hr"] = ("Max heart rate", "Maximale Herzfrequenz"),
+            ["max_hr_short"] = ("Max HR", "Max. HF"),
             ["lthr_long"] = ("Threshold heart rate (LTHR)", "Schwellen-Herzfrequenz (LTHR)"),
             ["max_hr_hint"] = ("The highest value you have seen, e.g. at the end of a ramp test.", "Der höchste Wert, den du gesehen hast, z. B. am Ende eines Rampentests."),
             ["lthr_hint"] = ("About the average heart rate of the last 20 minutes of a 30-minute all-out effort.", "Etwa der Durchschnittspuls der letzten 20 Minuten einer 30-minütigen Maximalbelastung."),
