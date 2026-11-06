@@ -129,6 +129,6 @@ public class WorldMapTests
             last = s;
         }
 
-        Assert.True(path.Route.Points.Count < 4000, "old edges are dropped");
+        Assert.True(path.Route.Points.Count < 4000 + Map.Edges.Max(e => e.X.Length), "old edges are dropped"); // a climb alone has ~4900 points
     }
 }
