@@ -149,6 +149,27 @@ namespace FreeVelo.Shared.Api
         public Task DeclineFriendAsync(string requestId, CancellationToken ct = default) =>
             Send<object>(HttpMethod.Post, ApiRoutes.DeclineFriend(requestId), null, authorized: true, ct);
 
+        // ------------------------------------------------------------------ Strava (no rider identity needed)
+
+        /// <summary>Starts connecting Strava; returns the login page to open. <paramref name="state"/>: <see cref="NewStravaState"/>.</summary>
+        public async Task<string> StravaStartAsync(string state, CancellationToken ct = default) =>
+            (await Send<StravaStartResponse>(HttpMethod.Post, ApiRoutes.StravaStart, new StravaStartRequest { state = state }, authorized: false, ct)).authorizeUrl;
+
+        /// <summary>The tokens once the rider approved on Strava; null while still waiting. Throws if declined/expired.</summary>
+        public Task<StravaTokens?> StravaClaimAsync(string state, CancellationToken ct = default) =>
+            Send<StravaTokens?>(HttpMethod.Post, ApiRoutes.StravaClaim, new StravaClaimRequest { state = state }, authorized: false, ct);
+
+        public Task<StravaTokens> StravaRefreshAsync(string refreshToken, CancellationToken ct = default) =>
+            Send<StravaTokens>(HttpMethod.Post, ApiRoutes.StravaRefresh, new StravaRefreshRequest { refreshToken = refreshToken }, authorized: false, ct);
+
+        /// <summary>Random secret for one Strava login (64 hex characters).</summary>
+        public static string NewStravaState()
+        {
+            var bytes = new byte[32];
+            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create()) rng.GetBytes(bytes);
+            return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
+        }
+
         /// <summary>A new random friend code (128 bits, URL-safe).</summary>
         public static string NewFriendCode()
         {

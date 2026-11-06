@@ -87,6 +87,9 @@ namespace FreeVelo.App
             groupAvatars.Initialize(world, _group, map.MainLoop);
             hud.InitializeGroup(_group, groupAvatars);
             hud.InitializeWorld(world);
+            var strava = gameObject.AddComponent<StravaService>();
+            strava.Initialize(_ride);
+            hud.InitializeStrava(strava);
             _group.RestoreLobby(); // back into the group ride after an app restart
             _avatar = RiderAvatar.Create(world, GroupAvatars.OwnJersey);
 

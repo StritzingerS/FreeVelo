@@ -51,8 +51,13 @@ container (ASP.NET Core + SQLite), so it runs on Oracle Free or any small VPS / 
       the app re-registers riders a forgetful free server lost, and waits up to 70 s for a sleeping server
 
 ### F. Strava
-- [ ] OAuth token exchange / refresh through the server (client secret stays on the server)
-- [ ] Upload the FIT file from the device after a ride (toggle), queue while offline
+- [x] OAuth token exchange / refresh through the server (client secret stays on the server, nothing stored):
+      app starts the login with a random state, Strava sends the browser back to the server, the app collects the
+      tokens once; tokens are kept on the phone
+- [x] Upload the FIT file from the device after a ride (automatic / manual), queue while offline with back-off,
+      duplicates count as uploaded; status and "View on Strava" in the recent rides and the ride summary
+- [ ] Strava API app registered, client id/secret on Render (`docs/RENDER.md` → Strava); first real upload
+- [ ] Ask Strava for more than one athlete (needed before friends can connect)
 
 ### G. Carried over from phase 1
 - [ ] Long validation ride: full 4×4 on the Neo 2, partly with the phone locked; FIT file checked in

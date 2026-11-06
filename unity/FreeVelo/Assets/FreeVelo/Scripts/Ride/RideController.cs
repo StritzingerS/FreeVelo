@@ -72,6 +72,9 @@ namespace FreeVelo.Ride
 
         public RideSummary Summary { get; private set; }
 
+        /// <summary>A ride ended and its FIT file was written (e.g. for the Strava upload).</summary>
+        public event Action<RideSummary> RideSaved;
+
         /// <summary>Position on the route (keeps going across rides; loops wrap).</summary>
         public double DistanceM { get; private set; }
 
@@ -225,6 +228,7 @@ namespace FreeVelo.Ride
                 EstimatedFtpW = _ftpTest.HasValue && Engine != null ? FtpTests.EstimateFtp(_ftpTest.Value, power, Engine.Workout) : null,
                 FitPath = SaveFit(ftp),
             };
+            if (Summary.FitPath != null) RideSaved?.Invoke(Summary);
         }
 
         /// <summary>Writes the ride as FIT file to persistentDataPath/rides; returns the path.</summary>

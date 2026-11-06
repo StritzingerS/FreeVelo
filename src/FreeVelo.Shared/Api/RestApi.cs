@@ -30,6 +30,13 @@ namespace FreeVelo.Shared.Api
         public static string AcceptFriend(string requestId) => $"/api/v1/friends/requests/{requestId}/accept";
 
         public static string DeclineFriend(string requestId) => $"/api/v1/friends/requests/{requestId}/decline";
+
+        // Strava: the server only exchanges and refreshes tokens (the client secret stays there); the tokens are
+        // stored on the phone, which uploads the FIT files directly to Strava.
+        public const string StravaStart = "/api/v1/strava/start";
+        public const string StravaCallback = "/api/v1/strava/callback";
+        public const string StravaClaim = "/api/v1/strava/claim";
+        public const string StravaRefresh = "/api/v1/strava/refresh";
     }
 
     /// <summary>Machine-readable error codes in <see cref="ApiError.error"/>.</summary>
@@ -43,6 +50,10 @@ namespace FreeVelo.Shared.Api
         public const string TooManyRequests = "too_many_requests";
         public const string RiderNotFound = "rider_not_found";
         public const string RequestNotFound = "request_not_found";
+        public const string StravaNotConfigured = "strava_not_configured";
+        public const string StravaDenied = "strava_denied";
+        public const string StravaFailed = "strava_failed";
+        public const string InvalidState = "invalid_state";
     }
 
     public static class RiderRules
@@ -264,5 +275,51 @@ namespace FreeVelo.Shared.Api
 
         /// <summary>Riders who accepted this rider's requests (delivered once; the app stores them).</summary>
         public FriendInfo[] accepted = new FriendInfo[0];
+    }
+
+    // ------------------------------------------------------------------ Strava
+
+    /// <summary>
+    /// Starts connecting Strava: <see cref="state"/> is a random secret (64 hex characters) made by the app. Whoever
+    /// knows it can collect the tokens, so it never leaves the phone except in this request and the Strava login.
+    /// </summary>
+    [Serializable]
+    public class StravaStartRequest
+    {
+        public string state = "";
+    }
+
+    [Serializable]
+    public class StravaStartResponse
+    {
+        /// <summary>Strava's login and approval page (opens the Strava app if installed).</summary>
+        public string authorizeUrl = "";
+    }
+
+    [Serializable]
+    public class StravaClaimRequest
+    {
+        public string state = "";
+    }
+
+    [Serializable]
+    public class StravaRefreshRequest
+    {
+        public string refreshToken = "";
+    }
+
+    /// <summary>Strava tokens for one athlete, kept on the phone.</summary>
+    [Serializable]
+    public class StravaTokens
+    {
+        public string accessToken = "";
+        public string refreshToken = "";
+
+        /// <summary>When <see cref="accessToken"/> expires (Unix seconds, UTC).</summary>
+        public long expiresAt;
+
+        /// <summary>The connected athlete (only after connecting, not after a refresh).</summary>
+        public long athleteId;
+        public string athleteName = "";
     }
 }

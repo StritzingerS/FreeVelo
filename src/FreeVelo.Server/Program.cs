@@ -4,6 +4,7 @@ using FreeVelo.Server.Live;
 using FreeVelo.Server.Lobbies;
 using FreeVelo.Server.Riders;
 using FreeVelo.Server.Storage;
+using FreeVelo.Server.Strava;
 using FreeVelo.Shared.Api;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -37,6 +38,9 @@ builder.Services.AddSingleton(sp => new TokenService(jwt, signingKey, sp.GetRequ
 builder.Services.AddSingleton(live);
 builder.Services.AddSingleton<LiveHub>();
 builder.Services.AddHostedService<LiveTicker>();
+builder.Services.AddSingleton(builder.Configuration.GetSection("Strava").Get<StravaOptions>() ?? new StravaOptions());
+builder.Services.AddHttpClient(StravaService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(20));
+builder.Services.AddSingleton<StravaService>();
 
 // The messages use public fields (readable by Unity's JsonUtility too).
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.IncludeFields = true);
@@ -105,6 +109,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapRiderEndpoints();
 app.MapLobbyEndpoints();
 app.MapFriendEndpoints();
+app.MapStravaEndpoints();
 
 // Live group ride: one WebSocket per app (binary messages, see FreeVelo.Shared.Live).
 app.Map(ApiRoutes.Live, async (HttpContext context, LiveHub hub) =>

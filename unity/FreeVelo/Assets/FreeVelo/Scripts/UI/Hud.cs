@@ -631,7 +631,7 @@ namespace FreeVelo.UI
             float zonesH = 92 + (zones.Zones.Count * 58);
             var rides = RecentRides();
             float ridesH = 92 + (Mathf.Max(1, rides.Length) * 66);
-            float contentH = 8 + 280 + 24 + 160 + 24 + 240 + 24 + ridesH + 24 + zonesH + 24;
+            float contentH = 8 + 280 + 24 + 160 + 24 + 240 + 24 + StravaCardH + 24 + ridesH + 24 + zonesH + 24;
             Ui.BeginScroll(3000, view, contentH);
             float x0 = 8, y0 = 8;
 
@@ -681,7 +681,9 @@ namespace FreeVelo.UI
 
             var groupCard = new Rect(x0, app.yMax + 24, c.width, 240);
             DrawGroupSettingsCard(groupCard);
-            var ridesCard = new Rect(x0, groupCard.yMax + 24, c.width, ridesH);
+            var stravaCard = new Rect(x0, groupCard.yMax + 24, c.width, StravaCardH);
+            DrawStravaCard(stravaCard);
+            var ridesCard = new Rect(x0, stravaCard.yMax + 24, c.width, ridesH);
             DrawRecentRidesCard(ridesCard, rides);
             DrawZonesCard(new Rect(x0, ridesCard.yMax + 24, c.width, zonesH));
             Ui.EndScroll(3000, view, contentH);
@@ -735,10 +737,13 @@ namespace FreeVelo.UI
                     title = name.Substring(17).Replace('-', ' ');
                 }
 
-                float buttonsW = 2 * 52 + 10;
+                float buttonsW = (3 * 52) + 20;
+                string strava = StravaStatusText(path);
+                if (strava.Length > 0) when += "   ·   " + strava;
                 GUI.Label(new Rect(row.x + 16, row.y + 6, row.width - buttonsW - 40, 26), title, Theme.With(Theme.Body, size: 17));
                 GUI.Label(new Rect(row.x + 16, row.y + 30, row.width - buttonsW - 40, 22), when, Theme.Caption);
-                if (Ui.IconButton(new Rect(row.xMax - buttonsW - 6, row.y + 3, 52, 52), Icon.Share, ButtonKind.Secondary))
+                StravaRideButton(new Rect(row.xMax - buttonsW - 6, row.y + 3, 52, 52), path, title);
+                if (Ui.IconButton(new Rect(row.xMax - buttonsW + 56, row.y + 3, 52, 52), Icon.Share, ButtonKind.Secondary))
                     Ui.Toast(FileActions.Share(path, L.Get("share")));
                 if (Ui.IconButton(new Rect(row.xMax - 58, row.y + 3, 52, 52), Icon.Download, ButtonKind.Secondary))
                     Ui.Toast(FileActions.SaveToDownloads(path));
@@ -1101,6 +1106,8 @@ namespace FreeVelo.UI
                 float w1 = Ui.ButtonWidth(L.Get("share"), true, 56), w2 = Ui.ButtonWidth(L.Get("save_downloads"), true, 56);
                 if (Ui.Button(new Rect(actions.x, actions.y, w1, 56), L.Get("share"), ButtonKind.Secondary, Icon.Share)) Ui.Toast(FileActions.Share(s.FitPath, L.Get("share")));
                 if (Ui.Button(new Rect(actions.x + w1 + 12, actions.y, w2, 56), L.Get("save_downloads"), ButtonKind.Secondary, Icon.Download)) Ui.Toast(FileActions.SaveToDownloads(s.FitPath));
+                float w3 = Ui.ButtonWidth(L.Get("strava_uploading"), true, 56);
+                DrawSummaryStravaButton(new Rect(actions.x + w1 + w2 + 24, actions.y, w3, 56), s.FitPath, s.Title);
             }
 
             if (Ui.Button(new Rect(actions.xMax - 180, actions.y, 180, 56), L.Get("done"), ButtonKind.Primary))

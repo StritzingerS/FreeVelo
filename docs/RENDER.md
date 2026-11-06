@@ -40,6 +40,26 @@ servers are registered on the new one automatically with their name.
   restart during a ride ends it (the apps show *The group ride has ended* – just create a new one).
 - **750 free instance hours per month** – enough for one server running the whole month.
 
+## Strava
+
+The app uploads rides to Strava with the rider's own Strava login. The server only exchanges and refreshes the
+login tokens, because that needs FreeVelo's Strava *client secret*; it stores nothing.
+
+1. On <https://www.strava.com/settings/api> create an API application:
+   - **Application Name:** FreeVelo
+   - **Category:** Training
+   - **Website:** `https://github.com/StritzingerS/FreeVelo`
+   - **Authorization Callback Domain:** `freevelo.onrender.com` (your service's host name, without `https://`)
+2. In the Render dashboard → service `freevelo` → **Environment** add:
+   - `Strava__ClientId` = the *Client ID* (a number)
+   - `Strava__ClientSecret` = the *Client Secret* (never put it in the repository or a chat)
+   Render redeploys the service; afterwards *Settings → Strava → Connect with Strava* works in the app.
+3. A new Strava API application allows **one connected athlete** (you). For friends to connect, ask Strava for
+   more (on the API settings page, *athlete capacity* / developer program); they want screenshots of the
+   "Connect with Strava" button and of an upload.
+
+Without these settings the app says that the server has no Strava access set up yet.
+
 ## Updates
 
 Automatic: every push to the Blueprint's branch builds and deploys a new version (running group rides end at

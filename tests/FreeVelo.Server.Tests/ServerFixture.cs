@@ -27,11 +27,17 @@ public sealed class ServerFactory : WebApplicationFactory<Program>
     private readonly int _codeJoinsPerMinute;
     private readonly bool _behindProxy;
 
-    public ServerFactory(int identityPerMinute = 1000, int codeJoinsPerMinute = 1000, bool behindProxy = false)
+    private readonly Dictionary<string, string> _settings;
+    private readonly HttpMessageHandler? _stravaHandler;
+
+    public ServerFactory(int identityPerMinute = 1000, int codeJoinsPerMinute = 1000, bool behindProxy = false,
+        Dictionary<string, string>? settings = null, HttpMessageHandler? stravaHandler = null)
     {
         _identityPerMinute = identityPerMinute;
         _codeJoinsPerMinute = codeJoinsPerMinute;
         _behindProxy = behindProxy;
+        _settings = settings ?? new Dictionary<string, string>();
+        _stravaHandler = stravaHandler;
     }
 
     public ManualTimeProvider Time { get; } = new();
@@ -45,7 +51,16 @@ public sealed class ServerFactory : WebApplicationFactory<Program>
         builder.UseSetting("RateLimit:CodeJoinsPerMinute", _codeJoinsPerMinute.ToString());
         builder.UseSetting("Server:BehindProxy", _behindProxy ? "true" : "false");
         builder.UseSetting("Live:TickMs", "50"); // 20 Hz instead of 4 Hz: live tests finish quickly
-        builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(Time));
+        foreach (var (key, value) in _settings) builder.UseSetting(key, value);
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddSingleton<TimeProvider>(Time);
+            if (_stravaHandler != null)
+            {
+                services.AddHttpClient(FreeVelo.Server.Strava.StravaService.HttpClientName)
+                    .ConfigurePrimaryHttpMessageHandler(() => _stravaHandler);
+            }
+        });
     }
 
     protected override void Dispose(bool disposing)
