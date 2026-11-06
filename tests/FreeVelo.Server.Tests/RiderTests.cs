@@ -122,6 +122,30 @@ public sealed class RiderTests : IDisposable
     }
 
     [Fact]
+    public async Task BehindTheProxyEachClientHasItsOwnLimit()
+    {
+        using var proxied = new ServerFactory(identityPerMinute: 2, behindProxy: true);
+        var client = proxied.CreateClient();
+
+        async Task<HttpStatusCode> SignIn(string clientIp)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, ApiRoutes.Session)
+            {
+                Content = System.Net.Http.Json.JsonContent.Create(new SessionRequest { riderId = "x", secret = "y" }, options: ServerFactory.Json),
+            };
+            request.Headers.Add("X-Forwarded-For", clientIp);
+            return (await client.SendAsync(request)).StatusCode;
+        }
+
+        // Two riders behind the same proxy (Caddy) do not share one limit.
+        Assert.Equal(HttpStatusCode.Unauthorized, await SignIn("203.0.113.1"));
+        Assert.Equal(HttpStatusCode.Unauthorized, await SignIn("203.0.113.1"));
+        Assert.Equal(HttpStatusCode.Unauthorized, await SignIn("203.0.113.2"));
+        Assert.Equal(HttpStatusCode.Unauthorized, await SignIn("203.0.113.2"));
+        Assert.Equal(HttpStatusCode.TooManyRequests, await SignIn("203.0.113.1"));
+    }
+
+    [Fact]
     public async Task SignInIsRateLimitedPerClient()
     {
         using var limited = new ServerFactory(identityPerMinute: 3);

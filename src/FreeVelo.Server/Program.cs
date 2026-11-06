@@ -71,10 +71,18 @@ builder.Services.AddRateLimiter(o =>
     o.AddPolicy(LobbyEndpoints.CodeRateLimit, http => PerIp(http, codePerMinute));
 });
 
-// Behind Caddy (reverse proxy on the same host): the client IP comes from X-Forwarded-For.
+// Behind Caddy: the client IP comes from X-Forwarded-For (rate limits are per client). By default only a proxy
+// on localhost is trusted; with Server:BehindProxy (Docker Compose, where Caddy is another container and port
+// 8080 is not published) the proxy in front is trusted whatever its address.
+bool behindProxy = builder.Configuration.GetValue("Server:BehindProxy", false);
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    if (behindProxy)
+    {
+        o.KnownIPNetworks.Clear();
+        o.KnownProxies.Clear();
+    }
 });
 
 var app = builder.Build();

@@ -21,18 +21,22 @@ jobs:
         run: dotnet test FreeVelo.slnx --configuration Release
 
   server-image:
-    name: Server Docker image
+    name: Server Docker image (with Caddy)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Build image
-        run: docker build -f src/FreeVelo.Server/Dockerfile -t freevelo-server .
-      - name: Start and check health
+      - name: Build and start the deploy setup (Caddy with a local certificate for "localhost")
+        working-directory: deploy
+        run: FREEVELO_DOMAIN=localhost docker compose up -d --build
+      - name: Health and an API call through HTTPS
         run: |
-          docker run -d --name freevelo -p 8080:8080 freevelo-server
-          for i in $(seq 1 30); do curl -sf http://localhost:8080/health && exit 0; sleep 1; done
-          docker logs freevelo
-          exit 1
+          for i in $(seq 1 60); do curl -skf https://localhost/health && break; sleep 1; done
+          curl -skf https://localhost/health
+          curl -skf -X POST -H 'content-type: application/json' -d '{"displayName":"CI"}' https://localhost/api/v1/riders | grep -q riderId
+      - name: Logs
+        if: always()
+        working-directory: deploy
+        run: FREEVELO_DOMAIN=localhost docker compose logs
 
   android:
     name: Android BLE test app
