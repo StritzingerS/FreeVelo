@@ -62,14 +62,17 @@ public sealed class LiveConnection
                 var (status, reason) = _closeRequest ?? (WebSocketCloseStatus.NormalClosure, "bye");
                 await Socket.CloseOutputAsync(status, reason, cancellationToken);
             }
+
+            // Give the app a moment to confirm the close: the receive loop ends on its answer. Ending the request
+            // right away can make a proxy in between (Render, phone networks) drop the last frames.
+            _closed.CancelAfter(TimeSpan.FromSeconds(5));
+            return;
         }
         catch (Exception e) when (e is WebSocketException or OperationCanceledException)
         {
             // The app went away; the receive loop notices too.
         }
-        finally
-        {
-            _closed.Cancel();
-        }
+
+        _closed.Cancel();
     }
 }
