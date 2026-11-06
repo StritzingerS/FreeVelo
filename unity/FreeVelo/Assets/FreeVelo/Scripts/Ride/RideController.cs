@@ -31,6 +31,11 @@ namespace FreeVelo.Ride
         public double IntensityFactor;
         public double Tss;
         public double? AvgHeartRate;
+        public int? MaxPowerW;
+        public double AscentM;
+
+        /// <summary>Energy burned in kcal: about the mechanical work in kJ (body efficiency ≈ 24 % cancels 4.184 kJ/kcal).</summary>
+        public double Kcal;
         public int? EstimatedFtpW;
         public IReadOnlyDictionary<int, double> PowerCurve;
 
@@ -164,6 +169,9 @@ namespace FreeVelo.Ride
                 IntensityFactor = PowerMetrics.IntensityFactor(np, ftp),
                 Tss = PowerMetrics.TrainingStressScore(power.Count, np, ftp),
                 AvgHeartRate = stats.AvgHeartRate,
+                MaxPowerW = stats.MaxPowerW,
+                AscentM = stats.AscentM,
+                Kcal = stats.WorkKj,
                 PowerCurve = PowerMetrics.PowerCurve(power),
                 EstimatedFtpW = _ftpTest.HasValue && Engine != null ? FtpTests.EstimateFtp(_ftpTest.Value, power, Engine.Workout) : null,
                 FitPath = SaveFit(ftp),

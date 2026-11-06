@@ -924,8 +924,8 @@ namespace FreeVelo.UI
             var s = _ride.Summary;
             Ui.Rect(_full, new Color(0, 0, 0, 0.45f), 0);
             float cw = Mathf.Min(900, _w - 80);
-            int tileCount = s.AvgHeartRate.HasValue ? 7 : 6;
-            float contentH = 108 + (((tileCount + 3) / 4) * 92) + 8 + (s.PowerCurve != null && s.PowerCurve.Count > 0 ? 146 : 0) + (s.EstimatedFtpW.HasValue ? 88 : 0) + 104;
+            const int tileCount = 6, cols = 3; // always two full rows
+            float contentH = 108 + (((tileCount + cols - 1) / cols) * 92) + 8 + (s.PowerCurve != null && s.PowerCurve.Count > 0 ? 146 : 0) + (s.EstimatedFtpW.HasValue ? 88 : 0) + 104;
             float ch = Mathf.Min(_h - 56, contentH);
             var r = new Rect((_w - cw) / 2f, (_h - ch) / 2f, cw, ch);
             Ui.Card(r, Theme.Surface, 24);
@@ -936,18 +936,18 @@ namespace FreeVelo.UI
             GUI.Label(new Rect(x + 68, r.y + 26, w - 68, 36), L.Get("ride_complete"), Theme.H1);
             GUI.Label(new Rect(x + 68, r.y + 62, w - 68, 24), s.Title, Theme.BodyMuted);
 
-            // Stat tiles
+            // Stat tiles: the ride (time, distance, elevation), then the effort (power, calories, heart rate).
             var tiles = new List<(string Label, string Value)>
             {
                 (L.Get("time"), Ui.Clock(s.DurationS)),
                 (L.Get("distance"), $"{s.DistanceM / 1000:0.00} km"),
+                (L.Get("ascent"), $"{s.AscentM:0} m"),
                 (L.Get("avg_power"), $"{s.AvgPowerW:0} W"),
-                ("NP", $"{s.NormalizedPowerW:0} W"),
-                ("IF", $"{s.IntensityFactor:0.00}"),
-                ("TSS", $"{s.Tss:0}"),
+                (L.Get("calories"), $"{s.Kcal:0} kcal"),
+                s.AvgHeartRate.HasValue
+                    ? (L.Get("avg_hr"), $"{s.AvgHeartRate:0} bpm")
+                    : (L.Get("max_power"), $"{s.MaxPowerW ?? 0} W"),
             };
-            if (s.AvgHeartRate.HasValue) tiles.Add((L.Get("avg_hr"), $"{s.AvgHeartRate:0} bpm"));
-            int cols = 4;
             float tw = (w - (12 * (cols - 1))) / cols;
             for (int i = 0; i < tiles.Count; i++)
             {
