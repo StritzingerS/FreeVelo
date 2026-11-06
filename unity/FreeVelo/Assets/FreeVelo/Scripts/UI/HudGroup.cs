@@ -63,7 +63,7 @@ namespace FreeVelo.UI
             SectionTitle(card, L.Get("your_name"), Icon.Group);
 
             float x = card.x + 24, w = card.width - 48;
-            _nameInput = Field(new Rect(x, card.y + 70, w, 56), _nameInput, RiderRules.MaxDisplayNameLength, "Sami");
+            _nameInput = Field(new Rect(x, card.y + 70, w, 56), _nameInput, RiderRules.MaxDisplayNameLength, L.Get("name_example"));
             GUI.Label(new Rect(x, card.y + 130, w, 44), L.Get("name_hint"), Theme.With(Theme.Caption, size: 14));
             GUI.Label(new Rect(x, card.yMax - 70, w - 240, 50), $"{L.Get("server")}: {ServerHost()}\n<color=#76828F>{L.Get("server_change_hint")}</color>", Theme.With(Theme.Caption, size: 13, anchor: TextAnchor.MiddleLeft));
 

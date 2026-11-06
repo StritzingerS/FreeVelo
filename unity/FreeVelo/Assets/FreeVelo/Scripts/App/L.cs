@@ -146,6 +146,7 @@ namespace FreeVelo.App
             ["group_rides"] = ("Group rides", "Gruppenfahrten"),
             ["group_intro"] = ("Ride together with friends – no account needed, just a name.", "Fahr mit Freunden zusammen – ohne Konto, nur mit einem Namen."),
             ["your_name"] = ("Your name", "Dein Name"),
+            ["name_example"] = ("e.g. Alex", "z. B. Alex"),
             ["name_hint"] = ("Shown to the others in group rides. You can change it later.", "So sehen dich die anderen in Gruppenfahrten. Du kannst ihn später ändern."),
             ["continue"] = ("Continue", "Weiter"),
             ["server"] = ("Server", "Server"),
