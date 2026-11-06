@@ -44,6 +44,9 @@ public sealed class Renderer
     private float _shadowScale;
 
     private readonly Vector3? _shadowCenter;
+
+    /// <summary>Distance fog like the game (off for top-down maps).</summary>
+    public bool Fog { get; set; } = true;
     private readonly float _shadowRadius;
 
     public Renderer(List<SceneMesh> meshes, Vector3? shadowCenter = null, float shadowRadius = 0)
@@ -216,7 +219,7 @@ public sealed class Renderer
                 var pos = (m.Positions[ia] * pa) + (m.Positions[ib] * pb) + (m.Positions[ic] * pc);
                 var n = Vector3.Normalize((m.Normals[ia] * pa) + (m.Normals[ib] * pb) + (m.Normals[ic] * pc));
                 var shaded = Shade(pos, n, albedo, m.Smoothness, m.Metallic, eye);
-                if (_shadowCenter != null)
+                if (_shadowCenter != null && Fog)
                 {
                     float fog = Math.Clamp((Vector3.Distance(pos, eye) - 180f) / (3600f - 180f), 0f, 1f);
                     shaded = Vector3.Lerp(shaded, SrgbToLinear(new Vector3(0.73f, 0.8f, 0.87f)), fog);

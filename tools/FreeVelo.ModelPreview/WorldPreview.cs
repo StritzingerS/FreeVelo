@@ -169,12 +169,31 @@ public static class WorldPreview
         Console.WriteLine($"-> {output} ({sw.ElapsedMilliseconds} ms)");
     }
 
-    private static List<SceneMesh> SceneMeshes(WorldMap map, Terrain terrain, SceneryLayout layout, Vector3 eye, double radius)
+    /// <summary>Straight down onto the whole world (north up), with all scenery.</summary>
+    public static void Top(string output, int size)
+    {
+        var map = WorldMap.Default;
+        var terrain = Terrain.Build(map);
+        var layout = SceneryLayout.Generate(terrain);
+        var (minX, minZ, maxX, maxZ) = map.Bounds;
+        var center = new Vector3((float)(minX + maxX) / 2, 0, (float)(minZ + maxZ) / 2);
+        float extent = (float)Math.Max(maxX - minX, maxZ - minZ) + 500;
+        const float fov = 30;
+        float height = extent / 2 / MathF.Tan(fov * MathF.PI / 360);
+        var camera = new Camera { Name = "top", Position = center + new Vector3(0, height, -0.01f * height), Target = center, FieldOfView = fov };
+        var meshes = SceneMeshes(map, terrain, layout, center, extent * 0.75, detailRadius: 0);
+        var renderer = new Renderer(meshes, shadowCenter: center, shadowRadius: extent) { Fog = false };
+        var img = Renderer.ToImage(renderer.Render(camera, size * 2, size * 2), size * 2, size * 2, 2, out _, out _);
+        Renderer.WritePng(output, img, size, size);
+        Console.WriteLine($"top view {extent:0} m wide, {meshes.Sum(m => m.Triangles.Length / 3) / 1000}k triangles -> {output}");
+    }
+
+    private static List<SceneMesh> SceneMeshes(WorldMap map, Terrain terrain, SceneryLayout layout, Vector3 eye, double radius, double detailRadius = 110)
     {
         var meshes = new List<SceneMesh>();
 
         // Terrain: 4 m grid close by, 12 m further away.
-        foreach (var (inner, outer, step) in new[] { (0.0, 260.0, 1), (240.0, radius, 3) })
+        foreach (var (inner, outer, step) in detailRadius > 0 ? new[] { (0.0, 260.0, 1), (240.0, radius, 3) } : new[] { (0.0, radius, 2) })
         {
             var pos = new List<Vector3>();
             var nrm = new List<Vector3>();
@@ -300,7 +319,7 @@ public static class WorldPreview
             double dist = Math.Sqrt(((item.X - eye.X) * (item.X - eye.X)) + ((item.Z - eye.Z) * (item.Z - eye.Z)));
             if (dist > radius) continue;
             var model = SceneryModels.Get(item.Kind, item.Variant);
-            var parts = dist < 110 ? model.Lod0 : model.Lod1;
+            var parts = dist < detailRadius ? model.Lod0 : model.Lod1;
             var rot = Rot.AboutY(item.RotationDeg);
             var at = new Vector3(item.X, item.Y, item.Z);
             foreach (var (material, mesh) in parts)

@@ -18,6 +18,12 @@ if (args.Length > 1 && args[0] == "--world")
     return;
 }
 
+if (args.Length > 1 && args[0] == "--top")
+{
+    WorldPreview.Top(args[1], args.Length > 2 ? int.Parse(args[2]) : 1600);
+    return;
+}
+
 if (args.Length > 1 && args[0] == "--map")
 {
     WorldPreview.Map(args[1], args.Length > 2 ? int.Parse(args[2]) : FreeVelo.Core.World.Gen.WorldMap.DefaultSeed);
