@@ -528,7 +528,8 @@ namespace FreeVelo.UI
                 (Icon.Bolt, L.Get("power_meter"), hub.PowerMeterAddress, null),
                 (Icon.Heart, L.Get("heart_rate"), hub.HeartRateAddress, null),
             };
-            float rw = (c.width - 32) / 3f;
+            float rw = (c.width - 48) / 4f;
+            DrawControllerCard(new Rect(c.x + (3 * (rw + 16)), c.y + 86, rw, 96));
             for (int i = 0; i < roles.Length; i++)
             {
                 var r = new Rect(c.x + (i * (rw + 16)), c.y + 86, rw, 96);

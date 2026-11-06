@@ -10,7 +10,7 @@ namespace FreeVelo.UI
     /// <summary>Virtual gears (ride screen buttons, settings), Zwift controller status, backup.</summary>
     public sealed partial class Hud
     {
-        private const float ControlsCardH = 236;
+        private const float ControlsCardH = 220;
         private const float BackupCardH = 150;
 
         /// <summary>Ride screen: harder (+) / easier (−) with the current virtual gear, right side.</summary>
@@ -25,7 +25,7 @@ namespace FreeVelo.UI
             if (Ui.IconButton(new Rect(card.x + 12, card.yMax - 76, 64, 64), Icon.Minus, ButtonKind.Secondary, gears.Gear > 0)) _ride.Shift(-1);
         }
 
-        /// <summary>Settings: virtual gear mode and the Zwift controllers.</summary>
+        /// <summary>Settings: virtual gear mode (the controller itself is on the devices page).</summary>
         private void DrawControlsCard(Rect card)
         {
             Ui.Card(card);
@@ -41,33 +41,41 @@ namespace FreeVelo.UI
                 VirtualGearMode.Erg => L.Get("gears_erg_hint"),
                 _ => L.Get("gears_off_hint"),
             };
-            GUI.Label(new Rect(card.x + 24, card.y + 152, 480, 64), hint, Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+            GUI.Label(new Rect(card.x + 24, card.y + 152, card.width - 48, 64), hint, Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+        }
 
-            // Zwift controllers
-            var right = new Rect(card.x + 540, card.y + 68, card.width - 540 - 24, card.height - 90);
-            GUI.Label(new Rect(right.x, right.y, right.width, 22), "Zwift Click / Play", Theme.Caption);
+        /// <summary>Devices page: the Zwift controller(s) next to trainer, power meter and heart rate.</summary>
+        private void DrawControllerCard(Rect r)
+        {
             var controllers = _ble.Hub.Controllers;
-            float y = right.y + 28;
-            if (controllers.Count == 0)
+            bool any = controllers.Count > 0;
+            bool locked = controllers.Any(c => c.State == ZwiftControllerState.Locked);
+            bool ready = controllers.Any(c => c.State == ZwiftControllerState.Ready);
+            var color = ready ? Theme.Success : locked ? Theme.Warning : Theme.Faint;
+            Ui.Card(r);
+            var circle = new Rect(r.x + 18, r.y + 22, 52, 52);
+            Ui.Rect(circle, any ? Theme.Alpha(color, 0.16f) : Theme.Surface2, 26);
+            Ui.DrawIcon(new Rect(circle.center.x - 13, circle.center.y - 13, 26, 26), Icon.Cadence, any ? color : Theme.Faint);
+            GUI.Label(new Rect(r.x + 84, r.y + 20, r.width - 100, 18), "ZWIFT CLICK", Theme.Overline);
+            if (!any)
             {
-                GUI.Label(new Rect(right.x, y, right.width, 80), L.Get("zwift_none"), Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+                GUI.Label(new Rect(r.x + 84, r.y + 40, r.width - 100, 28), L.Get("not_connected"), Theme.With(Theme.BodyMuted, size: 17));
                 return;
             }
 
-            foreach (var c in controllers.Take(3))
+            // One line per unit (a Click V2 has two): state and battery
+            float y = r.y + 40;
+            foreach (var c in controllers.Take(2))
             {
-                var color = c.State == ZwiftControllerState.Ready ? Theme.Success : c.State == ZwiftControllerState.Locked ? Theme.Warning : Theme.Faint;
-                Ui.Dot(new Vector2(right.x + 6, y + 12), 5, color);
                 string state = L.Get("zwift_" + c.State.ToString().ToLowerInvariant());
                 string battery = c.Battery.HasValue ? $" · {c.Battery} %" : "";
-                GUI.Label(new Rect(right.x + 18, y, right.width - 18, 24), $"{_ble.NameOf(c.Address)} – {state}{battery}", Clip(Theme.With(Theme.Body, size: 15)));
-                y += 28;
+                var col = c.State == ZwiftControllerState.Ready ? Theme.Text : c.State == ZwiftControllerState.Locked ? Theme.Warning : Theme.Muted;
+                GUI.Label(new Rect(r.x + 84, y, r.width - 100, 22), $"{state}{battery}", Clip(Theme.With(Theme.Body, col, 15)));
+                y += 22;
             }
 
-            if (controllers.Any(c => c.State == ZwiftControllerState.Locked))
-            {
-                GUI.Label(new Rect(right.x, y, right.width, 54), L.Get("zwift_locked_hint"), Theme.With(Theme.Caption, Theme.Warning, wrap: true));
-            }
+            // Locked unit: the explanation on tap (the card is small)
+            if (locked && GUI.Button(r, GUIContent.none, GUIStyle.none)) Ui.Toast(L.Get("zwift_locked_hint"), 8f);
         }
 
         /// <summary>Settings: export a backup ZIP or restore one (picked with the import file picker).</summary>

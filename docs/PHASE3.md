@@ -41,7 +41,7 @@ to wake up.
 - [x] Zwift Click V2 (and Click / Play / Ride): own module `FreeVelo.Devices.Zwift` after the community-documented
       protocol (RideOn handshake, keep-alive every 3 s, 0x23 button bitmap). + / A harder, − / B easier.
       The Click V2 **left** unit is locked by Zwift (unlock by connecting it to Zwift, lasts about 24 h);
-      the right unit works on its own (+ harder, B easier). The app shows "locked" in Settings → Controls.
+      the right unit works on its own (+ harder, B easier). The devices page shows the controller next to trainer, power meter and heart rate, with "locked" for a locked unit.
 - [ ] Test with the real Click V2 (both units, keep-alive, locked left unit) and decide Grade vs. ERG gears by feel
 
 ### Done when

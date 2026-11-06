@@ -151,7 +151,6 @@ namespace FreeVelo.App
             ["gears_grade_hint"] = ("Leave the bike in a middle gear (about 50×23) and shift with + / −. The trainer gets a matching grade.", "Rad in einem mittleren Gang lassen (etwa 50×23) und mit + / − schalten. Der Trainer bekommt eine passende Steigung."),
             ["gears_erg_hint"] = ("Leave the bike in a middle gear and shift with + / −. The trainer holds the power the road needs at your cadence.", "Rad in einem mittleren Gang lassen und mit + / − schalten. Der Trainer hält die Leistung, die die Straße bei deiner Trittfrequenz verlangt."),
             ["gear"] = ("Gear", "Gang"),
-            ["zwift_none"] = ("No Zwift controller connected. Connect it under Devices (both units of a Click V2).", "Kein Zwift-Controller verbunden. Unter Geräte verbinden (beim Click V2 beide Teile)."),
             ["zwift_connecting"] = ("connecting", "verbindet"),
             ["zwift_ready"] = ("ready", "bereit"),
             ["zwift_locked"] = ("locked", "gesperrt"),
