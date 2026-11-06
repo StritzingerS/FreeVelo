@@ -7,11 +7,14 @@ namespace FreeVelo.Server.Tests;
 /// <summary>A rider as the app would be: created once, then signed in with the stored id and secret.</summary>
 public sealed class TestRider
 {
-    private TestRider(HttpClient client, RiderCredentials credentials)
+    private TestRider(HttpClient client, RiderCredentials credentials, string accessToken)
     {
         Client = client;
         Credentials = credentials;
+        AccessToken = accessToken;
     }
+
+    public string AccessToken { get; }
 
     /// <summary>Client that sends this rider's access token.</summary>
     public HttpClient Client { get; }
@@ -28,8 +31,9 @@ public sealed class TestRider
         var credentials = await created.Read<RiderCredentials>();
         var session = await client.Post(ApiRoutes.Session, new SessionRequest { riderId = credentials.riderId, secret = credentials.secret });
         Assert.Equal(HttpStatusCode.OK, session.StatusCode);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", (await session.Read<SessionResponse>()).accessToken);
-        return new TestRider(client, credentials);
+        string token = (await session.Read<SessionResponse>()).accessToken;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return new TestRider(client, credentials, token);
     }
 }
 

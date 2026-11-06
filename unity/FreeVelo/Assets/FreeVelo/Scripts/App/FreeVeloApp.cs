@@ -62,7 +62,7 @@ namespace FreeVelo.App
             _ride = gameObject.AddComponent<RideController>();
             var hud = gameObject.AddComponent<Hud>();
 
-            var route = ProceduralRoutes.Generate(seed: 1, lengthM: 10_000, hilliness: 0.6);
+            var route = BuiltInRoutes.Get(BuiltInRoutes.DefaultId); // same route the server uses for group rides
             world.Build(route);
             _ride.Initialize(_ble, route);
             hud.Initialize(_ble, _ride);

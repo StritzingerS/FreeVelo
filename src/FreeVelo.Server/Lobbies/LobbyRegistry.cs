@@ -129,6 +129,16 @@ public sealed class LobbyRegistry
         lock (_sync) LeaveLocked(riderId);
     }
 
+    /// <summary>The open ride with this id, or null once it closed.</summary>
+    public Lobby? Get(string lobbyId)
+    {
+        lock (_sync)
+        {
+            RemoveIdle();
+            return _byId.TryGetValue(lobbyId, out var lobby) ? lobby : null;
+        }
+    }
+
     public Lobby? Of(string riderId)
     {
         lock (_sync)

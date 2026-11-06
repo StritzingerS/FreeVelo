@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using FreeVelo.Server.Live;
 using FreeVelo.Server.Lobbies;
 using FreeVelo.Server.Riders;
 using FreeVelo.Server.Storage;
@@ -11,6 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 var server = builder.Configuration.GetSection("Server").Get<ServerOptions>() ?? new ServerOptions();
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
+var live = builder.Configuration.GetSection("Live").Get<LiveOptions>() ?? new LiveOptions();
 int identityPerMinute = builder.Configuration.GetValue("RateLimit:IdentityRequestsPerMinute", 20);
 int codePerMinute = builder.Configuration.GetValue("RateLimit:CodeJoinsPerMinute", 10);
 
@@ -24,6 +26,9 @@ builder.Services.AddSingleton(sp => new Database(Path.Combine(server.DataDirecto
 builder.Services.AddSingleton<RiderStore>();
 builder.Services.AddSingleton<LobbyRegistry>();
 builder.Services.AddSingleton(sp => new TokenService(jwt, signingKey, sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton(live);
+builder.Services.AddSingleton<LiveHub>();
+builder.Services.AddHostedService<LiveTicker>();
 
 // The messages use public fields (readable by Unity's JsonUtility too).
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.IncludeFields = true);
@@ -39,6 +44,20 @@ builder.Services
             ValidAudience = JwtOptions.Audience,
             IssuerSigningKey = signingKey,
             ClockSkew = TimeSpan.FromSeconds(30),
+        };
+
+        // WebSocket clients that cannot set headers may pass the token as ?access_token=… (live endpoint only).
+        o.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (context.HttpContext.Request.Path == ApiRoutes.Live && context.Request.Query.TryGetValue("access_token", out var token))
+                {
+                    context.Token = token;
+                }
+
+                return Task.CompletedTask;
+            },
         };
     });
 builder.Services.AddAuthorization();
@@ -61,6 +80,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -68,6 +88,19 @@ app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapRiderEndpoints();
 app.MapLobbyEndpoints();
+
+// Live group ride: one WebSocket per app (binary messages, see FreeVelo.Shared.Live).
+app.Map(ApiRoutes.Live, async (HttpContext context, LiveHub hub) =>
+{
+    if (!context.WebSockets.IsWebSocketRequest || TokenService.RiderId(context.User) is not { } riderId)
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        return;
+    }
+
+    using var socket = await context.WebSockets.AcceptWebSocketAsync();
+    await hub.Run(socket, riderId, context.RequestAborted);
+}).RequireAuthorization();
 
 // Opens the database (and runs migrations) at startup instead of on the first request.
 app.Services.GetRequiredService<Database>();

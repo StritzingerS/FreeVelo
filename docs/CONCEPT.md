@@ -35,7 +35,7 @@
 | Engine | **Unity 6 (LTS)**, URP mobile renderer, C# |
 | Shared logic | Plain C# libraries (`netstandard2.1`), engine-independent and unit-testable |
 | BLE on Android | Own Kotlin plugin (`.aar`), exposed to C# via a thin bridge |
-| Server | **ASP.NET Core (.NET 10 LTS)**, WebSockets + MessagePack, PostgreSQL (or SQLite) |
+| Server | **ASP.NET Core (.NET 10 LTS)**, WebSockets with a small hand-written binary format (no library, IL2CPP-safe), SQLite |
 | Hosting | **Oracle Cloud Always Free** (ARM VM), Caddy as reverse proxy with Let's Encrypt, free domain (e.g. DuckDNS) |
 | Identity | **No email, no password:** on first start the app creates a rider with just a display name; the server returns a random secret that stays on the device and is used to get a JWT session. Private group rides are protected by a **4-letter invite code** |
 | Client data | SQLite on device + FIT files; manual backup export/import (ZIP) |
@@ -269,9 +269,9 @@ GDPR: privacy policy, rider deletion in the app, minimal logs.
 - Emoji reactions (👍 🔥 💪 😅 👋 …) shown above the avatar + in a feed.
 
 ### 9.3 Network
-- WebSocket (WSS) + MessagePack. Client → server 4 Hz: `{distance, lane, speed, wkg, cadence, active}`.
+- WebSocket (WSS), binary frames (`FreeVelo.Shared.Live`). Client → server 4 Hz: `{distance, lane, speed, wkg, cadence}`.
 - Server → clients 4 Hz: snapshot of all riders + group anchor. Clients interpolate (100–250 ms buffer).
-- REST for auth, lobby list, Strava OAuth proxy.
+- REST for riders/sessions, group rides (create, join by code, list), Strava OAuth proxy.
 
 ### 9.4 Keep Together algorithm (server-authoritative anchor)
 ```

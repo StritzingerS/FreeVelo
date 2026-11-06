@@ -6,6 +6,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY src/Directory.Build.props src/Directory.Build.targets src/
 COPY src/FreeVelo.Shared/ src/FreeVelo.Shared/
+COPY src/FreeVelo.Core/ src/FreeVelo.Core/
 COPY src/FreeVelo.Server/ src/FreeVelo.Server/
 RUN dotnet publish src/FreeVelo.Server/FreeVelo.Server.csproj -c Release -o /app
 

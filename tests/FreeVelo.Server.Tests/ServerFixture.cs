@@ -41,6 +41,7 @@ public sealed class ServerFactory : WebApplicationFactory<Program>
         builder.UseSetting("Server:DataDirectory", _dataDirectory);
         builder.UseSetting("RateLimit:IdentityRequestsPerMinute", _identityPerMinute.ToString());
         builder.UseSetting("RateLimit:CodeJoinsPerMinute", _codeJoinsPerMinute.ToString());
+        builder.UseSetting("Live:TickMs", "50"); // 20 Hz instead of 4 Hz: live tests finish quickly
         builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(Time));
     }
 

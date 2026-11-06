@@ -13,6 +13,9 @@ namespace FreeVelo.Shared.Api
         public const string JoinByCode = "/api/v1/lobbies/join";
         public const string LeaveLobby = "/api/v1/lobbies/leave";
 
+        /// <summary>WebSocket of the current group ride (binary live messages, see FreeVelo.Shared.Live).</summary>
+        public const string Live = "/api/v1/live";
+
         /// <summary>Join a public group ride from the list: POST to this with the lobby id.</summary>
         public static string JoinPublic(string lobbyId) => $"/api/v1/lobbies/{lobbyId}/join";
     }

@@ -17,14 +17,16 @@ container (ASP.NET Core + SQLite), so it runs on Oracle Free or any small VPS / 
       public), 4-letter invite code for private rides, public list, join, leave, host hand-over, idle cleanup
 
 ### B. Shared protocol (`src/FreeVelo.Shared`) – client + server
-- [ ] Network messages (rider state 4 Hz, snapshots, lobby events, emoji) – compact binary encoding without
+- [x] Network messages (rider state 4 Hz, snapshots, lobby events, emoji) – compact binary encoding without
       external dependencies (works with Unity IL2CPP)
-- [ ] Keep Together algorithm (server-authoritative anchor, elastic offsets, towing riders who stop)
+- [x] Keep Together algorithm (server-authoritative anchor, elastic offsets, towing riders who stop) – in
+      `FreeVelo.Core/Multiplayer`, routes shared by id (`BuiltInRoutes`)
 
 ### C. Server – realtime
-- [ ] WebSocket realtime: rider states in, snapshots out at 4 Hz; join mid-ride at the group's position
-- [ ] Keep Together anchor simulation on the server; Free mode relays positions
-- [ ] Emoji reactions
+- [x] WebSocket realtime: rider states in, snapshots out at 4 Hz; join mid-ride at the group's position;
+      reconnect within 2 min keeps the place, then the rider leaves the ride
+- [x] Keep Together anchor simulation on the server; Free mode relays positions
+- [x] Emoji reactions (relay, max. one per second per rider)
 
 ### D. Unity app
 - [ ] First start: display name (rider created in the background, secret kept on the device)

@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FreeVelo.Shared\FreeVelo.Shared.csproj" />
+    <ProjectReference Include="..\FreeVelo.Core\FreeVelo.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
