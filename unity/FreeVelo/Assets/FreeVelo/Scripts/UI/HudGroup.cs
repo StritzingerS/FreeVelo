@@ -371,7 +371,7 @@ namespace FreeVelo.UI
             }
 
             // Rider list (left): who is where, relative to me.
-            var panel = new Rect(24, 100, 300, 44 + (Mathf.Min(riders.Count, 8) * 38));
+            var panel = new Rect(24, _leftTop, 300, 44 + (Mathf.Min(riders.Count, 8) * 38));
             Ui.Card(panel, Theme.Alpha(Theme.Background, 0.85f));
             GUI.Label(new Rect(panel.x + 16, panel.y + 12, panel.width - 32, 20), (_group.Lobby?.name ?? L.Get("group")).ToUpperInvariant(), Clip(Theme.Overline));
             float y = panel.y + 40;

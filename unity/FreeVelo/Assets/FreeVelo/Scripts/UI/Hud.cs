@@ -817,6 +817,9 @@ namespace FreeVelo.UI
 
         // ------------------------------------------------------------------ ride
 
+        // Top of the cards at the right / left side of the ride screen (set by DrawRide).
+        private float _sideTop = 24, _leftTop = 100;
+
         private void DrawRide()
         {
             var live = _ble.Hub.Live;
@@ -829,8 +832,11 @@ namespace FreeVelo.UI
             if (Ui.IconButton(new Rect(24, 24, 60, 60), _ride.IsPaused ? Icon.Play : Icon.Pause)) _ride.TogglePause();
             if (Ui.IconButton(new Rect(92, 24, 60, 60), Icon.Stop)) _confirmEnd = true;
 
-            // Metrics bar (top centre)
-            float barW = Mathf.Min(820, _w - 520);
+            // Metrics bar (top centre). The side cards (320 wide + margins) go next to it when there is room,
+            // otherwise below the distance/grade chips.
+            const float sideSpace = 344 + 16;
+            bool sidesBeside = _w - (2 * sideSpace) >= 640;
+            float barW = sidesBeside ? Mathf.Min(820, _w - (2 * sideSpace)) : Mathf.Min(820, _w - 48);
             var bar = new Rect((_w - barW) / 2f, 20, barW, 112);
             Ui.Card(bar, Theme.Alpha(Theme.Background, 0.88f));
             float powerW = barW * 0.3f;
@@ -858,6 +864,8 @@ namespace FreeVelo.UI
 
             // Chips under the bar: distance, grade
             float cy = bar.yMax + 16;
+            _sideTop = sidesBeside ? 24 : cy + 54;
+            _leftTop = sidesBeside ? 100 : cy + 54;
             string grade = $"{pos.GradePercent:+0.0;-0.0;0.0} %";
             var gradeColor = pos.GradePercent > 4 ? Theme.Danger : pos.GradePercent > 1.5 ? Theme.Warning : pos.GradePercent < -1.5 ? Theme.Info : Theme.Muted;
             var chipStyle = Theme.With(Theme.H3, size: 17, anchor: TextAnchor.MiddleLeft);
@@ -944,7 +952,7 @@ namespace FreeVelo.UI
             int ftp = engine.FtpW;
 
             // Interval card (right)
-            var card = new Rect(_w - 344, 24, 320, 330);
+            var card = new Rect(_w - 344, _sideTop, 320, 330);
             if (_ride.WorkoutComplete)
             {
                 // Done: the ride continues as a free ride (trainer simulates the road).

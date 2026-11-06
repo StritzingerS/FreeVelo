@@ -41,7 +41,7 @@ namespace FreeVelo.UI
             double ahead = junction.DistanceM - _ride.DistanceM;
             if (ahead > 400 || ahead < 0) return;
 
-            var card = workout ? new Rect(24, 100, 320, 0) : new Rect(_w - 344, 24, 320, 0);
+            var card = workout ? new Rect(24, _leftTop, 320, 0) : new Rect(_w - 344, _sideTop, 320, 0);
             card.height = 64 + (junction.Options.Count * 62);
             Ui.Card(card, Theme.Alpha(Theme.Background, 0.9f));
             GUI.Label(new Rect(card.x + 20, card.y + 14, card.width - 40, 20), L.Get("junction").ToUpperInvariant(), Theme.Overline);

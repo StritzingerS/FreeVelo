@@ -113,6 +113,7 @@ namespace FreeVelo.Devices.Session
         private (long Ms, int Value)? _trainerPowerValue;
         private (long Ms, int Value)? _meterPowerValue;
         private (long Ms, double Value)? _trainerCadence;
+        private readonly CadenceGlitchFilter _trainerCadenceFilter = new CadenceGlitchFilter();
         private (long Ms, double Value)? _meterCadence;
         private (long Ms, double Value)? _trainerSpeed;
         private (long Ms, int Value)? _heartRate;
@@ -237,6 +238,7 @@ namespace FreeVelo.Devices.Session
                 _ftmsControlGranted = false;
                 _ftmsControlRequested = false;
                 _ftmsTrainingStatus = null;
+                _trainerCadenceFilter.Reset();
             }
         }
 
@@ -279,14 +281,14 @@ namespace FreeVelo.Devices.Session
             else if (characteristic == IndoorBikeDataChar && IndoorBikeData.TryParse(data, out var ibd) && ibd != null)
             {
                 if (ibd.PowerW.HasValue) _trainerPowerValue = (now, ibd.PowerW.Value);
-                if (ibd.CadenceRpm.HasValue) _trainerCadence = (now, ibd.CadenceRpm.Value);
+                if (ibd.CadenceRpm.HasValue) _trainerCadence = (now, _trainerCadenceFilter.Next(now, ibd.CadenceRpm.Value, ibd.PowerW));
                 if (ibd.SpeedKmh.HasValue) _trainerSpeed = (now, ibd.SpeedKmh.Value);
                 if (ibd.HeartRateBpm.HasValue && ibd.HeartRateBpm > 0) _trainerHeartRate = (now, ibd.HeartRateBpm.Value);
             }
             else if (characteristic == TacxFec.RxCharacteristic && FecData.TryParse(data, out var fec) && fec != null)
             {
                 if (fec.PowerW.HasValue) _trainerPowerValue = (now, fec.PowerW.Value);
-                if (fec.CadenceRpm.HasValue) _trainerCadence = (now, fec.CadenceRpm.Value);
+                if (fec.CadenceRpm.HasValue) _trainerCadence = (now, _trainerCadenceFilter.Next(now, fec.CadenceRpm.Value, Value(_trainerPowerValue, now)));
                 if (fec.SpeedKmh.HasValue) _trainerSpeed = (now, fec.SpeedKmh.Value);
                 if (fec.HeartRateBpm.HasValue) _trainerHeartRate = (now, fec.HeartRateBpm.Value);
                 if (fec.Page == 0x19 && fec.TrainerStatus.HasFlag(FecTrainerStatus.UserConfigurationRequired))
