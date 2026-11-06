@@ -20,8 +20,10 @@ namespace FreeVelo.World
         private const float ShoulderWidth = 0.9f;
         private const int TerrainChunkCells = 32;
         private const float SceneryChunk = 100f;
-        private const float DetailRadius = 75f;
-        private const float NearChunkRadius = 150f;
+        /// <summary>Trees, houses and bushes are drawn in full detail up to this distance (instanced).</summary>
+        private const float DetailRadius = 220f;
+        /// <summary>Chunks closer than this (centre) are drawn item by item; must exceed DetailRadius + half a chunk diagonal.</summary>
+        private const float NearChunkRadius = 300f;
 
         private readonly Dictionary<(Color, Texture), Material> _materials = new Dictionary<(Color, Texture), Material>();
         private readonly Dictionary<(SceneryKind, int, int), (Mesh Mesh, Material[] Materials)> _models = new Dictionary<(SceneryKind, int, int), (Mesh, Material[])>();
