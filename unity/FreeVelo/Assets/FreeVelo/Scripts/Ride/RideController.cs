@@ -113,6 +113,7 @@ namespace FreeVelo.Ride
             _ble.ApplySettings();
             _recording = new RideRecording(DateTime.UtcNow, workout != null ? workout.Name.Get(AppSettings.Language) : L.Get("free_ride"));
             _lastSegmentIndex = -1;
+            _workoutComplete = false;
             _sampleTimer = 0;
             _rideStartDistanceM = DistanceM; // continue where the rider is, but count this ride from 0
             _physics.SpeedMps = 0;
@@ -203,23 +204,31 @@ namespace FreeVelo.Ride
         /// <summary>Ride clock in seconds (usable from any thread, unlike Time.time).</summary>
         public float ClockS => (float)Clock.Elapsed.TotalSeconds;
 
-        private bool _finishPending;
+        private bool _workoutComplete;
         private DateTime _lastStepUtc;
+
+        /// <summary>The workout is done; the ride goes on as a free ride until the rider ends it.</summary>
+        public bool WorkoutComplete => _workoutComplete;
 
         private void Update()
         {
             lock (BleService.Sync)
             {
-                if (_finishPending)
-                {
-                    _finishPending = false;
-                    ShowCue(L.Get("finished"));
-                    EndRide();
-                    return;
-                }
-
                 Step(Mathf.Min(Time.deltaTime, 0.25f), background: false);
             }
+        }
+
+        /// <summary>
+        /// Once, when the last block ends: the ride and its recording go on in free-ride mode (trainer simulates
+        /// the road, own lap), so a 50 min workout can be ridden on to a full hour.
+        /// </summary>
+        private void CompleteWorkoutIfDone(bool background)
+        {
+            if (_workoutComplete || Engine == null || !Engine.IsFinished) return;
+            _workoutComplete = true;
+            _recording.StartLap();
+            ShowCue(L.Get("finished"));
+            if (background) RideKeepAlive.Alert(L.Get("finished"), L.Get("finished_background"));
         }
 
         /// <summary>
@@ -300,25 +309,7 @@ namespace FreeVelo.Ride
                 _ble.Hub.SetSimulation(position.GradePercent, crr, _physics.WindResistanceCoefficient);
             }
 
-            if (Engine != null && Engine.IsFinished)
-            {
-                // Saving the FIT file needs the main thread: in the background, finish when the app returns.
-                if (background)
-                {
-                    // The recording ends here (no more samples, no catch-up); release the trainer and tell the
-                    // rider, who cannot see the screen.
-                    _finishPending = true;
-                    _physics.SpeedMps = 0;
-                    _ble.Hub.SetSimulation(0);
-                    RideKeepAlive.Update(L.Get("finished"));
-                    RideKeepAlive.Alert(L.Get("finished"), L.Get("finished_background"));
-                }
-                else
-                {
-                    ShowCue(L.Get("finished"));
-                    EndRide();
-                }
-            }
+            CompleteWorkoutIfDone(background);
         }
 
         /// <summary>Background tick from the Android plugin (Unity paused): Bluetooth, trainer and ride go on.</summary>
@@ -327,7 +318,7 @@ namespace FreeVelo.Ride
             lock (BleService.Sync)
             {
                 _ble.BackgroundTick();
-                if (!_finishPending) Step(Mathf.Min(dt, 1f), background: true);
+                Step(Mathf.Min(dt, 1f), background: true);
             }
         }
 
@@ -366,7 +357,7 @@ namespace FreeVelo.Ride
             RideKeepAlive.ClearAlert();
 
             // Catch up only what the background ticks did not cover (normally nothing).
-            if (_backgroundSinceUtc.HasValue && State == RideState.Riding && !_finishPending)
+            if (_backgroundSinceUtc.HasValue && State == RideState.Riding)
             {
                 lock (BleService.Sync)
                 {
@@ -407,6 +398,8 @@ namespace FreeVelo.Ride
                         if (_lastSegmentIndex >= 0) _recording.StartLap();
                         _lastSegmentIndex = Engine.CurrentIndex;
                     }
+
+                    CompleteWorkoutIfDone(background: false);
                 }
 
                 time = time.AddSeconds(1);

@@ -840,8 +840,21 @@ namespace FreeVelo.UI
 
             // Interval card (right)
             var card = new Rect(_w - 344, 24, 320, 330);
-            Ui.Card(card, Theme.Alpha(Theme.Background, 0.88f));
-            if (state.Segment != null)
+            if (_ride.WorkoutComplete)
+            {
+                // Done: the ride continues as a free ride (trainer simulates the road).
+                card.height = 150;
+                Ui.Card(card, Theme.Alpha(Theme.Background, 0.88f));
+                GUI.Label(new Rect(card.x + 22, card.y + 18, card.width - 44, 18), L.Get("finished").ToUpperInvariant(), Theme.With(Theme.Overline, Theme.Success));
+                GUI.Label(new Rect(card.x + 22, card.y + 42, card.width - 44, 48), L.Get("free_ride_on"), Theme.With(Theme.H1, size: 30));
+                GUI.Label(new Rect(card.x + 22, card.y + 92, card.width - 44, 44), $"Workout {Ui.Clock(engine.TotalDurationS)} · {L.Get("time")} {Ui.Clock(_ride.ElapsedS)}", Theme.Caption);
+            }
+            else
+            {
+                Ui.Card(card, Theme.Alpha(Theme.Background, 0.88f));
+            }
+
+            if (state.Segment != null && !_ride.WorkoutComplete)
             {
                 var seg = state.Segment;
                 string kind = seg.Repeat.HasValue ? $"{L.Get("interval")} {seg.Repeat}" : L.Get("block");
