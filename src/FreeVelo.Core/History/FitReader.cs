@@ -32,9 +32,19 @@ namespace FreeVelo.Core.History
     /// speed, altitude). Enough to rebuild the history from FIT files – FreeVelo's own and other apps'.
     /// Handles normal and compressed-timestamp headers, both byte orders and developer fields (skipped).
     /// </summary>
+    /// <summary>Records and lap starts of a FIT activity.</summary>
+    public sealed class FitActivity
+    {
+        public List<FitRecord> Records { get; } = new List<FitRecord>();
+
+        /// <summary>Start of each lap (FreeVelo writes one lap per workout block).</summary>
+        public List<DateTime> LapStarts { get; } = new List<DateTime>();
+    }
+
     public static class FitReader
     {
         private const int RecordMessage = 20;
+        private const int LapMessage = 19;
         private static readonly DateTime FitEpoch = new DateTime(1989, 12, 31, 0, 0, 0, DateTimeKind.Utc);
 
         private sealed class Definition
@@ -46,7 +56,10 @@ namespace FreeVelo.Core.History
         }
 
         /// <summary>Reads the records; throws <see cref="InvalidDataException"/> if it is not a FIT file.</summary>
-        public static List<FitRecord> ReadRecords(byte[] data)
+        public static List<FitRecord> ReadRecords(byte[] data) => ReadActivity(data).Records;
+
+        /// <summary>Reads records and laps; throws <see cref="InvalidDataException"/> if it is not a FIT file.</summary>
+        public static FitActivity ReadActivity(byte[] data)
         {
             if (data.Length < 14 || data[8] != (byte)'.' || data[9] != (byte)'F' || data[10] != (byte)'I' || data[11] != (byte)'T')
             {
@@ -57,7 +70,8 @@ namespace FreeVelo.Core.History
             int dataSize = BitConverter.ToInt32(data, 4);
             int end = Math.Min(data.Length, headerSize + dataSize);
             var definitions = new Definition?[16];
-            var records = new List<FitRecord>();
+            var activity = new FitActivity();
+            var records = activity.Records;
             uint lastTimestamp = 0;
             int i = headerSize;
 
@@ -73,7 +87,7 @@ namespace FreeVelo.Core.History
                     if (ts < lastTimestamp) ts += 0x20;
                     lastTimestamp = ts;
                     var def = definitions[local] ?? throw new InvalidDataException("Data before definition");
-                    i = ReadData(data, i, def, ts, records, ref lastTimestamp);
+                    i = ReadData(data, i, def, ts, activity, ref lastTimestamp);
                     continue;
                 }
 
@@ -98,20 +112,23 @@ namespace FreeVelo.Core.History
                 else
                 {
                     var def = definitions[localType] ?? throw new InvalidDataException("Data before definition");
-                    i = ReadData(data, i, def, null, records, ref lastTimestamp);
+                    i = ReadData(data, i, def, null, activity, ref lastTimestamp);
                 }
             }
 
-            return records;
+            activity.LapStarts.Sort();
+            return activity;
         }
 
-        private static int ReadData(byte[] data, int i, Definition def, uint? compressedTs, List<FitRecord> records, ref uint lastTimestamp)
+        private static int ReadData(byte[] data, int i, Definition def, uint? compressedTs, FitActivity activity, ref uint lastTimestamp)
         {
             uint? timestamp = compressedTs;
+            uint? lapStart = null;
             uint? power = null, hr = null, cadence = null, distance = null, speed = null, altitude = null;
             foreach (var (field, size) in def.Fields)
             {
                 if (i + size > data.Length) throw new InvalidDataException("Truncated FIT file");
+                if (def.Global == LapMessage && field == 2) lapStart = Read(data, i, size, def.BigEndian);
                 if (def.Global == RecordMessage || field == 253)
                 {
                     uint? value = Read(data, i, size, def.BigEndian);
@@ -138,9 +155,10 @@ namespace FreeVelo.Core.History
             }
 
             i += def.DeveloperBytes;
+            if (def.Global == LapMessage && lapStart.HasValue) activity.LapStarts.Add(FitEpoch.AddSeconds(lapStart.Value));
             if (def.Global == RecordMessage && timestamp.HasValue)
             {
-                records.Add(new FitRecord(
+                activity.Records.Add(new FitRecord(
                     FitEpoch.AddSeconds(timestamp.Value),
                     (int?)power,
                     (int?)hr,

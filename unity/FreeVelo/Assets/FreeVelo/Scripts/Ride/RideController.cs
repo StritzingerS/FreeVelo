@@ -75,7 +75,7 @@ namespace FreeVelo.Ride
         private bool _wasGroupRide;
 
         /// <summary>Virtual gears (used when <see cref="AppSettings.GearMode"/> is not Off).</summary>
-        public VirtualGears Gears { get; } = new VirtualGears();
+        public VirtualGears Gears { get; private set; } = new VirtualGears();
 
         /// <summary>Virtual gears act now: a free / group ride or a free part of a workout (in ERG blocks, shifting changes the intensity).</summary>
         public bool GearsActive => State == RideState.Riding && AppSettings.GearMode != VirtualGearMode.Off && !InErgBlock;
@@ -190,6 +190,7 @@ namespace FreeVelo.Ride
             WorkoutState = Engine?.Current;
             _intensitySum = 0;
             _intensitySeconds = 0;
+            if (Gears.Count != AppSettings.GearCount) Gears = new VirtualGears(AppSettings.GearCount);
             Gears.Set(Gears.NearestGear(Gears.ReferenceRatio));
             _ftpTest = FtpTestOf(workout);
 
@@ -214,19 +215,14 @@ namespace FreeVelo.Ride
         public void Shift(int steps)
         {
             if (State != RideState.Riding) return;
-            if (InErgBlock) AdjustBlockIntensity(0.01 * steps);
+            if (InErgBlock) AdjustBlockIntensity(0.01 * AppSettings.ErgStepPercent * steps);
             else if (AppSettings.GearMode != VirtualGearMode.Off) Gears.Shift(steps);
         }
 
-        /// <summary>Zwift controller buttons (may come from the Bluetooth thread): + / A harder, − / B easier.</summary>
+        /// <summary>Zwift controller buttons (may come from the Bluetooth thread); what they do is set in Settings.</summary>
         public void OnControllerButton(ZwiftButton button)
         {
-            int step = button switch
-            {
-                ZwiftButton.ShiftUpRight or ZwiftButton.ShiftDownRight or ZwiftButton.A or ZwiftButton.ClickPlus or ZwiftButton.Up => +1,
-                ZwiftButton.ShiftUpLeft or ZwiftButton.ShiftDownLeft or ZwiftButton.B or ZwiftButton.ClickMinus or ZwiftButton.Down => -1,
-                _ => 0,
-            };
+            int step = AppSettings.ButtonAction(button); // as assigned in Settings (cached, thread-safe)
             if (step != 0) System.Threading.Interlocked.Add(ref _pendingShift, step);
         }
 
@@ -454,7 +450,7 @@ namespace FreeVelo.Ride
             else
             {
                 // Virtual gears: the bike stays in one gear, the trainer gets the road as felt in the virtual gear.
-                double grade = position.GradePercent * AppSettings.TrainerDifficulty;
+                double grade = position.GradePercent * _ble.Hub.TrainerDifficulty; // (not PlayerPrefs: may run in the background)
                 double mass = _physics.TotalMassKg;
                 double cw = _physics.WindResistanceCoefficient;
                 if (AppSettings.GearMode == VirtualGearMode.Erg)

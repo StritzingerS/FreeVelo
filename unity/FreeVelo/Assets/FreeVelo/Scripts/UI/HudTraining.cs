@@ -260,7 +260,7 @@ namespace FreeVelo.UI
             var rides = HistoryStore.Rides;
             var view = new Rect(c.x - 8, c.y, c.width + 16, c.height);
             int shown = Mathf.Min(rides.Count, 30);
-            float contentH = 220 + 16 + 200 + 16 + 230 + 24 + 30 + (Mathf.Max(1, shown) * 62) + 16;
+            float contentH = 220 + 16 + CalendarCardH + 16 + 200 + 16 + 230 + 24 + 30 + (Mathf.Max(1, shown) * 62) + 16;
             Ui.BeginScroll(3102, view, contentH);
             float x0 = 8, w = c.width;
             var today = DateTime.Now.Date;
@@ -290,8 +290,12 @@ namespace FreeVelo.UI
                 DrawFitnessChart(new Rect(fit.x + 24, fit.y + 74, fit.width - 48, fit.height - 92), fitness.Skip(Math.Max(0, fitness.Count - 90)).ToList());
             }
 
+            // Month calendar
+            var calendar = new Rect(x0, fit.yMax + 16, w, CalendarCardH);
+            DrawCalendar(calendar);
+
             // Weekly volume (12 weeks)
-            float y = fit.yMax + 16;
+            float y = calendar.yMax + 16;
             var vol = new Rect(x0, y, w, 200);
             Ui.Card(vol);
             SectionTitle(vol, L.Get("weekly_volume"), Icon.Timer);
@@ -346,6 +350,8 @@ namespace FreeVelo.UI
                     if (Ui.IconButton(new Rect(bx + 108, row.y + 4, 46, 46), Icon.Download, ButtonKind.Ghost)) Ui.Toast(FileActions.SaveToDownloads(fitPath));
                 }
 
+                // The rest of the row opens the ride's detail
+                if (GUI.Button(new Rect(row.x, row.y, row.width - buttonsW - 8, row.height), GUIContent.none, GUIStyle.none)) OpenRideDetail(r);
                 float sx = row.x + 170 + w * 0.26f + 8;
                 float sw = (row.xMax - buttonsW - 16 - sx) / 4f;
                 Stat(new Rect(sx, row.y, sw, row.height), Ui.Clock(r.durationS));

@@ -32,6 +32,10 @@ to wake up.
 - [x] Group and free rides count as load (CTL/ATL) only; a session is done when its workout was ridden
 - [x] Backup: one ZIP (settings, rides, history, own workouts, plan) via the share sheet; restored by picking it in the
       import file picker. Not included: server identity and Strava login
+- [x] Ride detail (tap a ride in History or the calendar): tiles, power / heart rate / elevation graph, time in power
+      and heart rate zones, laps per workout block (read from the FIT file)
+- [x] Heart rate zones: 5 zones in % max HR or 7 zones in % LTHR (Friel), set in Settings → Profile
+- [x] History month calendar: TSS per day, the plan's sessions as dots, tap opens the ride
 - [ ] Test on the phone: plan for a few weeks, history after importing the existing rides, backup to another phone
 
 ### D. Controls
@@ -42,6 +46,8 @@ to wake up.
       protocol (RideOn handshake, keep-alive every 3 s, 0x23 button bitmap). + / A harder, − / B easier.
       The Click V2 **left** unit is locked by Zwift (unlock by connecting it to Zwift, lasts about 24 h);
       the right unit works on its own (+ harder, B easier). The devices page shows the controller next to trainer, power meter and heart rate, with "locked" for a locked unit.
+- [x] Controller settings (Settings → Trainer & shifting): what each Click V2 button does (harder / easier / nothing),
+      number of virtual gears (12–30), ERG step per press (1–5 %)
 - [ ] Test with the real Click V2 (both units, keep-alive, locked left unit) and decide Grade vs. ERG gears by feel
 
 ### Done when

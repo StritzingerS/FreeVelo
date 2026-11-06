@@ -28,6 +28,7 @@ namespace FreeVelo.UI
             Devices,
             Settings,
             Editor,
+            RideDetail,
         }
 
         private enum WorkoutTab
@@ -138,6 +139,7 @@ namespace FreeVelo.UI
                 case Page.Workouts: DrawWorkouts(content); break;
                 case Page.Devices: DrawDevices(content); break;
                 case Page.Training: DrawTraining(content); break;
+                case Page.RideDetail: DrawRideDetail(content); break;
                 case Page.Settings: DrawSettings(content); break;
             }
         }
@@ -165,7 +167,7 @@ namespace FreeVelo.UI
             foreach (var item in items)
             {
                 var r = new Rect(8, y, RailW - 16, 80);
-                bool selected = _page == item.Page;
+                bool selected = _page == item.Page || (_page == Page.RideDetail && item.Page == Page.Training);
                 var pill = new Rect(r.center.x - 30, r.y + 8, 60, 38);
                 if (selected) Ui.Rect(pill, Theme.Alpha(Theme.Accent, 0.18f), 19);
                 Ui.DrawIcon(new Rect(pill.center.x - 13, pill.center.y - 13, 26, 26), item.Icon, selected ? Theme.Accent : Theme.Muted);
@@ -654,8 +656,8 @@ namespace FreeVelo.UI
             bool sim = _ble.BackendName == "Simulator";
             const float sectionH = 40, gap = 24;
             float contentH = 8
-                + sectionH + 280 + gap + zonesH + gap              // profile
-                + sectionH + 280 + gap + (sim ? 160 + gap : 0)     // trainer
+                + sectionH + 280 + gap + zonesH + gap + HrCardH + gap          // profile
+                + sectionH + 280 + gap + ButtonsCardH + gap + (sim ? 160 + gap : 0) // trainer
                 + sectionH + ServerCardH + gap                     // riding together
                 + sectionH + StravaCardH + gap + BackupCardH + gap // data
                 + sectionH + 160 + gap;                            // app
@@ -683,6 +685,8 @@ namespace FreeVelo.UI
             y += 280 + gap;
             DrawZonesCard(new Rect(x0, y, c.width, zonesH));
             y += zonesH + gap;
+            DrawHeartRateCard(new Rect(x0, y, c.width, HrCardH));
+            y += HrCardH + gap;
 
             // ---- Trainer: difficulty, power source, virtual gears
             y = SettingsSection(x0, y, L.Get("section_trainer"));
@@ -700,6 +704,8 @@ namespace FreeVelo.UI
             if (newSource != AppSettings.PowerSource) AppSettings.PowerSource = newSource;
             DrawControlsCard(new Rect(x0 + colW + 24, y, colW, 280));
             y += 280 + gap;
+            DrawButtonsCard(new Rect(x0, y, c.width, ButtonsCardH));
+            y += ButtonsCardH + gap;
             if (sim)
             {
                 var simCard = new Rect(x0, y, colW, 160);

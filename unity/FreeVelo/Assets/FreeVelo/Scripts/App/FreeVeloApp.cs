@@ -62,6 +62,7 @@ namespace FreeVelo.App
             Screen.autorotateToLandscapeRight = true;
             Screen.orientation = ScreenOrientation.AutoRotation;
 
+            AppSettings.Preload(); // settings the ride logic reads in the background
             _ble = gameObject.AddComponent<BleService>();
             var world = gameObject.AddComponent<WorldBuilder>();
             _world = world;
