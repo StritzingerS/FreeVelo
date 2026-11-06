@@ -2,8 +2,8 @@
 // traced in the pixel coordinates of a 2000 × 1294 side-view photo, no brand markings.
 const P = {
   rear: [618, 800], front: [1390, 800], R: 254,
-  bb: [928, 850], seat: [834, 452], post: [786, 340],
-  headTop: [1262, 446], headBot: [1298, 560], stay: [832, 580],
+  bb: [928, 850], seat: [834, 484], post: [786, 340],
+  headTop: [1262, 478], headBot: [1298, 560], stay: [832, 580],
 };
 const p = a => a.join(' ');
 module.exports.P = P;
@@ -19,7 +19,7 @@ module.exports.bikePx = (c = '#fff') => `
   <path stroke-width="42" d="M${p(P.headBot)} L${p(P.front)}"/>
   <path stroke-width="40" d="M${p(P.seat)} L${p(P.post)}"/>
   <path stroke-width="34" d="M684 318 Q770 332 862 318"/>
-  <path stroke-width="32" d="M${p(P.headTop)} L1292 376 L1400 370 C1452 372 1458 448 1412 476"/>
+  <path stroke-width="32" d="M${p(P.headTop)} L1292 410 L1400 404 C1452 406 1458 480 1412 506"/>
 </g>
 <circle cx="${P.bb[0]}" cy="${P.bb[1]}" r="60" fill="${c}"/>`;
 
