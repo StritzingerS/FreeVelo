@@ -555,7 +555,22 @@ namespace FreeVelo.UI
                     ly += 24;
                 }
 
-                if (!string.IsNullOrEmpty(_ble.LogFilePath)) GUI.Label(new Rect(log.x + 16, log.yMax - 28, log.width - 32, 20), _ble.LogFilePath, Theme.With(Theme.Caption, Theme.Faint, 13));
+                string path = _ble.LogFilePath;
+                if (!string.IsNullOrEmpty(path))
+                {
+                    // Android/data cannot be opened by other apps (Android 11+): share or copy the log from here.
+                    GUI.Label(new Rect(log.x + 16, log.yMax - 28, log.width - 380, 20), System.IO.Path.GetFileName(path), Clip(Theme.With(Theme.Caption, Theme.Faint, 13)));
+                    if (Ui.Button(new Rect(log.xMax - 356, log.yMax - 50, 170, 40), L.Get("share_log"), ButtonKind.Secondary, Icon.Share))
+                    {
+                        string error = FileActions.Share(path, L.Get("share_log"));
+                        if (error != null) Ui.Toast(error);
+                    }
+
+                    if (Ui.Button(new Rect(log.xMax - 178, log.yMax - 50, 166, 40), L.Get("save_log"), ButtonKind.Secondary, Icon.Download))
+                    {
+                        Ui.Toast(FileActions.SaveToDownloads(path));
+                    }
+                }
             }
         }
 

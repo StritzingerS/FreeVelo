@@ -19,6 +19,8 @@ namespace FreeVelo.App
             ["not_connected"] = ("Not connected", "Nicht verbunden"),
             ["nearby"] = ("Nearby devices", "Geräte in der Nähe"),
             ["show_log"] = ("Show log", "Log anzeigen"),
+            ["share_log"] = ("Share log", "Log teilen"),
+            ["save_log"] = ("To Downloads", "In Downloads"),
             ["hide_log"] = ("Hide log", "Log ausblenden"),
             ["rider"] = ("Rider", "Fahrer"),
             ["app"] = ("App", "App"),
