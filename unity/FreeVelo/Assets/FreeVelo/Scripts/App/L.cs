@@ -108,6 +108,8 @@ namespace FreeVelo.App
             ["language"] = ("Language", "Sprache"),
             ["sim_power"] = ("Simulated rider power (editor)", "Simulierte Fahrerleistung (Editor)"),
             ["low_cadence"] = ("Low cadence – ERG reduced", "Niedrige Trittfrequenz – ERG reduziert"),
+            ["erg_too_fast"] = ("Too fast for ERG – shift to an easier gear", "Zu schnell für ERG – leichteren Gang wählen"),
+            ["erg_too_fast_kmh"] = ("Too fast for ERG – easier gear, below {0:0} km/h", "Zu schnell für ERG – leichterer Gang, unter {0:0} km/h"),
             ["min"] = ("min", "Min."),
             ["intensity"] = ("Intensity", "Intensität"),
             ["finished"] = ("Workout complete!", "Workout geschafft!"),

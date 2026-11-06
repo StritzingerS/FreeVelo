@@ -101,6 +101,7 @@ namespace FreeVelo.Devices.Session
         private static readonly Guid HeartRateService = GattUuids.FromShort(GattUuids.HeartRateService);
         private static readonly Guid IndoorBikeDataChar = GattUuids.FromShort(GattUuids.IndoorBikeData);
         private static readonly Guid ControlPointChar = GattUuids.FromShort(GattUuids.FitnessMachineControlPoint);
+        private static readonly Guid TrainingStatusChar = GattUuids.FromShort(GattUuids.TrainingStatus);
         private static readonly Guid CyclingPowerChar = GattUuids.FromShort(GattUuids.CyclingPowerMeasurement);
         private static readonly Guid HeartRateChar = GattUuids.FromShort(GattUuids.HeartRateMeasurement);
 
@@ -133,6 +134,9 @@ namespace FreeVelo.Devices.Session
         private bool _ftmsControlRequested;
         private long _ftmsControlRequestedMs;
         private long _lowCadenceSinceMs = -1;
+        private byte? _ftmsTrainingStatus;
+        private long _ergOverSinceMs = -1;
+        private long _ergTooFastUntilMs = NeverMs;
         private bool _fecUserConfigRequested;
         private long _fecUserConfigSentMs = NeverMs;
 
@@ -165,6 +169,21 @@ namespace FreeVelo.Devices.Session
         public bool LowCadenceProtectionActive { get; private set; }
 
         public bool IsErgMode => _ergMode;
+
+        /// <summary>
+        /// FTMS training status "speed outside of control region – high": the wheel turns too fast for the trainer
+        /// to get down to the ERG target even at minimum resistance (typical for rollers like the Elite Nero).
+        /// </summary>
+        public const byte FtmsStatusSpeedTooHigh = 0x0A;
+
+        /// <summary>
+        /// True while the trainer cannot hold the ERG target because the rider is too fast (gear too big): the
+        /// trainer reports it, or the power stays clearly above the target.
+        /// </summary>
+        public bool ErgSpeedTooHigh { get; private set; }
+
+        /// <summary>Estimated speed (km/h) at which the trainer could hold the current ERG target.</summary>
+        public double? ErgMaxSpeedKmh { get; private set; }
 
         /// <summary>The ERG target currently sent to the trainer (after ramping/protection).</summary>
         public int? SentErgTargetW => double.IsNaN(_ergSent) ? (int?)null : (int)Math.Round(_ergSent);
@@ -217,6 +236,7 @@ namespace FreeVelo.Devices.Session
             {
                 _ftmsControlGranted = false;
                 _ftmsControlRequested = false;
+                _ftmsTrainingStatus = null;
             }
         }
 
@@ -251,7 +271,12 @@ namespace FreeVelo.Devices.Session
             long now = _clockMs();
             bool isTrainer = address == TrainerAddress;
 
-            if (characteristic == IndoorBikeDataChar && IndoorBikeData.TryParse(data, out var ibd) && ibd != null)
+            if (characteristic == TrainingStatusChar && data.Length >= 2)
+            {
+                if (_ftmsTrainingStatus != data[1]) Log?.Invoke($"FTMS training status 0x{data[1]:X2}");
+                _ftmsTrainingStatus = data[1];
+            }
+            else if (characteristic == IndoorBikeDataChar && IndoorBikeData.TryParse(data, out var ibd) && ibd != null)
             {
                 if (ibd.PowerW.HasValue) _trainerPowerValue = (now, ibd.PowerW.Value);
                 if (ibd.CadenceRpm.HasValue) _trainerCadence = (now, ibd.CadenceRpm.Value);
@@ -432,6 +457,7 @@ namespace FreeVelo.Devices.Session
 
             if (_ergMode) TickErg(trainer, now, dt);
             else TickSim(trainer, now);
+            UpdateErgRange(now);
 
             _resendNeeded = false;
         }
@@ -475,6 +501,44 @@ namespace FreeVelo.Devices.Session
                     ? FtmsControlPoint.SetTargetPower(rounded)
                     : TacxFec.SetTargetPower(rounded);
                 if (Send(trainer, CommandCharacteristic, command, null)) _ergSent = rounded;
+            }
+        }
+
+        /// <summary>Over the target by this much (W, or fraction of the target if larger) counts as "too fast".</summary>
+        private const int ErgOverWatts = 15;
+        private const double ErgOverFraction = 0.12;
+        private const long ErgOverDelayMs = 8000;
+        private const long ErgTooFastHoldMs = 3000;
+
+        private void UpdateErgRange(long now)
+        {
+            int target = double.IsNaN(_ergSent) ? 0 : (int)Math.Round(_ergSent);
+            int? power = Live.TrainerPowerW ?? Live.PowerW;
+            double? speed = Live.TrainerSpeedKmh;
+            // Only at a normal cadence and a settled target (not while ramping or reduced for low cadence)
+            bool pedaling = _ergMode && target > 0 && power.HasValue && Live.CadenceRpm >= LowCadenceRpm
+                && Math.Abs(_ergCurrent - _ergTarget) < 1;
+
+            bool over = pedaling && power!.Value > target + Math.Max(ErgOverWatts, target * ErgOverFraction);
+            if (over) { if (_ergOverSinceMs < 0) _ergOverSinceMs = now; }
+            else _ergOverSinceMs = -1;
+
+            bool reported = _ftmsTrainingStatus == FtmsStatusSpeedTooHigh && pedaling && power!.Value > target + 5;
+            bool tooFast = reported || (_ergOverSinceMs >= 0 && now - _ergOverSinceMs >= ErgOverDelayMs);
+            if (tooFast) _ergTooFastUntilMs = now + ErgTooFastHoldMs;
+
+            bool show = _ergMode && (tooFast || now < _ergTooFastUntilMs);
+            if (show && tooFast && speed > 0 && power > 0)
+            {
+                // Rollers and most wheel-speed trainers: power at minimum resistance grows roughly with speed.
+                ErgMaxSpeedKmh = Math.Floor(speed!.Value * target / power!.Value);
+            }
+
+            if (!show) ErgMaxSpeedKmh = null;
+            if (show != ErgSpeedTooHigh)
+            {
+                ErgSpeedTooHigh = show;
+                Log?.Invoke(show ? $"ERG: too fast for {target} W – trainer at minimum resistance" : "ERG: back in control range");
             }
         }
 

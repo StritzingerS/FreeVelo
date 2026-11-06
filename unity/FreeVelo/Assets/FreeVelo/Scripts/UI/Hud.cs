@@ -807,6 +807,9 @@ namespace FreeVelo.UI
             string warning = _ble.Hub.TrainerAddress == null ? L.Get("no_trainer")
                 : _ride.IsAutoPaused ? L.Get("paused_pedal")
                 : _ble.Hub.LowCadenceProtectionActive ? L.Get("low_cadence")
+                : _ble.Hub.ErgSpeedTooHigh ? (_ble.Hub.ErgMaxSpeedKmh is double max && max >= 5
+                    ? string.Format(L.Get("erg_too_fast_kmh"), max)
+                    : L.Get("erg_too_fast"))
                 : _ride.IsPaused ? L.Get("paused")
                 : null;
             if (warning != null)
