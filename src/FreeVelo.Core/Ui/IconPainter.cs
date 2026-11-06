@@ -38,6 +38,15 @@ namespace FreeVelo.Core.Ui
         Search,
         Skip,
         Trainer,
+        Group,
+        ThumbsUp,
+        Fire,
+        Drop,
+        Hand,
+        TurnLeft,
+        TurnRight,
+        Straight,
+        Tow,
     }
 
     /// <summary>
@@ -227,6 +236,17 @@ namespace FreeVelo.Core.Ui
             return pts;
         }
 
+        /// <summary>Closed outline of a rounded bar at 45° (a chain link).</summary>
+        private static Vector2[] Stadium(Vector2 c, float length, float radius)
+        {
+            var axis = Vector2.Normalize(V(1, -1)) * (length / 2 - radius);
+            var pts = new List<Vector2>();
+            pts.AddRange(Arc(c + axis, radius, -135, 45, 10));
+            pts.AddRange(Arc(c - axis, radius, 45, 225, 10));
+            pts.Add(pts[0]);
+            return pts.ToArray();
+        }
+
         private static List<Shape> Shapes(Icon icon)
         {
             var s = new List<Shape>();
@@ -391,6 +411,62 @@ namespace FreeVelo.Core.Ui
                     s.Add(Line(V(3.5f, 20), V(20.5f, 20)));
                     s.Add(Line(V(7, 20), V(10.5f, 9), V(15, 13)));
                     s.Add(Line(V(13, 20), V(10.5f, 9)));
+                    break;
+                case Icon.Group:
+                    // Two riders: heads and shoulders, the front one larger.
+                    s.Add(new Ring(V(9, 8), 3.4f, Stroke));
+                    s.Add(new Polyline(Stroke, Arc(V(9, 21), 6.5f, 200, 340)));
+                    s.Add(new Ring(V(16.5f, 9), 2.8f, Stroke));
+                    s.Add(new Polyline(Stroke, Arc(V(17.5f, 20.5f), 5, 230, 330)));
+                    break;
+                case Icon.ThumbsUp:
+                    // Cuff, fist and the thumb pointing up.
+                    s.Add(new Box(V(3.5f, 10.5f), V(7, 20.5f), 1));
+                    s.Add(new Box(V(8.5f, 10.5f), V(19.5f, 20.5f), 2.6f));
+                    s.Add(new Polygon(V(8.5f, 11.5f), V(11.5f, 3.2f), V(14.4f, 4.2f), V(13.6f, 11.5f)));
+                    s.Add(new Polyline(1.1f, V(10, 14.2f), V(18.5f, 14.2f)) { Cut = true });
+                    s.Add(new Polyline(1.1f, V(10, 17.4f), V(18.5f, 17.4f)) { Cut = true });
+                    break;
+                case Icon.Fire:
+                    s.Add(new Polygon(
+                        V(12.5f, 2), V(15.5f, 6.5f), V(18.5f, 11), V(19, 15.5f), V(17, 19.5f), V(13.5f, 21.8f), V(10, 21.8f),
+                        V(6.5f, 19.5f), V(5, 15.5f), V(5.8f, 11.5f), V(8.2f, 8.5f), V(9.3f, 12), V(11, 7.5f)));
+                    s.Add(new Polygon(V(12, 12), V(14.6f, 16), V(14.3f, 18.8f), V(12, 20.2f), V(9.8f, 18.8f), V(9.6f, 16)) { Cut = true });
+                    break;
+                case Icon.Drop:
+                    s.Add(new Disc(V(12, 15), 5.6f));
+                    s.Add(new Polygon(V(12, 2.5f), V(16.9f, 12.3f), V(7.1f, 12.3f)));
+                    break;
+                case Icon.Tow:
+                    // Two interlocked chain links (towed along by the group).
+                    s.Add(new Polyline(Stroke, Stadium(V(8.7f, 15.3f), 8.6f, 3.3f)));
+                    s.Add(new Polyline(Stroke, Stadium(V(15.3f, 8.7f), 8.6f, 3.3f)));
+                    break;
+                case Icon.Straight:
+                    s.Add(Line(V(12, 21), V(12, 5)));
+                    s.Add(new Polygon(V(12, 2.5f), V(17.5f, 9), V(6.5f, 9)));
+                    break;
+                case Icon.TurnLeft:
+                case Icon.TurnRight:
+                {
+                    // Up from the bottom, then a bend towards the side, arrowhead pointing sideways.
+                    float d = icon == Icon.TurnRight ? 1 : -1;
+                    var bend = new List<Vector2> { V(12 - (d * 3), 21), V(12 - (d * 3), 13) };
+                    bend.AddRange(Arc(V(12 + (d * 2), 13), 5, d > 0 ? 180 : 0, d > 0 ? 270 : -90, 10));
+                    bend.Add(V(12 + (d * 5.5f), 8));
+                    s.Add(new Polyline(Stroke * 1.15f, bend.ToArray()));
+                    s.Add(new Polygon(V(12 + (d * 9.5f), 8), V(12 + (d * 4.5f), 2.5f), V(12 + (d * 4.5f), 13.5f)));
+                    break;
+                }
+
+                case Icon.Hand:
+                    // Waving hand: palm and four fingers, thumb to the side.
+                    s.Add(new Disc(V(12.5f, 15.5f), 5.2f));
+                    s.Add(new Polyline(2.6f, V(9, 13), V(8, 5.5f)));
+                    s.Add(new Polyline(2.6f, V(11.6f, 12), V(11.6f, 3.8f)));
+                    s.Add(new Polyline(2.6f, V(14.3f, 12), V(15, 4.5f)));
+                    s.Add(new Polyline(2.6f, V(16.8f, 13.5f), V(18.6f, 7.5f)));
+                    s.Add(new Polyline(2.6f, V(8.5f, 17.5f), V(4.5f, 13.5f)));
                     break;
             }
 

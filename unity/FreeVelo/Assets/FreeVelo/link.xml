@@ -1,0 +1,4 @@
+<!-- IL2CPP code stripping: keep the shared network messages whole (JsonUtility reads their fields by reflection). -->
+<linker>
+  <assembly fullname="FreeVelo.Shared" preserve="all" />
+</linker>

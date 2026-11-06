@@ -286,6 +286,69 @@ public class DeviceHubTests
         Assert.Equal(0, hub.Live.PowerMeterPowerW); // pedals at rest at the end
     }
 
+    [Fact]
+    public void ErgTooFastWhenPowerStaysAboveTarget()
+    {
+        ConnectFtmsTrainer();
+        _hub.SetErgTarget(150);
+        for (int i = 0; i < 40; i++) // 10 s at 32.5 km/h, 250 W instead of 150 W
+        {
+            _hub.OnData("KICKR", IndoorBike, Ibd(250, 90));
+            Advance(250);
+            if (i < 28) Assert.False(_hub.ErgSpeedTooHigh); // not before 8 s
+        }
+
+        Assert.True(_hub.ErgSpeedTooHigh);
+        Assert.Equal(19, _hub.ErgMaxSpeedKmh); // 32.5 km/h × 150 / 250
+
+        for (int i = 0; i < 20; i++)
+        {
+            _hub.OnData("KICKR", IndoorBike, Ibd(152, 90));
+            Advance(250);
+        }
+
+        Assert.False(_hub.ErgSpeedTooHigh);
+        Assert.Null(_hub.ErgMaxSpeedKmh);
+    }
+
+    [Fact]
+    public void ReplayedNeroLogReportsErgTooFast()
+    {
+        // Elite Nero rollers: every ERG target is acknowledged, but at 18–25 km/h even minimum resistance gives more
+        // than the 110–130 W warm-up targets, and the trainer reports "speed too high" (training status 0x0A).
+        var log = Load("elite-nero-ftms-erg-2026-11-06.csv");
+        string nero = log[0].DeviceAddress;
+        var hub = new DeviceHub(_writer, () => _now);
+        hub.OnReady(nero, new[] { Ftms, Cps });
+
+        var tooFast = new List<(long Ms, double? MaxKmh)>();
+        long lastTick = log[0].TimestampMs;
+        foreach (var e in log)
+        {
+            while (lastTick + 250 <= e.TimestampMs)
+            {
+                lastTick += 250;
+                _now = lastTick;
+                hub.Tick();
+                if (hub.ErgSpeedTooHigh) tooFast.Add((_now, hub.ErgMaxSpeedKmh));
+            }
+
+            _now = e.TimestampMs;
+            if (e.Direction == BleLogDirection.Write && e.Characteristic == ControlPoint && e.Payload[0] == 0x05)
+                hub.SetErgTarget(e.Payload[1] | e.Payload[2] << 8);
+            else if (e.Direction == BleLogDirection.Notify)
+                hub.OnData(e.DeviceAddress, e.Characteristic, e.Payload);
+        }
+
+        long start = log[0].TimestampMs;
+        Assert.Contains(tooFast, t => t.Ms - start is > 50_000 and < 60_000); // 18 km/h, 129 W for 119 W
+        Assert.Contains(tooFast, t => t.Ms - start is > 80_000 and < 90_000); // 24 km/h, 175 W for 125 W
+        Assert.All(tooFast.Where(t => t.MaxKmh.HasValue), t => Assert.InRange(t.MaxKmh!.Value, 10, 19));
+
+        // Stopped at the end: no hint any more
+        Assert.False(hub.ErgSpeedTooHigh);
+    }
+
     private static List<BleLogEntry> Load(string name) =>
         BleLogEntry.ReadAll(new StringReader(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Logs", name)))).ToList();
 }

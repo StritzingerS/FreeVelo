@@ -43,11 +43,22 @@ public sealed class Renderer
     private Vector2 _shadowMin;
     private float _shadowScale;
 
-    public Renderer(List<SceneMesh> meshes)
+    private readonly Vector3? _shadowCenter;
+
+    /// <summary>Distance fog like the game (off for top-down maps).</summary>
+    public bool Fog { get; set; } = true;
+    private readonly float _shadowRadius;
+
+    public Renderer(List<SceneMesh> meshes, Vector3? shadowCenter = null, float shadowRadius = 0)
     {
         _meshes = meshes;
+        _shadowCenter = shadowCenter;
+        _shadowRadius = shadowRadius;
         BuildShadowMap(4096);
     }
+
+    /// <summary>Shadow casters: everything, or (large scenes) only what is near the camera.</summary>
+    private bool InShadowRegion(Vector3 p) => _shadowCenter == null || Vector3.DistanceSquared(new Vector3(p.X, 0, p.Z), new Vector3(_shadowCenter.Value.X, 0, _shadowCenter.Value.Z)) < _shadowRadius * _shadowRadius;
 
     // ------------------------------------------------------------------ shadow map (orthographic along the sun)
 
@@ -62,6 +73,7 @@ public sealed class Renderer
         {
             foreach (var p in m.Positions)
             {
+                if (!InShadowRegion(p)) continue;
                 var l = inv * p;
                 min = Vector2.Min(min, new Vector2(l.X, l.Y));
                 max = Vector2.Max(max, new Vector2(l.X, l.Y));
@@ -80,6 +92,7 @@ public sealed class Renderer
             var lp = m.Positions.Select(p => inv * p).ToArray();
             for (int t = 0; t < m.Triangles.Length; t += 3)
             {
+                if (!InShadowRegion(m.Positions[m.Triangles[t]])) continue;
                 var a = lp[m.Triangles[t]];
                 var b = lp[m.Triangles[t + 1]];
                 var c = lp[m.Triangles[t + 2]];
@@ -114,9 +127,10 @@ public sealed class Renderer
 
     private float ShadowFactor(Vector3 world, Vector3 normal)
     {
-        var l = _lightRot.Transposed * (world + (normal * 0.004f));
+        if (!InShadowRegion(world)) return 1f;
+        var l = _lightRot.Transposed * (world + (normal * (_shadowCenter == null ? 0.004f : 0.15f)));
         var s = ToShadow(l);
-        float bias = 0.004f;
+        float bias = _shadowCenter == null ? 0.004f : 0.25f;
         int lit = 0, total = 0;
         for (int dy = -1; dy <= 1; dy++)
         {
@@ -204,7 +218,14 @@ public sealed class Renderer
                 float pa = w0 * iza * z, pb = w1 * izb * z, pc = w2 * izc * z;
                 var pos = (m.Positions[ia] * pa) + (m.Positions[ib] * pb) + (m.Positions[ic] * pc);
                 var n = Vector3.Normalize((m.Normals[ia] * pa) + (m.Normals[ib] * pb) + (m.Normals[ic] * pc));
-                color[i] = Shade(pos, n, albedo, m.Smoothness, m.Metallic, eye);
+                var shaded = Shade(pos, n, albedo, m.Smoothness, m.Metallic, eye);
+                if (_shadowCenter != null && Fog)
+                {
+                    float fog = Math.Clamp((Vector3.Distance(pos, eye) - 180f) / (3600f - 180f), 0f, 1f);
+                    shaded = Vector3.Lerp(shaded, SrgbToLinear(new Vector3(0.73f, 0.8f, 0.87f)), fog);
+                }
+
+                color[i] = shaded;
             }
         }
     }

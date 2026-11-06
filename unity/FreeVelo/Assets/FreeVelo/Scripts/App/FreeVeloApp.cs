@@ -1,6 +1,8 @@
 using System.Linq;
 using FreeVelo.Ble;
+using FreeVelo.Net;
 using FreeVelo.Core.World;
+using FreeVelo.Core.World.Gen;
 using FreeVelo.Ride;
 using FreeVelo.UI;
 using FreeVelo.World;
@@ -15,6 +17,9 @@ namespace FreeVelo.App
     {
         private BleService _ble;
         private RideController _ride;
+        private GroupRideService _group;
+        private WorldBuilder _world;
+        private System.Threading.Tasks.Task<(FreeVelo.Core.World.Gen.Terrain Terrain, SceneryLayout Layout)> _worldTask;
         private RiderAvatar _avatar;
         private Camera _camera;
         private float _lean;
@@ -59,14 +64,34 @@ namespace FreeVelo.App
 
             _ble = gameObject.AddComponent<BleService>();
             var world = gameObject.AddComponent<WorldBuilder>();
+            _world = world;
             _ride = gameObject.AddComponent<RideController>();
             var hud = gameObject.AddComponent<Hud>();
+            _group = gameObject.AddComponent<GroupRideService>();
+            var groupAvatars = gameObject.AddComponent<GroupAvatars>();
 
-            var route = ProceduralRoutes.Generate(seed: 1, lengthM: 10_000, hilliness: 0.6);
-            world.Build(route);
-            _ride.Initialize(_ble, route);
+            // The generated world: the road network is ready at once (also used by the server); terrain and
+            // scenery take a few seconds and are generated in the background, then built into the scene.
+            var map = WorldMap.Default;
+            var path = NetworkPath.OnMainLoop(map, 0, 0);
+            _worldTask = System.Threading.Tasks.Task.Run(() =>
+            {
+                var terrain = FreeVelo.Core.World.Gen.Terrain.Build(map);
+                return (terrain, SceneryLayout.Generate(terrain));
+            });
+            _ride.Initialize(_ble, path.Route);
+            _ride.Map = map;
+            _ride.Path = path;
             hud.Initialize(_ble, _ride);
-            _avatar = RiderAvatar.Create(world, new Color(0.1f, 0.45f, 0.85f));
+            _ride.Group = _group;
+            groupAvatars.Initialize(world, _group, map.MainLoop);
+            hud.InitializeGroup(_group, groupAvatars);
+            hud.InitializeWorld(world);
+            var strava = gameObject.AddComponent<StravaService>();
+            strava.Initialize(_ride);
+            hud.InitializeStrava(strava);
+            _group.RestoreLobby(); // back into the group ride after an app restart
+            _avatar = RiderAvatar.Create(world, GroupAvatars.OwnJersey);
 
             _camera = Camera.main;
             if (_camera == null)
@@ -118,6 +143,20 @@ namespace FreeVelo.App
             RenderSettings.fogEndDistance = 3600f;
         }
 
+        private void Update()
+        {
+            if (_worldTask == null || !_worldTask.IsCompleted) return;
+            var task = _worldTask;
+            _worldTask = null;
+            if (task.IsFaulted)
+            {
+                Debug.LogException(task.Exception);
+                return;
+            }
+
+            _world.Build(_ride.Map, task.Result.Terrain, task.Result.Layout);
+        }
+
         private void LateUpdate()
         {
             float dt = Time.deltaTime;
@@ -133,8 +172,9 @@ namespace FreeVelo.App
             var rotation = Quaternion.Euler(pitch, heading, -(_lean + _avatar.StopLeanDeg));
             var right = Quaternion.Euler(0, heading, 0) * Vector3.right;
 
-            // Ride on the right half of the road.
-            var position = new Vector3((float)sample.X, (float)sample.Y + 0.05f, (float)sample.Z) + (right * 1.4f);
+            // Ride on the right half of the road (in a group ride in the own lane, so riders do not overlap).
+            float lateral = _ride.IsGroupRide ? GroupAvatars.Lateral(_group.State.MyHomeLaneM) : GroupAvatars.BaseLateralM;
+            var position = new Vector3((float)sample.X, (float)sample.Y + 0.05f, (float)sample.Z) + (right * lateral);
             _avatar.transform.SetPositionAndRotation(position, rotation);
 
             bool riding = _ride.State == RideState.Riding;

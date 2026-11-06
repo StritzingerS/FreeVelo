@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+**/data/
+unity/
+android/
+tools/
+tests/
+.git/

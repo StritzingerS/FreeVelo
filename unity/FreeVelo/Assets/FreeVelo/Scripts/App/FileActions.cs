@@ -40,6 +40,34 @@ namespace FreeVelo.App
             }
         }
 
+        /// <summary>Opens the share sheet with a text (e.g. the invite code); null on success, else a message.</summary>
+        public static string ShareText(string text, string title)
+        {
+            try
+            {
+#if UNITY_ANDROID && !UNITY_EDITOR
+                using (var intentClass = new AndroidJavaClass("android.content.Intent"))
+                using (var intent = new AndroidJavaObject("android.content.Intent", "android.intent.action.SEND"))
+                using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+                {
+                    intent.Call<AndroidJavaObject>("setType", "text/plain").Dispose();
+                    intent.Call<AndroidJavaObject>("putExtra", "android.intent.extra.TEXT", text).Dispose();
+                    using (var chooser = intentClass.CallStatic<AndroidJavaObject>("createChooser", intent, title))
+                    {
+                        activity.Call("startActivity", chooser);
+                    }
+                }
+#endif
+                return null;
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                return Explain(e);
+            }
+        }
+
         /// <summary>Copies the file to Downloads/FreeVelo; returns a message for the user.</summary>
         public static string SaveToDownloads(string path)
         {

@@ -89,7 +89,8 @@ namespace FreeVelo.Core.World
         /// <summary>Position at <paramref name="distanceM"/>; loops wrap around, open routes are clamped.</summary>
         public RouteSample Sample(double distanceM)
         {
-            double d = IsLoop ? Mod(distanceM, LengthM) : Math.Max(0, Math.Min(LengthM, distanceM));
+            // Open routes may start at any distance (a path through the road network): clamp to their range.
+            double d = IsLoop ? Mod(distanceM, LengthM) : Math.Max(Points[0].DistanceM, Math.Min(LengthM, distanceM));
 
             int lo = 0, hi = Points.Count - 1;
             while (hi - lo > 1)

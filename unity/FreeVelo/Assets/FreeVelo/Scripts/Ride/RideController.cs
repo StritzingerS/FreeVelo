@@ -9,6 +9,9 @@ using FreeVelo.Core.Recording;
 using FreeVelo.Core.Training;
 using FreeVelo.Core.Workouts;
 using FreeVelo.Core.World;
+using FreeVelo.Core.World.Gen;
+using FreeVelo.Net;
+using FreeVelo.Shared.Api;
 using UnityEngine;
 
 namespace FreeVelo.Ride
@@ -69,6 +72,9 @@ namespace FreeVelo.Ride
 
         public RideSummary Summary { get; private set; }
 
+        /// <summary>A ride ended and its FIT file was written (e.g. for the Strava upload).</summary>
+        public event Action<RideSummary> RideSaved;
+
         /// <summary>Position on the route (keeps going across rides; loops wrap).</summary>
         public double DistanceM { get; private set; }
 
@@ -99,6 +105,31 @@ namespace FreeVelo.Ride
 
         private readonly Queue<(float T, double P)> _powerWindow = new Queue<(float, double)>();
 
+        /// <summary>Group rides (set by the app; null = solo only).</summary>
+        public GroupRideService Group { get; set; }
+
+        /// <summary>The current ride is a group ride (live with the others).</summary>
+        public bool IsGroupRide { get; private set; }
+
+        /// <summary>The generated world (road network).</summary>
+        public WorldMap Map { get; set; }
+
+        /// <summary>Solo rides: the way through the road network (the rider picks left / right at junctions).</summary>
+        public NetworkPath Path { get; set; }
+
+        /// <summary>The next junction ahead (solo rides; null in group rides, which follow the main loop).</summary>
+        public UpcomingJunction NextJunction()
+        {
+            if (IsGroupRide || Path == null) return null;
+            lock (BleService.Sync) return Path.Next();
+        }
+
+        /// <summary>Picks the way on at the next junction (index into its options).</summary>
+        public void ChooseTurn(int option)
+        {
+            lock (BleService.Sync) Path?.Choose(option);
+        }
+
         public void Initialize(BleService ble, Route route)
         {
             _ble = ble;
@@ -116,7 +147,12 @@ namespace FreeVelo.Ride
         public void StartRide(Workout workout)
         {
             _ble.ApplySettings();
-            _recording = new RideRecording(DateTime.UtcNow, workout != null ? workout.Name.Get(AppSettings.Language) : L.Get("free_ride"));
+            IsGroupRide = Group != null && Group.Lobby != null;
+            // Group rides follow the main loop (the server's Keep Together simulation uses the same route).
+            if (IsGroupRide && Map != null) Route = Map.MainLoop;
+            else if (Path != null) Route = Path.Route;
+            string title = workout != null ? workout.Name.Get(AppSettings.Language) : IsGroupRide ? Group.Lobby.name : L.Get("free_ride");
+            _recording = new RideRecording(DateTime.UtcNow, title);
             _lastSegmentIndex = -1;
             _workoutComplete = false;
             _sampleTimer = 0;
@@ -136,6 +172,7 @@ namespace FreeVelo.Ride
             // Failing is the goal of a ramp test: no ERG reduction at low cadence.
             _ble.Hub.LowCadenceProtectionEnabled = _ftpTest != FtpTestKind.Ramp;
             State = RideState.Riding;
+            if (IsGroupRide) Group.StartLive();
             RideKeepAlive.Start(_recording.Name, L.Get("ride_running"));
             _notificationTimer = 0;
         }
@@ -151,6 +188,21 @@ namespace FreeVelo.Ride
             if (State != RideState.Riding) return;
             State = RideState.Finished;
             RideKeepAlive.Stop();
+            if (IsGroupRide)
+            {
+                Group.StopLive(); // still in the group ride (waiting room) until the rider leaves it
+                if (Map != null)
+                {
+                    // Back on the road network from the place on the main loop.
+                    lock (BleService.Sync)
+                    {
+                        Path = NetworkPath.OnMainLoop(Map, DistanceM, DistanceM);
+                        Route = Path.Route;
+                    }
+                }
+            }
+
+            IsGroupRide = false;
             _physics.SpeedMps = 0; // the rider stops: no more wheel/world movement after the ride
             _ble.Hub.SetSimulation(0); // release ERG resistance
             _ble.Hub.LowCadenceProtectionEnabled = true;
@@ -176,6 +228,7 @@ namespace FreeVelo.Ride
                 EstimatedFtpW = _ftpTest.HasValue && Engine != null ? FtpTests.EstimateFtp(_ftpTest.Value, power, Engine.Workout) : null,
                 FitPath = SaveFit(ftp),
             };
+            if (Summary.FitPath != null) RideSaved?.Invoke(Summary);
         }
 
         /// <summary>Writes the ride as FIT file to persistentDataPath/rides; returns the path.</summary>
@@ -184,10 +237,10 @@ namespace FreeVelo.Ride
             if (_recording == null || _recording.Samples.Count < 10) return null;
             try
             {
-                string folder = Path.Combine(Application.persistentDataPath, "rides");
+                string folder = System.IO.Path.Combine(Application.persistentDataPath, "rides");
                 Directory.CreateDirectory(folder);
                 string safeName = new string(_recording.Name.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
-                string path = Path.Combine(folder, $"{_recording.StartUtc.ToLocalTime():yyyy-MM-dd_HH-mm}_{safeName}.fit");
+                string path = System.IO.Path.Combine(folder, $"{_recording.StartUtc.ToLocalTime():yyyy-MM-dd_HH-mm}_{safeName}.fit");
                 File.WriteAllBytes(path, FitActivityWriter.Write(_recording, FitActivityWriter.SessionInfo(_recording, ftp)));
                 Debug.Log("FreeVelo: ride saved to " + path);
                 return path;
@@ -262,6 +315,8 @@ namespace FreeVelo.Ride
             double crr = RoadSurfaces.RollingResistance(position.Surface);
             _physics.Step(IsPaused ? 0 : power, position.GradePercent, crr, dt);
             DistanceM += _physics.SpeedMps * dt;
+            if (IsGroupRide) ApplyGroup(cadence, dt);
+            else if (Path != null && Path.Update(DistanceM)) Route = Path.Route; // next junction reached: chosen road added
 
             if (running)
             {
@@ -318,6 +373,44 @@ namespace FreeVelo.Ride
             }
 
             CompleteWorkoutIfDone(background);
+        }
+
+        /// <summary>
+        /// Group ride, every step (also in the background): Keep Together places the rider where the server's group
+        /// simulation says (the trainer still gets the grade of that spot); Free mode starts next to the group once.
+        /// Jumps into the group do not count as ridden distance. Then the own state goes to the server.
+        /// </summary>
+        private void ApplyGroup(double cadence, float dt)
+        {
+            if (Group.Mode == LobbyMode.KeepTogether)
+            {
+                if (Group.TryGetOwnPosition(out double groupDistance, out float groupSpeed, out bool welcomed))
+                {
+                    double error = groupDistance - DistanceM;
+                    if (welcomed || Math.Abs(error) > 30)
+                    {
+                        // (Re)connected or far off: jump into the group (not counted as ridden distance).
+                        if (welcomed) _rideStartDistanceM += error;
+                        DistanceM = groupDistance;
+                    }
+                    else
+                    {
+                        // The rider already moved on with the group speed this step; close the remaining gap to the
+                        // server's position gently (~0.5 s), so small corrections never show as jerks.
+                        DistanceM += error * Math.Min(1.0, dt * 2.0);
+                    }
+
+                    _physics.SpeedMps = groupSpeed;
+                }
+            }
+            else if (Group.TryTakeStartDistance(out double start))
+            {
+                _rideStartDistanceM += start - DistanceM;
+                DistanceM = start;
+            }
+
+            // Mass set at the start of the ride (PlayerPrefs cannot be read from the background thread).
+            Group.Publish(DistanceM, _physics.SpeedMps, Power3s / Math.Max(1.0, _physics.RiderMassKg), cadence);
         }
 
         /// <summary>Background tick from the Android plugin (Unity paused): Bluetooth, trainer and ride go on.</summary>
