@@ -255,7 +255,7 @@ namespace FreeVelo.UI
                     var old = GUI.color;
                     GUI.color = new Color(1, 1, 1, alpha);
                     var style = Theme.With(Theme.Caption, Theme.Text, 15, TextAnchor.MiddleLeft);
-                    string text = $"{rider.DisplayName}  <color=#B3BECA>{rider.Wkg:0.0}</color>";
+                    string text = rider.DisplayName;
                     float w = style.CalcSize(new GUIContent(text)).x + 34;
                     var tag = new Rect(gp.x - (w / 2), gp.y - 30, w, 30);
                     Ui.Rect(tag, Theme.Alpha(Theme.Background, 0.8f), 15);
