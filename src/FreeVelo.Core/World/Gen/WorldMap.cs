@@ -788,19 +788,39 @@ namespace FreeVelo.Core.World.Gen
 
             double a = Nodes[e.From].Elevation, b = Nodes[e.To].Elevation;
             var h = new double[n];
-            for (int i = 0; i < n; i++)
+            if (e.Kind == RoadKind.Connector)
             {
-                double f = e.D[i] / e.Length;
-                if (e.Kind == RoadKind.Connector)
+                for (int i = 0; i < n; i++) h[i] = a + ((b - a) * e.D[i] / e.Length) + (12 * Math.Sin(Math.PI * e.D[i] / e.Length));
+            }
+            else
+            {
+                // Inside the home world's terrain grid the road follows the ground like the home roads (that ground
+                // stays as it is); from where it leaves the grid, an even gradient to the foot, eased at both ends.
+                var (minX, minZ, maxX, maxZ) = Bounds;
+                double margin = Terrain.Margin + 60;
+                int exit = 0;
+                for (int i = 0; i < n; i++)
                 {
-                    h[i] = a + ((b - a) * f) + (12 * Math.Sin(Math.PI * f));
+                    if (e.X[i] > minX - margin && e.X[i] < maxX + margin && e.Z[i] > minZ - margin && e.Z[i] < maxZ + margin) exit = i;
                 }
-                else
+
+                var ground = new double[n];
+                for (int i = 0; i < n; i++) ground[i] = BaseHeight(e.X[i], e.Z[i]);
+                ground = Smooth(ground, 16);
+                double shift = a - ground[0];
+                double start = ground[exit] + shift, along = e.Length - e.D[exit];
+                for (int i = 0; i < n; i++)
                 {
-                    // Even gradient with 150 m easing at both ends
-                    double ease = Math.Min(1, Math.Min(e.D[i], e.Length - e.D[i]) / 150);
+                    if (i <= exit)
+                    {
+                        h[i] = ground[i] + shift;
+                        continue;
+                    }
+
+                    double f = (e.D[i] - e.D[exit]) / along;
+                    double ease = Math.Min(1, Math.Min(e.D[i] - e.D[exit], e.Length - e.D[i]) / 150);
                     double t = f + ((SmoothStep(f) - f) * (1 - ease));
-                    h[i] = a + ((b - a) * t);
+                    h[i] = start + ((b - start) * t);
                 }
             }
 

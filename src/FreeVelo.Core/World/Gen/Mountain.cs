@@ -101,6 +101,9 @@ namespace FreeVelo.Core.World.Gen
 
         public const double ConnectorLength = 1000;
         private const double HomeClearance = 900;
+
+        /// <summary>The climbs stay this far outside the home world's detailed terrain grid (whose ground stays as it is).</summary>
+        internal const double GridClearance = 350;
         private const double RiverClearance = 250;
         private const double ClimbsApart = 400;
         private const double AccessTarget = 3500;
@@ -167,7 +170,7 @@ namespace FreeVelo.Core.World.Gen
         /// Tried first, so the world is generated in well under a second; the full search (several seconds) only runs
         /// when it doesn't fit, e.g. for another seed. A test checks that it still is the search's best result.
         /// </summary>
-        internal static readonly (int Theta, double G1, int Side, double G2) DefaultHint = (6, 30, 1, -40);
+        internal static readonly (int Theta, double G1, int Side, double G2) DefaultHint = (6, 30, 1, -60);
 
         /// <summary>The parameters the plan was made with (see <see cref="DefaultHint"/>).</summary>
         internal (int Theta, double G1, int Side, double G2) Key { get; private set; }
@@ -195,11 +198,16 @@ namespace FreeVelo.Core.World.Gen
             var sampleStelvio = Sample(stelvio);
             var sampleAlpe = Sample(alpe);
 
+            var (bminX, bminZ, bmaxX, bmaxZ) = map.Bounds;
+            double grid = Terrain.Margin + GridClearance;
+            bool InHomeGrid(double x, double z) => x > bminX - grid && x < bmaxX + grid && z > bminZ - grid && z < bmaxZ + grid;
+
             bool ClearOfHome(PlacedClimb p, int[] sample)
             {
                 foreach (int i in sample)
                 {
                     var (x, z) = p.Point(i);
+                    if (InHomeGrid(x, z)) return false;
                     if (HomeDistance(x, z, HomeClearance) < HomeClearance) return false;
                     if (riverIndex.Nearest(x, z, RiverClearance, out _, out _) < RiverClearance) return false;
                 }
@@ -377,13 +385,29 @@ namespace FreeVelo.Core.World.Gen
             // Heights: summits equal, so the Alpe d'Huez foot is higher; the access roads share the difference.
             double e1 = JunctionElevation(map, loop, l1), e2 = JunctionElevation(map, loop, l2);
             double difference = s1.Data.Gain - s2.Data.Gain + (e1 - e2); // how much higher foot 2 is than foot 1, relative to their junctions
-            double total = accessA.Length + accessB.Length;
-            if (Math.Abs(difference) / total > MaxAccessGrade) return null;
-            double down = difference * accessA.Length / total;
+            // Only the part outside the home grid takes up the height difference (inside, the road follows the ground).
+            double outsideA = OutsideGrid(map, accessA), outsideB = OutsideGrid(map, accessB);
+            double total = outsideA + outsideB;
+            if (total < 1000 || Math.Abs(difference) / total > MaxAccessGrade) return null;
+            double down = difference * outsideA / total;
             double foot1 = e1 - down;
             var c1 = new PlacedClimb(s1.Data, s1.Angle, s1.SummitX, s1.SummitZ, foot1);
             var c2 = new PlacedClimb(s2.Data, s2.Angle, s2.SummitX, s2.SummitZ, c1.SummitElevation - s2.Data.Gain);
             return new Mountain(c1, c2, connector, accessA, accessB, l1, l2, e1, e2);
+        }
+
+        /// <summary>Length of an access road after it has left the home world's terrain grid.</summary>
+        internal static double OutsideGrid(WorldMap map, Polyline path)
+        {
+            var (minX, minZ, maxX, maxZ) = map.Bounds;
+            double m = Terrain.Margin + 60;
+            double exit = 0;
+            for (int i = 0; i < path.Count; i++)
+            {
+                if (path.X[i] > minX - m && path.X[i] < maxX + m && path.Z[i] > minZ - m && path.Z[i] < maxZ + m) exit = path.D[i];
+            }
+
+            return path.Length - exit;
         }
 
         /// <summary>Same height as the node the world puts there (average ground around it).</summary>

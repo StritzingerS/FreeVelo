@@ -111,4 +111,31 @@ public class MountainTests
         Assert.Equal(stored.Alpe.Angle, searched.Alpe.Angle, 9);
         Assert.Equal(stored.Stelvio.FootElevation, searched.Stelvio.FootElevation, 6);
     }
+
+    private static readonly Lazy<Terrain> Ground = new(() => Terrain.Build(Map));
+
+    [Fact]
+    public void MountainGroundCarriesTheRoadsAndJoinsTheHomeGroundWithoutASeam()
+    {
+        var terrain = Ground.Value;
+        Assert.NotNull(terrain.Mountain);
+
+        // Road beds 0.3 m under the road surface along all mountain roads
+        foreach (var e in Map.Edges.Where(e => e.Kind != RoadKind.Home))
+        {
+            for (int i = 0; i < e.X.Length; i += 37) Assert.Equal(e.E[i] - 0.3, terrain.Height(e.X[i], e.Z[i]), 1);
+        }
+
+        // At the edge of the home grid the computed mountain ground continues the grid
+        for (double x = terrain.MinX + 50; x < terrain.MaxX - 50; x += 173)
+        {
+            double inside = terrain.Height(x, terrain.MaxZ - 0.01), outside = terrain.Height(x, terrain.MaxZ + 0.01);
+            Assert.True(Math.Abs(inside - outside) < 0.6, $"seam at x {x:0}: {inside:0.0} / {outside:0.0}");
+        }
+
+        // The mountain rises towards the summit
+        var summit = Map.Mountain!.Stelvio;
+        var top = summit.Point(summit.Data.X.Length - 1);
+        Assert.True(terrain.Mountain!.Coarse(top.X + 300, top.Z + 300) > terrain.Mountain.LowRoad + 800);
+    }
 }

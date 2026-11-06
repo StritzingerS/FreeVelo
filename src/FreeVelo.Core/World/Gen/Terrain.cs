@@ -34,6 +34,9 @@ namespace FreeVelo.Core.World.Gen
 
         public WorldMap Map => _map;
 
+        /// <summary>The mountain's shape (null for worlds without a mountain). Outside the home grid, heights come from it.</summary>
+        public MountainTerrain? Mountain { get; private set; }
+
         public double MinX { get; }
 
         public double MinZ { get; }
@@ -53,6 +56,7 @@ namespace FreeVelo.Core.World.Gen
         public static Terrain Build(WorldMap map, double cell = 4)
         {
             var terrain = new Terrain(map, cell);
+            if (map.Mountain != null) terrain.Mountain = MountainTerrain.Build(map, (terrain.MinX, terrain.MinZ, terrain.MaxX, terrain.MaxZ));
             Parallel.For(0, terrain.Nz, z =>
             {
                 for (int x = 0; x < terrain.Nx; x++)
@@ -66,9 +70,14 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>Grid height at a grid point.</summary>
         public float At(int x, int z) => _heights[(Math.Max(0, Math.Min(Nz - 1, z)) * Nx) + Math.Max(0, Math.Min(Nx - 1, x))];
 
-        /// <summary>Ground height anywhere (bilinear between grid points).</summary>
+        /// <summary>True inside the detailed home grid (outside it the mountain's ground is computed on demand).</summary>
+        public bool InGrid(double x, double z) => x >= MinX && x <= MaxX && z >= MinZ && z <= MaxZ;
+
+        /// <summary>Ground height anywhere: the home grid (bilinear between grid points), or the mountain's ground.</summary>
         public double Height(double x, double z)
         {
+            if (!InGrid(x, z)) return Compute(x, z);
+
             double gx = (x - MinX) / Cell, gz = (z - MinZ) / Cell;
             int ix = (int)Math.Floor(gx), iz = (int)Math.Floor(gz);
             double fx = gx - ix, fz = gz - iz;
@@ -126,9 +135,10 @@ namespace FreeVelo.Core.World.Gen
             return _map.River != null && DistanceToRiver(x, z, _map.River.HalfWidth + margin + 1, out _) < _map.River.HalfWidth + margin;
         }
 
-        private double Compute(double x, double z)
+        /// <summary>Ground at a point, computed (for the home grid once, for the mountain whenever a chunk is built).</summary>
+        public double Compute(double x, double z)
         {
-            double h = _map.BaseHeight(x, z);
+            double h = _map.BaseHeight(x, z) + (Mountain?.Offset(x, z) ?? 0);
 
             foreach (var lake in _map.Lakes)
             {
