@@ -119,6 +119,214 @@ public static class WorldPreview
         Console.WriteLine($"{kinds.Count} kinds x {SceneryModels.Variants}, LOD{lod}: {tris} triangles -> {output}");
     }
 
+    /// <summary>3D views of the generated world: rider's-eye views along the main loop and an overview.</summary>
+    public static void Scene(string output, double[] distances)
+    {
+        var sw = Stopwatch.StartNew();
+        var map = WorldMap.Default;
+        var terrain = Terrain.Build(map);
+        var layout = SceneryLayout.Generate(terrain);
+        Console.WriteLine($"world generated in {sw.ElapsedMilliseconds} ms");
+        var loop = map.MainLoop;
+        const int ss = 2, w = 960, h = 540;
+        var tiles = new List<byte[]>();
+        foreach (double d in distances)
+        {
+            Camera camera;
+            Vector3 focus;
+            if (d < 0)
+            {
+                // Overview from high above the start.
+                var s0 = loop.Sample(-d);
+                focus = new Vector3((float)s0.X, (float)s0.Y, (float)s0.Z);
+                var back = new Vector3(-(float)Math.Sin(s0.HeadingRad), 0, -(float)Math.Cos(s0.HeadingRad));
+                camera = new Camera { Name = "over", Position = focus + (back * 260) + new Vector3(0, 160, 0), Target = focus + (Vector3.UnitY * 10) - (back * 200), FieldOfView = 60 };
+            }
+            else
+            {
+                var s = loop.Sample(d);
+                var fwd = new Vector3((float)Math.Sin(s.HeadingRad), 0, (float)Math.Cos(s.HeadingRad));
+                var right = new Vector3(fwd.Z, 0, -fwd.X);
+                focus = new Vector3((float)s.X, (float)s.Y, (float)s.Z) + (right * 1.4f);
+                camera = new Camera { Name = $"d{d}", Position = focus - (fwd * 4.6f) + new Vector3(0, 1.9f, 0), Target = focus + (fwd * 20) + new Vector3(0, 1.0f, 0), FieldOfView = 60 };
+            }
+
+            var meshes = SceneMeshes(map, terrain, layout, camera.Position, d < 0 ? 1600 : 1100);
+            var renderer = new Renderer(meshes, shadowCenter: camera.Position, shadowRadius: 180);
+            tiles.Add(Renderer.ToImage(renderer.Render(camera, w * ss, h * ss), w * ss, h * ss, ss, out _, out _));
+            Console.WriteLine($"  view {camera.Name}: {meshes.Sum(m => m.Triangles.Length / 3) / 1000}k triangles");
+        }
+
+        int cols = Math.Min(2, tiles.Count), rows = (tiles.Count + cols - 1) / cols;
+        var sheet = new byte[cols * w * rows * h * 3];
+        for (int t = 0; t < tiles.Count; t++)
+        {
+            int ox = (t % cols) * w, oy = (t / cols) * h;
+            for (int y = 0; y < h; y++) Buffer.BlockCopy(tiles[t], y * w * 3, sheet, (((oy + y) * cols * w) + ox) * 3, w * 3);
+        }
+
+        Renderer.WritePng(output, sheet, cols * w, rows * h);
+        Console.WriteLine($"-> {output} ({sw.ElapsedMilliseconds} ms)");
+    }
+
+    private static List<SceneMesh> SceneMeshes(WorldMap map, Terrain terrain, SceneryLayout layout, Vector3 eye, double radius)
+    {
+        var meshes = new List<SceneMesh>();
+
+        // Terrain: 4 m grid close by, 12 m further away.
+        foreach (var (inner, outer, step) in new[] { (0.0, 260.0, 1), (240.0, radius, 3) })
+        {
+            var pos = new List<Vector3>();
+            var nrm = new List<Vector3>();
+            var tri = new List<int>();
+            int x0 = (int)((eye.X - outer - terrain.MinX) / terrain.Cell), x1 = (int)((eye.X + outer - terrain.MinX) / terrain.Cell);
+            int z0 = (int)((eye.Z - outer - terrain.MinZ) / terrain.Cell), z1 = (int)((eye.Z + outer - terrain.MinZ) / terrain.Cell);
+            x0 = Math.Max(1, x0 - (x0 % step)); z0 = Math.Max(1, z0 - (z0 % step));
+            x1 = Math.Min(terrain.Nx - 2, x1); z1 = Math.Min(terrain.Nz - 2, z1);
+            int nx = ((x1 - x0) / step) + 1, nz = ((z1 - z0) / step) + 1;
+            for (int j = 0; j < nz; j++)
+            {
+                for (int i = 0; i < nx; i++)
+                {
+                    int gx = x0 + (i * step), gz = z0 + (j * step);
+                    float x = (float)(terrain.MinX + (gx * terrain.Cell)), z = (float)(terrain.MinZ + (gz * terrain.Cell));
+                    pos.Add(new Vector3(x, terrain.At(gx, gz) - (step > 1 ? 0.4f : 0), z));
+                    float dx = terrain.At(gx + 1, gz) - terrain.At(gx - 1, gz), dz = terrain.At(gx, gz + 1) - terrain.At(gx, gz - 1);
+                    nrm.Add(Vector3.Normalize(new Vector3(-dx, 2 * (float)terrain.Cell, -dz)));
+                }
+            }
+
+            for (int j = 0; j < nz - 1; j++)
+            {
+                for (int i = 0; i < nx - 1; i++)
+                {
+                    int a = (j * nx) + i;
+                    var c = pos[a];
+                    double r = Math.Sqrt(((c.X - eye.X) * (c.X - eye.X)) + ((c.Z - eye.Z) * (c.Z - eye.Z)));
+                    if (r < inner || r > outer) continue;
+                    tri.AddRange(new[] { a, a + nx, a + 1, a + 1, a + nx, a + nx + 1 });
+                }
+            }
+
+            meshes.Add(new SceneMesh { Positions = pos.ToArray(), Normals = nrm.ToArray(), Triangles = tri.ToArray(), Albedo = new Vector3(0.36f, 0.5f, 0.22f), CastsShadow = false });
+        }
+
+        // Roads
+        foreach (var e in map.Edges)
+        {
+            var pos = new List<Vector3>();
+            var tri = new List<int>();
+            float half = (float)e.Width / 2;
+            for (int i = 0; i < e.X.Length; i++)
+            {
+                int a = Math.Max(0, i - 1), b = Math.Min(e.X.Length - 1, i + 1);
+                var f = Vector3.Normalize(new Vector3((float)(e.X[b] - e.X[a]), 0, (float)(e.Z[b] - e.Z[a])));
+                var r = new Vector3(f.Z, 0, -f.X);
+                var c = new Vector3((float)e.X[i], (float)e.E[i] + 0.05f, (float)e.Z[i]);
+                pos.Add(c - (r * half));
+                pos.Add(c + (r * half));
+                if (i > 0) { int k = pos.Count - 4; tri.AddRange(new[] { k, k + 2, k + 1, k + 1, k + 2, k + 3 }); }
+            }
+
+            var color = e.Surface == FreeVelo.Core.Physics.RoadSurface.Asphalt ? new Vector3(0.3f, 0.3f, 0.31f) : new Vector3(0.6f, 0.56f, 0.46f);
+            meshes.Add(new SceneMesh { Positions = pos.ToArray(), Normals = Enumerable.Repeat(Vector3.UnitY, pos.Count).ToArray(), Triangles = tri.ToArray(), Albedo = color, CastsShadow = false });
+        }
+
+        // Water
+        var wpos = new List<Vector3>();
+        var wtri = new List<int>();
+        foreach (var lake in map.Lakes)
+        {
+            int c = wpos.Count;
+            wpos.Add(new Vector3((float)lake.X, (float)lake.Level, (float)lake.Z));
+            for (int i = 0; i < 64; i++)
+            {
+                double a = i * Math.PI * 2 / 64;
+                double r = lake.RadiusAt(a) * 1.06;
+                wpos.Add(new Vector3((float)(lake.X + (Math.Cos(a) * r)), (float)lake.Level, (float)(lake.Z + (Math.Sin(a) * r))));
+            }
+
+            for (int i = 0; i < 64; i++) wtri.AddRange(new[] { c, c + 1 + ((i + 1) % 64), c + 1 + i });
+        }
+
+        var river = map.River!;
+        for (int i = 0; i < river.X.Length; i++)
+        {
+            int a = Math.Max(0, i - 1), b = Math.Min(river.X.Length - 1, i + 1);
+            var f = Vector3.Normalize(new Vector3((float)(river.X[b] - river.X[a]), 0, (float)(river.Z[b] - river.Z[a])));
+            var r = new Vector3(f.Z, 0, -f.X) * ((float)river.HalfWidth + 2.5f);
+            var c = new Vector3((float)river.X[i], (float)river.Level[i], (float)river.Z[i]);
+            wpos.Add(c - r);
+            wpos.Add(c + r);
+            if (i > 0) { int k = wpos.Count - 4; wtri.AddRange(new[] { k, k + 2, k + 1, k + 1, k + 2, k + 3 }); }
+        }
+
+        var (wc, ws) = WorldMaterials.All[WorldMaterial.Water];
+        meshes.Add(new SceneMesh { Positions = wpos.ToArray(), Normals = Enumerable.Repeat(Vector3.UnitY, wpos.Count).ToArray(), Triangles = wtri.ToArray(), Albedo = wc, Smoothness = ws, CastsShadow = false });
+
+        // Fields
+        foreach (var field in layout.Fields)
+        {
+            var pos = new List<Vector3>();
+            var tri = new List<int>();
+            int nu = (int)(field.HalfLength / 4), nv = (int)(field.HalfWidth / 4);
+            for (int j = 0; j <= nv; j++)
+            {
+                for (int i = 0; i <= nu; i++)
+                {
+                    var (x, z) = field.Point(-field.HalfLength + (2 * field.HalfLength * i / nu), -field.HalfWidth + (2 * field.HalfWidth * j / nv));
+                    pos.Add(new Vector3((float)x, (float)terrain.Height(x, z) + 0.08f, (float)z));
+                }
+            }
+
+            for (int j = 0; j < nv; j++)
+            {
+                for (int i = 0; i < nu; i++)
+                {
+                    int a = (j * (nu + 1)) + i, b = a + nu + 1;
+                    tri.AddRange(new[] { a, a + 1, b, a + 1, b + 1, b });
+                }
+            }
+
+            var (fc, _) = WorldMaterials.All[field.Crop];
+            meshes.Add(new SceneMesh { Positions = pos.ToArray(), Normals = Enumerable.Repeat(Vector3.UnitY, pos.Count).ToArray(), Triangles = tri.ToArray(), Albedo = fc, CastsShadow = false });
+        }
+
+        // Scenery, merged per material
+        var merged = new Dictionary<WorldMaterial, (List<Vector3> P, List<Vector3> N, List<int> T)>();
+        var normalCache = new Dictionary<MeshData, Vector3[]>();
+        foreach (var item in layout.Items)
+        {
+            double dist = Math.Sqrt(((item.X - eye.X) * (item.X - eye.X)) + ((item.Z - eye.Z) * (item.Z - eye.Z)));
+            if (dist > radius) continue;
+            var model = SceneryModels.Get(item.Kind, item.Variant);
+            var parts = dist < 110 ? model.Lod0 : model.Lod1;
+            var rot = Rot.AboutY(item.RotationDeg);
+            var at = new Vector3(item.X, item.Y, item.Z);
+            foreach (var (material, mesh) in parts)
+            {
+                if (!merged.TryGetValue(material, out var m)) merged[material] = m = (new List<Vector3>(), new List<Vector3>(), new List<int>());
+                if (!normalCache.TryGetValue(mesh, out var n)) normalCache[mesh] = n = mesh.ComputeNormals(IsFoliage(material) ? 85f : 35f);
+                int offset = m.P.Count;
+                for (int i = 0; i < mesh.Vertices.Count; i++)
+                {
+                    m.P.Add(at + (rot * (mesh.Vertices[i] * item.Scale)));
+                    m.N.Add(rot * n[i]);
+                }
+
+                foreach (int t in mesh.Triangles) m.T.Add(t + offset);
+            }
+        }
+
+        foreach (var (material, m) in merged)
+        {
+            var (color, smooth) = WorldMaterials.All[material];
+            meshes.Add(new SceneMesh { Positions = m.P.ToArray(), Normals = m.N.ToArray(), Triangles = m.T.ToArray(), Albedo = color, Smoothness = smooth });
+        }
+
+        return meshes;
+    }
+
     public static bool IsFoliage(WorldMaterial m) => m is WorldMaterial.SpruceNeedles or WorldMaterial.SpruceNeedlesDark or WorldMaterial.PineNeedles
         or WorldMaterial.LeavesDark or WorldMaterial.LeavesMid or WorldMaterial.LeavesLight or WorldMaterial.BirchLeaves or WorldMaterial.PoplarLeaves
         or WorldMaterial.Bush or WorldMaterial.BushFlowering or WorldMaterial.Rock;

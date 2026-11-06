@@ -104,6 +104,7 @@ namespace FreeVelo.UI
                     break;
             }
 
+            DrawWorldLoading();
             Ui.DrawToast(_w, _h);
         }
 
@@ -193,13 +194,18 @@ namespace FreeVelo.UI
             var hero = new Rect(c.x, c.y + 100, c.width, 236);
             Ui.Card(hero);
             GUI.Label(new Rect(hero.x + 24, hero.y + 20, 400, 20), L.Get("free_ride").ToUpperInvariant(), Theme.Overline);
-            GUI.Label(new Rect(hero.x + 24, hero.y + 42, hero.width - 48, 34), route?.Name ?? "-", Theme.H2);
-            if (route != null)
+            GUI.Label(new Rect(hero.x + 24, hero.y + 42, hero.width - 48, 34), L.Get("world_name"), Theme.H2);
+            var map = _ride.Map;
+            if (map != null)
             {
+                var loop = map.MainLoop;
+                double network = 0;
+                foreach (var edge in map.Edges) network += edge.Length;
                 float x = hero.x + 24;
-                x += Ui.Chip(new Rect(x, hero.y + 82, 0, 30), $"{route.LengthM / 1000:0.0} km", Theme.Info, Icon.Route) + 8;
-                Ui.Chip(new Rect(x, hero.y + 82, 0, 30), $"{route.TotalAscentM:0} m ↑", Theme.Success);
-                DrawElevation(new Rect(hero.x + 24, hero.y + 124, hero.width - 236, 88), route, -1);
+                x += Ui.Chip(new Rect(x, hero.y + 82, 0, 30), $"{L.Get("main_loop")} {loop.LengthM / 1000:0.0} km", Theme.Info, Icon.Route) + 8;
+                x += Ui.Chip(new Rect(x, hero.y + 82, 0, 30), $"{loop.TotalAscentM:0} m ↑", Theme.Success) + 8;
+                Ui.Chip(new Rect(x, hero.y + 82, 0, 30), string.Format(L.Get("network_info"), network / 1000, map.Nodes.Count), Theme.Muted, Icon.Signal);
+                DrawElevation(new Rect(hero.x + 24, hero.y + 124, hero.width - 236, 88), loop, -1);
             }
 
             if (_group?.Lobby != null)
@@ -796,7 +802,8 @@ namespace FreeVelo.UI
             }
 
             if (workout) DrawWorkoutPanel();
-            else DrawRouteProgress();
+            else DrawRideStrip();
+            if (!_ride.IsGroupRide) DrawJunctionCard(workout);
             if (_ride.IsGroupRide && _group != null) DrawGroupOverlay();
 
             // Cue
@@ -918,17 +925,6 @@ namespace FreeVelo.UI
             Ui.Card(graph, Theme.Alpha(Theme.Background, 0.85f));
             WorkoutProfile(new Rect(graph.x + 16, graph.y + 30, graph.width - 32, graph.height - 42), engine.Workout, false, engine.ElapsedS);
             GUI.Label(new Rect(graph.x + 18, graph.y + 6, 300, 22), $"{Ui.Clock(engine.ElapsedS)} / {Ui.Clock(engine.TotalDurationS)}", Theme.Caption);
-        }
-
-        private void DrawRouteProgress()
-        {
-            var route = _ride.Route;
-            if (route == null) return;
-            var graph = new Rect(24, _h - 120, _w - 48, 96);
-            Ui.Card(graph, Theme.Alpha(Theme.Background, 0.85f));
-            GUI.Label(new Rect(graph.x + 18, graph.y + 6, 600, 22), $"{route.Name} · {route.LengthM / 1000:0.0} km", Theme.Caption);
-            double position = _ride.DistanceM % route.LengthM;
-            DrawElevation(new Rect(graph.x + 16, graph.y + 30, graph.width - 32, graph.height - 40), route, position);
         }
 
         // ------------------------------------------------------------------ summary

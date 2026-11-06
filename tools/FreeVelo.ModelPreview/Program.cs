@@ -11,6 +11,13 @@ if (args.Length > 1 && args[0] == "--scenery")
     return;
 }
 
+if (args.Length > 1 && args[0] == "--world")
+{
+    var at = args.Skip(2).Select(a => double.Parse(a, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+    WorldPreview.Scene(args[1], at.Length > 0 ? at : new[] { 300.0, 1840, 4200, -5000 });
+    return;
+}
+
 if (args.Length > 1 && args[0] == "--map")
 {
     WorldPreview.Map(args[1], args.Length > 2 ? int.Parse(args[2]) : FreeVelo.Core.World.Gen.WorldMap.DefaultSeed);

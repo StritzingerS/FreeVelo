@@ -86,6 +86,7 @@ namespace FreeVelo.App
             _ride.Group = _group;
             groupAvatars.Initialize(world, _group, map.MainLoop);
             hud.InitializeGroup(_group, groupAvatars);
+            hud.InitializeWorld(world);
             _group.RestoreLobby(); // back into the group ride after an app restart
             _avatar = RiderAvatar.Create(world, new Color(0.1f, 0.45f, 0.85f));
 

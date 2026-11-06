@@ -233,10 +233,10 @@ namespace FreeVelo.Ride
             if (_recording == null || _recording.Samples.Count < 10) return null;
             try
             {
-                string folder = Path.Combine(Application.persistentDataPath, "rides");
+                string folder = System.IO.Path.Combine(Application.persistentDataPath, "rides");
                 Directory.CreateDirectory(folder);
                 string safeName = new string(_recording.Name.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
-                string path = Path.Combine(folder, $"{_recording.StartUtc.ToLocalTime():yyyy-MM-dd_HH-mm}_{safeName}.fit");
+                string path = System.IO.Path.Combine(folder, $"{_recording.StartUtc.ToLocalTime():yyyy-MM-dd_HH-mm}_{safeName}.fit");
                 File.WriteAllBytes(path, FitActivityWriter.Write(_recording, FitActivityWriter.SessionInfo(_recording, ftp)));
                 Debug.Log("FreeVelo: ride saved to " + path);
                 return path;

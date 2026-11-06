@@ -129,6 +129,18 @@ namespace FreeVelo.App
             ["page"] = ("Page", "Seite"),
             ["no_trainer"] = ("No trainer connected – connect one under Devices.", "Kein Rollentrainer verbunden – unter Geräte verbinden."),
 
+            // World
+            ["world_name"] = ("Hill country", "Hügelland"),
+            ["main_loop"] = ("Main loop", "Hauptrunde"),
+            ["side_road"] = ("Side road", "Nebenstraße"),
+            ["gravel_road"] = ("Gravel road", "Schotterweg"),
+            ["junction"] = ("Junction", "Kreuzung"),
+            ["in"] = ("in", "in"),
+            ["to_next_junction"] = ("to the next junction", "bis zur nächsten Kreuzung"),
+            ["ahead_3km"] = ("Next 3 km", "Nächste 3 km"),
+            ["network_info"] = ("{0:0} km of roads · {1} junctions", "{0:0} km Straßen · {1} Kreuzungen"),
+            ["loading_world"] = ("Building the world …", "Welt wird erstellt …"),
+
             // Group rides
             ["group"] = ("Group", "Gruppe"),
             ["group_rides"] = ("Group rides", "Gruppenfahrten"),
