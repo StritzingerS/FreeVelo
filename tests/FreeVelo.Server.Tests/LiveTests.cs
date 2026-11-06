@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.WebSockets;
 using FreeVelo.Server.Live;
 using FreeVelo.Shared.Api;
@@ -30,6 +31,9 @@ public sealed class LiveClient : IAsyncDisposable
         var socket = await client.ConnectAsync(new Uri("ws://localhost" + ApiRoutes.Live), CancellationToken.None);
         return new LiveClient(socket);
     }
+
+    /// <summary>Cuts the connection without a close handshake (like a force-closed app).</summary>
+    public void Abort() => _socket.Abort();
 
     public Task Send(LiveMessage message) =>
         _socket.SendAsync(LiveCodec.Encode(message), WebSocketMessageType.Binary, true, CancellationToken.None);
@@ -250,8 +254,41 @@ public sealed class LiveTests : IDisposable
         Assert.False(anna2.Flags.HasFlag(RiderFlags.Connected));
         Assert.True(anna2.Flags.HasFlag(RiderFlags.Towed));
 
+        // A clean close (ride ended, waiting room) does not count as dropping out.
+        _server.Time.Advance(TimeSpan.FromSeconds(25));
+        await Task.Delay(200);
         var current = await (await anna.Client.GetAsync(ApiRoutes.CurrentLobby)).Read<LobbyDetails>();
         Assert.Equal(2, current.riders.Length);
+    }
+
+    [Fact]
+    public async Task ForceClosedAppDropsOutAfterTheGrace()
+    {
+        var (sami, anna, _) = await RideTogether(LobbyMode.KeepTogether);
+        await using var samiLive = await LiveClient.Connect(_server, sami);
+        var annaLive = await LiveClient.Connect(_server, anna);
+        await samiLive.WaitFor<RosterMessage>(r => r.Riders.Count == 2);
+
+        annaLive.Abort(); // the app is killed: no goodbye
+        await Task.Delay(300);
+        Assert.Equal(2, samiLive.All<RosterMessage>().Last().Riders.Count); // a quick reconnect would keep the place
+
+        _server.Time.Advance(TimeSpan.FromSeconds(25));
+        await samiLive.WaitFor<RosterMessage>(r => r.Riders.Count == 1);
+        Assert.Equal(HttpStatusCode.NoContent, (await anna.Client.GetAsync(ApiRoutes.CurrentLobby)).StatusCode);
+    }
+
+    [Fact]
+    public async Task RiderWithoutAnyActivityLeavesAfterAFewMinutes()
+    {
+        var (sami, anna, _) = await RideTogether(LobbyMode.KeepTogether);
+
+        // Sami's app keeps asking (waiting room), Anna's was closed.
+        _server.Time.Advance(TimeSpan.FromMinutes(2));
+        await sami.Client.GetAsync(ApiRoutes.CurrentLobby);
+        _server.Time.Advance(TimeSpan.FromMinutes(2));
+        var lobby = await (await sami.Client.GetAsync(ApiRoutes.CurrentLobby)).Read<LobbyDetails>();
+        Assert.Equal(new[] { "Sami" }, lobby.riders.Select(r => r.displayName));
     }
 
     [Fact]

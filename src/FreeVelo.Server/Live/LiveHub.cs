@@ -11,8 +11,12 @@ public sealed class LiveOptions
     /// <summary>Server tick: snapshots per second = 1000 / TickMs (4 Hz).</summary>
     public int TickMs { get; set; } = 250;
 
-    /// <summary>How long a rider whose app disconnected stays in the ride (dead spot, app restart).</summary>
-    public int AwayGraceSeconds { get; set; } = 120;
+    /// <summary>
+    /// How long a rider whose connection broke off (no WebSocket close: app force-closed or killed, network gone)
+    /// stays in the ride, so a quick reconnect keeps the place. A clean close (ride ended, back in the waiting room)
+    /// keeps the rider in the ride; the registry drops riders without any activity after a few minutes.
+    /// </summary>
+    public int DroppedGraceSeconds { get; set; } = 20;
 }
 
 /// <summary>
@@ -72,7 +76,9 @@ public sealed class LiveHub
         finally
         {
             _log.LogInformation("Live: {Name} ({Rider}) disconnected from ride {Lobby} after {Seconds:0} s ({State}, {Status})", name, riderId[..6], lobby.Code, (DateTime.UtcNow - started).TotalSeconds, socket.State, socket.CloseStatus);
-            lock (session.Sync) session.Detach(riderId, connection);
+            // No close frame from the app: it was killed or lost the network.
+            bool abrupt = !socket.CloseStatus.HasValue;
+            lock (session.Sync) session.Detach(riderId, connection, abrupt);
             connection.Close(WebSocketCloseStatus.NormalClosure, "bye");
             await sending;
         }
@@ -117,7 +123,7 @@ public sealed class LiveHub
     /// <summary>One tick for all rides (4 times a second).</summary>
     public void Tick(double dtSeconds)
     {
-        var grace = TimeSpan.FromSeconds(_options.AwayGraceSeconds);
+        var grace = TimeSpan.FromSeconds(_options.DroppedGraceSeconds);
         foreach (var (lobbyId, session) in _sessions)
         {
             try
@@ -132,18 +138,21 @@ public sealed class LiveHub
                         continue;
                     }
 
-                    // Riders away too long leave the ride (the registry closes it when nobody is left).
-                    foreach (string away in session.AwayLongerThan(grace)) _lobbies.Leave(away);
+                    // Riders whose connection broke off and did not come back leave the ride (the registry closes it
+                    // when nobody is left).
+                    foreach (string away in session.DroppedLongerThan(grace))
+                    {
+                        _log.LogInformation("Live: rider {Rider} dropped out of ride {Lobby} (connection lost)", away[..6], lobby.Code);
+                        _lobbies.Leave(away);
+                    }
 
                     // Follow the registry: joins and leaves over REST.
                     var (_, members) = _lobbies.Members(lobby);
                     foreach (string gone in session.MemberIds.Except(members).ToList()) session.RemoveMember(gone, LiveCloseCodes.LeftRide, "left_ride");
                     foreach (string joined in members.Except(session.MemberIds).ToList()) session.AddMember(joined, _riders.Find(joined)?.DisplayName ?? "");
 
-                    if (session.HasConnections)
-                    {
-                        foreach (string id in session.MemberIds) _lobbies.Touch(id);
-                    }
+                    // Connected riders are active (also with the app in the background).
+                    foreach (string id in session.ConnectedMemberIds) _lobbies.Touch(id);
 
                     session.Tick(dtSeconds);
                 }

@@ -49,7 +49,7 @@ Group rides live only in memory: a server restart ends running group rides (the 
 | `Server:DataDirectory` | `data` | Database and key folder |
 | `Jwt:SigningKey` | (generated) | Base64 key, at least 32 bytes; empty = generate once in the data folder |
 | `Live:TickMs` | `250` | Snapshot interval (4 per second) |
-| `Live:AwayGraceSeconds` | `120` | How long a rider whose app lost the connection keeps their place |
+| `Live:DroppedGraceSeconds` | `20` | How long a rider whose connection broke off (app force-closed, network gone) keeps their place; riders without any activity leave after 3 min |
 | `RateLimit:IdentityRequestsPerMinute` | `20` | Per IP: creating riders and sessions |
 | `RateLimit:CodeJoinsPerMinute` | `10` | Per IP: joining with a code |
 

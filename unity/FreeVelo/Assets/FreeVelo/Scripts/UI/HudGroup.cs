@@ -287,7 +287,7 @@ namespace FreeVelo.UI
                 GUI.Label(new Rect(row.x + 28, row.y, 130, row.height), r.DisplayName, Clip(Theme.With(Theme.Body, nameColor, 15)));
                 GUI.Label(new Rect(row.x + 154, row.y, 54, row.height), $"{r.Wkg:0.0}", Theme.With(Theme.Caption, Theme.Muted, 14, TextAnchor.MiddleRight));
                 string gap = r.IsMe || !hasMe ? string.Empty : $"{r.DistanceM - me.DistanceM:+0;-0;0} m";
-                if (towed) Ui.DrawIcon(new Rect(row.xMax - 24, row.center.y - 9, 18, 18), Icon.Drop, Theme.Info);
+                if (towed) Ui.DrawIcon(new Rect(row.xMax - 24, row.center.y - 9, 18, 18), Icon.Tow, Theme.Info);
                 else GUI.Label(new Rect(row.x + 206, row.y, row.width - 210, row.height), gap, Theme.With(Theme.Caption, Theme.Muted, 14, TextAnchor.MiddleRight));
                 y += 38;
             }

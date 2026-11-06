@@ -73,6 +73,14 @@ public sealed class LobbyRegistry
 {
     public static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
 
+    /// <summary>
+    /// A rider without any activity (no live connection, no API calls – the waiting room asks every few seconds) for
+    /// this long has left: the app was closed. Long enough to switch to a messenger and share the code.
+    /// </summary>
+    public static readonly TimeSpan RiderTimeout = TimeSpan.FromMinutes(3);
+
+    private readonly Dictionary<string, DateTimeOffset> _lastSeen = new();
+
     private readonly object _sync = new();
     private readonly Dictionary<string, Lobby> _byId = new();
     private readonly Dictionary<string, Lobby> _byCode = new();
@@ -153,7 +161,10 @@ public sealed class LobbyRegistry
     {
         lock (_sync)
         {
-            if (_byRider.TryGetValue(riderId, out var lobby)) lobby.LastActivityUtc = _time.GetUtcNow();
+            if (!_byRider.TryGetValue(riderId, out var lobby)) return;
+            var now = _time.GetUtcNow();
+            lobby.LastActivityUtc = now;
+            _lastSeen[riderId] = now;
         }
     }
 
@@ -191,10 +202,12 @@ public sealed class LobbyRegistry
         lobby.Add(riderId);
         lobby.LastActivityUtc = _time.GetUtcNow();
         _byRider[riderId] = lobby;
+        _lastSeen[riderId] = lobby.LastActivityUtc;
     }
 
     private void LeaveLocked(string riderId)
     {
+        _lastSeen.Remove(riderId);
         if (!_byRider.Remove(riderId, out var lobby)) return;
         lobby.Remove(riderId);
         if (lobby.RiderIds.Count == 0) Close(lobby);
@@ -204,12 +217,17 @@ public sealed class LobbyRegistry
     {
         _byId.Remove(lobby.Id);
         _byCode.Remove(lobby.Code);
-        foreach (string riderId in lobby.RiderIds) _byRider.Remove(riderId);
+        foreach (string riderId in lobby.RiderIds)
+        {
+            _byRider.Remove(riderId);
+            _lastSeen.Remove(riderId);
+        }
     }
 
     private void RemoveIdle()
     {
         var now = _time.GetUtcNow();
+        foreach (var riderId in _lastSeen.Where(p => now - p.Value > RiderTimeout).Select(p => p.Key).ToList()) LeaveLocked(riderId);
         foreach (var lobby in _byId.Values.Where(l => now - l.LastActivityUtc > IdleTimeout).ToList()) Close(lobby);
     }
 

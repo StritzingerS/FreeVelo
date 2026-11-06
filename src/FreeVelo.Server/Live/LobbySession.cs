@@ -61,24 +61,26 @@ public sealed class LobbySession
 
     public bool HasConnections => _members.Values.Any(m => m.Connection != null);
 
+    public List<string> ConnectedMemberIds => _members.Values.Where(m => m.Connection != null).Select(m => m.RiderId).ToList();
+
     /// <summary>The app connected: welcome it (replacing an older connection of the same rider).</summary>
     public void Attach(string riderId, string displayName, LiveConnection connection)
     {
         var member = AddMember(riderId, displayName);
         member.Connection?.Close(LiveCloseCodes.Replaced, "replaced");
         member.Connection = connection;
-        member.DisconnectedAt = null;
+        member.DisconnectedAt = null; // back: no longer counting towards dropping out
         connection.Send(LiveCodec.Encode(new WelcomeMessage { YourSlot = member.Slot, Mode = Mode, StartDistanceM = StartDistance(riderId), TickMs = (ushort)TickMs }));
         _rosterChanged = true;
     }
 
     /// <summary>The app's connection ended; the rider stays in the ride for a while (reconnect after a dropout).</summary>
-    public void Detach(string riderId, LiveConnection connection)
+    public void Detach(string riderId, LiveConnection connection, bool abrupt)
     {
         if (_members.TryGetValue(riderId, out var member) && member.Connection == connection)
         {
             member.Connection = null;
-            member.DisconnectedAt = _time.GetUtcNow();
+            member.DisconnectedAt = abrupt ? _time.GetUtcNow() : null;
         }
     }
 
@@ -110,7 +112,7 @@ public sealed class LobbySession
     }
 
     /// <summary>Riders whose app has been gone longer than <paramref name="grace"/>.</summary>
-    public IEnumerable<string> AwayLongerThan(TimeSpan grace)
+    public IEnumerable<string> DroppedLongerThan(TimeSpan grace)
     {
         var now = _time.GetUtcNow();
         return _members.Values.Where(m => m.DisconnectedAt is { } t && now - t > grace).Select(m => m.RiderId).ToList();

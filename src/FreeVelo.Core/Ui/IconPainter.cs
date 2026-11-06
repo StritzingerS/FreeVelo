@@ -46,6 +46,7 @@ namespace FreeVelo.Core.Ui
         TurnLeft,
         TurnRight,
         Straight,
+        Tow,
     }
 
     /// <summary>
@@ -233,6 +234,17 @@ namespace FreeVelo.Core.Ui
             }
 
             return pts;
+        }
+
+        /// <summary>Closed outline of a rounded bar at 45° (a chain link).</summary>
+        private static Vector2[] Stadium(Vector2 c, float length, float radius)
+        {
+            var axis = Vector2.Normalize(V(1, -1)) * (length / 2 - radius);
+            var pts = new List<Vector2>();
+            pts.AddRange(Arc(c + axis, radius, -135, 45, 10));
+            pts.AddRange(Arc(c - axis, radius, 45, 225, 10));
+            pts.Add(pts[0]);
+            return pts.ToArray();
         }
 
         private static List<Shape> Shapes(Icon icon)
@@ -424,6 +436,11 @@ namespace FreeVelo.Core.Ui
                 case Icon.Drop:
                     s.Add(new Disc(V(12, 15), 5.6f));
                     s.Add(new Polygon(V(12, 2.5f), V(16.9f, 12.3f), V(7.1f, 12.3f)));
+                    break;
+                case Icon.Tow:
+                    // Two interlocked chain links (towed along by the group).
+                    s.Add(new Polyline(Stroke, Stadium(V(8.7f, 15.3f), 8.6f, 3.3f)));
+                    s.Add(new Polyline(Stroke, Stadium(V(15.3f, 8.7f), 8.6f, 3.3f)));
                     break;
                 case Icon.Straight:
                     s.Add(Line(V(12, 21), V(12, 5)));
