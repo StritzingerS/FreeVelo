@@ -2,9 +2,12 @@
   <Folder Name="/src/">
     <Project Path="src/FreeVelo.Core/FreeVelo.Core.csproj" />
     <Project Path="src/FreeVelo.Devices/FreeVelo.Devices.csproj" />
+    <Project Path="src/FreeVelo.Server/FreeVelo.Server.csproj" />
+    <Project Path="src/FreeVelo.Shared/FreeVelo.Shared.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FreeVelo.Core.Tests/FreeVelo.Core.Tests.csproj" />
     <Project Path="tests/FreeVelo.Devices.Tests/FreeVelo.Devices.Tests.csproj" />
+    <Project Path="tests/FreeVelo.Server.Tests/FreeVelo.Server.Tests.csproj" />
   </Folder>
 </Solution>

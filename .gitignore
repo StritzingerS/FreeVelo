@@ -62,3 +62,6 @@ unity/**/[Aa]ssets/[Pp]lugins/[Aa]ndroid/kotlin-stdlib-*.jar*
 # Local-only Unity content (Asset Store models etc. – must not be pushed to the public repository)
 unity/**/[Aa]ssets/FreeVeloLocal/
 unity/**/[Aa]ssets/FreeVeloLocal.meta
+
+# FreeVelo server data (database, signing key) when run locally
+src/FreeVelo.Server/data/

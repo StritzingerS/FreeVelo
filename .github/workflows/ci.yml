@@ -20,6 +20,20 @@ jobs:
       - name: Build and test
         run: dotnet test FreeVelo.slnx --configuration Release
 
+  server-image:
+    name: Server Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build image
+        run: docker build -f src/FreeVelo.Server/Dockerfile -t freevelo-server .
+      - name: Start and check health
+        run: |
+          docker run -d --name freevelo -p 8080:8080 freevelo-server
+          for i in $(seq 1 30); do curl -sf http://localhost:8080/health && exit 0; sleep 1; done
+          docker logs freevelo
+          exit 1
+
   android:
     name: Android BLE test app
     runs-on: ubuntu-latest
