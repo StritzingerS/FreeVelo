@@ -796,8 +796,8 @@ namespace FreeVelo.Core.World.Gen
             {
                 // Inside the home world's terrain grid the road follows the ground like the home roads (that ground
                 // stays as it is); from where it leaves the grid, an even gradient to the foot, eased at both ends.
-                var (minX, minZ, maxX, maxZ) = Bounds;
-                double margin = Terrain.Margin + 60;
+                var (minX, minZ, maxX, maxZ) = Terrain.GridRect(this);
+                double margin = 60;
                 int exit = 0;
                 for (int i = 0; i < n; i++)
                 {

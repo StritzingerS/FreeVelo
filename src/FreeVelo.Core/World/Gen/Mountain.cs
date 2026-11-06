@@ -170,7 +170,7 @@ namespace FreeVelo.Core.World.Gen
         /// Tried first, so the world is generated in well under a second; the full search (several seconds) only runs
         /// when it doesn't fit, e.g. for another seed. A test checks that it still is the search's best result.
         /// </summary>
-        internal static readonly (int Theta, double G1, int Side, double G2) DefaultHint = (6, 30, 1, -60);
+        internal static readonly (int Theta, double G1, int Side, double G2) DefaultHint = (3, 30, 1, -60);
 
         /// <summary>The parameters the plan was made with (see <see cref="DefaultHint"/>).</summary>
         internal (int Theta, double G1, int Side, double G2) Key { get; private set; }
@@ -198,8 +198,8 @@ namespace FreeVelo.Core.World.Gen
             var sampleStelvio = Sample(stelvio);
             var sampleAlpe = Sample(alpe);
 
-            var (bminX, bminZ, bmaxX, bmaxZ) = map.Bounds;
-            double grid = Terrain.Margin + GridClearance;
+            var (bminX, bminZ, bmaxX, bmaxZ) = Terrain.GridRect(map);
+            double grid = GridClearance;
             bool InHomeGrid(double x, double z) => x > bminX - grid && x < bmaxX + grid && z > bminZ - grid && z < bmaxZ + grid;
 
             bool ClearOfHome(PlacedClimb p, int[] sample)
@@ -399,8 +399,8 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>Length of an access road after it has left the home world's terrain grid.</summary>
         internal static double OutsideGrid(WorldMap map, Polyline path)
         {
-            var (minX, minZ, maxX, maxZ) = map.Bounds;
-            double m = Terrain.Margin + 60;
+            var (minX, minZ, maxX, maxZ) = Terrain.GridRect(map);
+            double m = 60;
             double exit = 0;
             for (int i = 0; i < path.Count; i++)
             {

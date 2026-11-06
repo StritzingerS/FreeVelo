@@ -18,21 +18,36 @@ namespace FreeVelo.Core.World.Gen
         private readonly SegmentIndex? _river;
         private readonly float[] _heights;
 
+        /// <summary>Chunks of the 3D world (home grid and mountain): the home grid is a whole number of them.</summary>
+        public const double ChunkSize = 128;
+
         private Terrain(WorldMap map, double cell)
         {
             _map = map;
             Cell = cell;
-            var (minX, minZ, maxX, maxZ) = map.Bounds;
-            MinX = Math.Floor((minX - Margin) / cell) * cell;
-            MinZ = Math.Floor((minZ - Margin) / cell) * cell;
-            Nx = (int)Math.Ceiling((maxX + Margin - MinX) / cell) + 1;
-            Nz = (int)Math.Ceiling((maxZ + Margin - MinZ) / cell) + 1;
+            var rect = GridRect(map);
+            MinX = rect.MinX;
+            MinZ = rect.MinZ;
+            Nx = (int)Math.Round((rect.MaxX - rect.MinX) / cell) + 1;
+            Nz = (int)Math.Round((rect.MaxZ - rect.MinZ) / cell) + 1;
             foreach (var e in map.Edges) _roads.Add(new SegmentIndex(e.X, e.Z, 40));
             if (map.River != null) _river = new SegmentIndex(map.River.X, map.River.Z, 40);
             _heights = new float[Nx * Nz];
         }
 
         public WorldMap Map => _map;
+
+        /// <summary>
+        /// The home world's detailed grid: its roads and water plus <see cref="Margin"/>, rounded out to whole chunks
+        /// (so the mountain's chunks join it exactly).
+        /// </summary>
+        public static (double MinX, double MinZ, double MaxX, double MaxZ) GridRect(WorldMap map)
+        {
+            var (minX, minZ, maxX, maxZ) = map.Bounds;
+            double x0 = Math.Floor((minX - Margin) / ChunkSize) * ChunkSize, z0 = Math.Floor((minZ - Margin) / ChunkSize) * ChunkSize;
+            double x1 = x0 + (Math.Ceiling((maxX + Margin - x0) / ChunkSize) * ChunkSize), z1 = z0 + (Math.Ceiling((maxZ + Margin - z0) / ChunkSize) * ChunkSize);
+            return (x0, z0, x1, z1);
+        }
 
         /// <summary>The mountain's shape (null for worlds without a mountain). Outside the home grid, heights come from it.</summary>
         public MountainTerrain? Mountain { get; private set; }
