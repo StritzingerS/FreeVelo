@@ -288,8 +288,13 @@ namespace FreeVelo.Net
             if (_api == null || _apiServer != server)
             {
                 if (string.IsNullOrEmpty(server)) throw new InvalidOperationException(L.Get("no_server"));
-                var http = new HttpClient { BaseAddress = new Uri(server + "/"), Timeout = TimeSpan.FromSeconds(15) };
-                _api = new FreeVeloApi(http, new UnityJson());
+                // Long timeout: a free host that went to sleep needs up to about a minute to wake up.
+                var http = new HttpClient { BaseAddress = new Uri(server + "/"), Timeout = TimeSpan.FromSeconds(70) };
+                _api = new FreeVeloApi(http, new UnityJson())
+                {
+                    // The server forgot the rider (free hosting without storage restarted): keep the new identity.
+                    CredentialsReplaced = credentials => AppSettings.Rider = credentials,
+                };
                 _apiServer = server;
             }
 

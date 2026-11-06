@@ -56,6 +56,12 @@ namespace FreeVelo.Shared.Api
         /// <summary>The stored identity (null until <see cref="CreateRiderAsync"/>).</summary>
         public RiderCredentials? Credentials { get; set; }
 
+        /// <summary>
+        /// Called when the server no longer knew the rider (e.g. a free host that forgets its data on restart) and the
+        /// rider was registered again with the same name: the app stores the new credentials.
+        /// </summary>
+        public Action<RiderCredentials>? CredentialsReplaced { get; set; }
+
         public Uri? BaseAddress => _http.BaseAddress;
 
         /// <summary>First start: creates the rider and sets <see cref="Credentials"/> (the app must store them).</summary>
@@ -72,7 +78,20 @@ namespace FreeVelo.Shared.Api
         {
             if (_accessToken != null && _now() < _accessTokenUntil) return _accessToken;
             if (Credentials == null) throw new InvalidOperationException("No rider yet: call CreateRiderAsync first.");
-            var session = await Send<SessionResponse>(HttpMethod.Post, ApiRoutes.Session, new SessionRequest { riderId = Credentials.riderId, secret = Credentials.secret }, authorized: false, ct);
+            SessionResponse session;
+            try
+            {
+                session = await Send<SessionResponse>(HttpMethod.Post, ApiRoutes.Session, new SessionRequest { riderId = Credentials.riderId, secret = Credentials.secret }, authorized: false, ct);
+            }
+            catch (ApiException e) when (e.Code == ApiErrors.InvalidCredentials && !string.IsNullOrWhiteSpace(Credentials.displayName))
+            {
+                // The server forgot this rider: register again with the same name, nobody has to type anything.
+                var renewed = await Send<RiderCredentials>(HttpMethod.Post, ApiRoutes.Riders, new CreateRiderRequest { displayName = Credentials.displayName }, authorized: false, ct);
+                Credentials = renewed;
+                CredentialsReplaced?.Invoke(renewed);
+                session = await Send<SessionResponse>(HttpMethod.Post, ApiRoutes.Session, new SessionRequest { riderId = renewed.riderId, secret = renewed.secret }, authorized: false, ct);
+            }
+
             _accessToken = session.accessToken;
             _accessTokenUntil = _now().AddSeconds(Math.Max(60, session.expiresIn - 300)); // renew 5 min early
             Credentials.displayName = session.rider.displayName;

@@ -1,0 +1,18 @@
+# Render Blueprint for the FreeVelo server (free plan, see docs/RENDER.md).
+# Render builds the Docker image and redeploys automatically on every push to the branch the Blueprint uses.
+services:
+  - type: web
+    name: freevelo
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./src/FreeVelo.Server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      # Render sends traffic to this port.
+      - key: PORT
+        value: "8080"
+      # Requests come through Render's proxy: trust its X-Forwarded-For (rate limits per rider, not per proxy).
+      - key: Server__BehindProxy
+        value: "true"

@@ -62,9 +62,30 @@ public sealed class ClientTests : IDisposable
 
         await restarted.DeleteRiderAsync();
         Assert.Null(restarted.Credentials);
-        var gone = new FreeVeloApi(_server.CreateClient(), new TestJson()) { Credentials = credentials };
-        var error = await Assert.ThrowsAsync<ApiException>(() => gone.CurrentLobbyAsync());
-        Assert.Equal(HttpStatusCode.Unauthorized, error.Status);
+        // Old credentials of a deleted rider (e.g. a second device): registered again as a new rider.
+        var stale = new FreeVeloApi(_server.CreateClient(), new TestJson()) { Credentials = credentials };
+        Assert.Null(await stale.CurrentLobbyAsync());
+        Assert.NotEqual(credentials.riderId, stale.Credentials!.riderId);
+    }
+
+    [Fact]
+    public async Task ServerThatForgotTheRiderRegistersThemAgainWithTheSameName()
+    {
+        var api = NewApi();
+        var old = await api.CreateRiderAsync("Sami");
+
+        // A new, empty server (e.g. Render restarted without persistent storage), same app.
+        using var fresh = new ServerFactory();
+        var app = new FreeVeloApi(fresh.CreateClient(), new TestJson()) { Credentials = old };
+        RiderCredentials? stored = null;
+        app.CredentialsReplaced = c => stored = c;
+
+        var lobby = await app.CreateLobbyAsync(new CreateLobbyRequest { name = "After restart" });
+        Assert.Equal("Sami", lobby.riders.Single().displayName);
+        Assert.NotNull(stored);
+        Assert.NotEqual(old.riderId, stored!.riderId);
+        Assert.Equal("Sami", stored.displayName);
+        Assert.Same(stored, app.Credentials);
     }
 
     [Fact]

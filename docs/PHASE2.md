@@ -44,6 +44,8 @@ container (ASP.NET Core + SQLite), so it runs on Oracle Free or any small VPS / 
 - [x] Oracle Free VM setup guide (`docs/ORACLE.md`): Docker Compose with Caddy (HTTPS via Let's Encrypt),
       DuckDNS name; `deploy/` folder, checked in CI
 - [x] Backups of the SQLite file (`deploy/backup.sh`, daily via cron)
+- [x] Render (free, no credit card): `render.yaml` Blueprint with automatic deploys on push (`docs/RENDER.md`);
+      the app re-registers riders a forgetful free server lost, and waits up to 70 s for a sleeping server
 
 ### F. Strava
 - [ ] OAuth token exchange / refresh through the server (client secret stays on the server)

@@ -10,6 +10,12 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Hosting platforms (Render, Koyeb, …) say through PORT where to listen; otherwise ASPNETCORE_HTTP_PORTS / --urls.
+if (int.TryParse(Environment.GetEnvironmentVariable("PORT"), out int platformPort))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{platformPort}");
+}
+
 var server = builder.Configuration.GetSection("Server").Get<ServerOptions>() ?? new ServerOptions();
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 var live = builder.Configuration.GetSection("Live").Get<LiveOptions>() ?? new LiveOptions();
