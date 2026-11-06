@@ -912,7 +912,7 @@ namespace FreeVelo.UI
             Ui.Rect(_full, new Color(0, 0, 0, 0.45f), 0);
             float cw = Mathf.Min(900, _w - 80);
             int tileCount = s.AvgHeartRate.HasValue ? 7 : 6;
-            float contentH = 108 + (((tileCount + 3) / 4) * 92) + 8 + (s.PowerCurve != null && s.PowerCurve.Count > 0 ? 124 : 0) + (s.EstimatedFtpW.HasValue ? 88 : 0) + 104;
+            float contentH = 108 + (((tileCount + 3) / 4) * 92) + 8 + (s.PowerCurve != null && s.PowerCurve.Count > 0 ? 146 : 0) + (s.EstimatedFtpW.HasValue ? 88 : 0) + 104;
             float ch = Mathf.Min(_h - 56, contentH);
             var r = new Rect((_w - cw) / 2f, (_h - ch) / 2f, cw, ch);
             Ui.Card(r, Theme.Surface, 24);
@@ -952,17 +952,17 @@ namespace FreeVelo.UI
                 GUI.Label(new Rect(x, y, 300, 18), L.Get("power_curve").ToUpperInvariant(), Theme.Overline);
                 var curve = s.PowerCurve.ToList();
                 double max = curve.Max(kv => kv.Value);
-                float bw = Mathf.Min(96, (w - (8 * (curve.Count - 1))) / curve.Count);
+                float bw = Mathf.Min(96, (w - (10 * (curve.Count - 1))) / curve.Count);
                 for (int i = 0; i < curve.Count; i++)
                 {
                     float h = 14 + (float)(curve[i].Value / max) * 50;
-                    var b = new Rect(x + (i * (bw + 10)), y + 92 - h, bw, h);
+                    var b = new Rect(x + (i * (bw + 10)), y + 116 - h, bw, h);
                     Ui.Rect(b, ZoneColor(curve[i].Value, AppSettings.FtpW), 6);
                     GUI.Label(new Rect(b.x, b.y - 22, bw, 20), $"{curve[i].Value:0}", Theme.With(Theme.Caption, Theme.Text, 14, TextAnchor.MiddleCenter));
-                    GUI.Label(new Rect(b.x, y + 94, bw, 20), FormatDuration(curve[i].Key), Theme.With(Theme.Caption, size: 13, anchor: TextAnchor.MiddleCenter));
+                    GUI.Label(new Rect(b.x, y + 118, bw, 20), FormatDuration(curve[i].Key), Theme.With(Theme.Caption, size: 13, anchor: TextAnchor.MiddleCenter));
                 }
 
-                y += 124;
+                y += 146;
             }
 
             // FTP test result
