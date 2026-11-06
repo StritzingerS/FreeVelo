@@ -24,6 +24,7 @@ namespace FreeVelo.UI
             Home,
             Group,
             Workouts,
+            Training,
             Devices,
             Settings,
             Editor,
@@ -136,6 +137,7 @@ namespace FreeVelo.UI
                 case Page.Group: DrawGroup(content); break;
                 case Page.Workouts: DrawWorkouts(content); break;
                 case Page.Devices: DrawDevices(content); break;
+                case Page.Training: DrawTraining(content); break;
                 case Page.Settings: DrawSettings(content); break;
             }
         }
@@ -155,6 +157,7 @@ namespace FreeVelo.UI
                 (Page.Home, Icon.Bike, L.Get("ride")),
                 (Page.Group, Icon.Group, L.Get("group")),
                 (Page.Workouts, Icon.List, L.Get("workouts")),
+                (Page.Training, Icon.Target, L.Get("training")),
                 (Page.Devices, Icon.Bluetooth, L.Get("devices")),
                 (Page.Settings, Icon.Gear, L.Get("settings")),
             };
@@ -168,7 +171,7 @@ namespace FreeVelo.UI
                 Ui.DrawIcon(new Rect(pill.center.x - 13, pill.center.y - 13, 26, 26), item.Icon, selected ? Theme.Accent : Theme.Muted);
                 GUI.Label(new Rect(r.x, r.y + 50, r.width, 24), item.Label, Theme.With(Theme.Caption, selected ? Theme.Text : Theme.Muted, 14, TextAnchor.MiddleCenter));
                 if (GUI.Button(r, GUIContent.none, GUIStyle.none)) Navigate(item.Page);
-                y += 86;
+                y += 82;
             }
 
             // Connection indicator at the bottom: trainer status.
@@ -225,9 +228,27 @@ namespace FreeVelo.UI
             var templates = WorkoutStore.Library.Templates;
             var quick = new[] { 1, 4, 7 }.Where(i => i < templates.Count).Select(i => templates[i]).ToList();
             float cw = (c.width - 16 * (quick.Count - 1)) / Mathf.Max(1, quick.Count);
+            var planNext = PlanStore.Active ? PlanStore.Plan.Next(System.DateTime.Now.Date) : null;
+            var planWorkout = PlanStore.WorkoutOf(planNext);
+            if (planWorkout != null)
+            {
+                // Training plan: its next session takes the first place.
+                var r = new Rect(c.x, y + 26, cw, 150);
+                bool isToday = planNext.Date == System.DateTime.Now.Date;
+                Ui.Card(r, Color.Lerp(Theme.Surface, Theme.Accent, 0.12f));
+                Ui.Outline(r, Theme.Alpha(Theme.Accent, 0.8f), 2, Theme.Radius);
+                GUI.Label(new Rect(r.x + 16, r.y + 12, r.width - 32, 18), (L.Get("plan") + " · " + (isToday ? L.Get("today") : DayLabel(planNext.Date))).ToUpperInvariant(), Theme.With(Theme.Overline, Theme.Accent));
+                GUI.Label(new Rect(r.x + 16, r.y + 32, r.width - 32, 26), planWorkout.Name.Get(AppSettings.Language), Clip(Theme.With(Theme.H3, size: 17)));
+                GUI.Label(new Rect(r.x + 16, r.y + 58, r.width - 32, 20), Meta(planWorkout) + (planNext.adjustPercent != 0 ? $" · {planNext.adjustPercent:+0;-0} %" : ""), Theme.Caption);
+                WorkoutProfile(new Rect(r.x + 16, r.y + 84, r.width - 86, 50), planWorkout, false);
+                if (Ui.IconButton(new Rect(r.xMax - 60, r.yMax - 60, 46, 46), Icon.Play, ButtonKind.Primary)) _ride.StartRide(planWorkout, planNext.Intensity);
+                quick.RemoveAt(quick.Count - 1);
+            }
+
+            int offset = planWorkout != null ? 1 : 0;
             for (int i = 0; i < quick.Count; i++)
             {
-                var r = new Rect(c.x + (i * (cw + 16)), y + 26, cw, 150);
+                var r = new Rect(c.x + ((i + offset) * (cw + 16)), y + 26, cw, 150);
                 var w = quick[i];
                 Ui.Card(r);
                 GUI.Label(new Rect(r.x + 16, r.y + 14, r.width - 32, 26), w.Name.Get(AppSettings.Language), Clip(Theme.With(Theme.H3, size: 17)));
@@ -631,7 +652,7 @@ namespace FreeVelo.UI
             float zonesH = 92 + (zones.Zones.Count * 58);
             var rides = RecentRides();
             float ridesH = 92 + (Mathf.Max(1, rides.Length) * 66);
-            float contentH = 8 + 280 + 24 + 160 + 24 + 240 + 24 + StravaCardH + 24 + ridesH + 24 + zonesH + 24;
+            float contentH = 8 + 280 + 24 + 160 + 24 + 240 + 24 + ControlsCardH + 24 + StravaCardH + 24 + ridesH + 24 + BackupCardH + 24 + zonesH + 24;
             Ui.BeginScroll(3000, view, contentH);
             float x0 = 8, y0 = 8;
 
@@ -641,7 +662,11 @@ namespace FreeVelo.UI
             SectionTitle(rider, L.Get("rider"), Icon.Bike);
             GUI.Label(new Rect(rider.x + 24, rider.y + 68, 300, 22), L.Get("ftp"), Theme.Caption);
             int ftp = Ui.Stepper(new Rect(rider.x + 24, rider.y + 92, rider.width - 48, 52), AppSettings.FtpW, "W", 1, 10, 50, 600);
-            if (ftp != AppSettings.FtpW) AppSettings.FtpW = ftp;
+            if (ftp != AppSettings.FtpW)
+            {
+                AppSettings.FtpW = ftp;
+                HistoryStore.RecordFtp(ftp, "manual");
+            }
             GUI.Label(new Rect(rider.x + 24, rider.y + 156, 300, 22), L.Get("weight"), Theme.Caption);
             int weight = Ui.Stepper(new Rect(rider.x + 24, rider.y + 180, rider.width - 48, 52), Mathf.RoundToInt(AppSettings.RiderWeightKg), "kg", 1, 5, 30, 200);
             if (weight != Mathf.RoundToInt(AppSettings.RiderWeightKg)) AppSettings.RiderWeightKg = weight;
@@ -681,11 +706,15 @@ namespace FreeVelo.UI
 
             var groupCard = new Rect(x0, app.yMax + 24, c.width, 240);
             DrawGroupSettingsCard(groupCard);
-            var stravaCard = new Rect(x0, groupCard.yMax + 24, c.width, StravaCardH);
+            var controlsCard = new Rect(x0, groupCard.yMax + 24, c.width, ControlsCardH);
+            DrawControlsCard(controlsCard);
+            var stravaCard = new Rect(x0, controlsCard.yMax + 24, c.width, StravaCardH);
             DrawStravaCard(stravaCard);
             var ridesCard = new Rect(x0, stravaCard.yMax + 24, c.width, ridesH);
             DrawRecentRidesCard(ridesCard, rides);
-            DrawZonesCard(new Rect(x0, ridesCard.yMax + 24, c.width, zonesH));
+            var backupCard = new Rect(x0, ridesCard.yMax + 24, c.width, BackupCardH);
+            DrawBackupCard(backupCard);
+            DrawZonesCard(new Rect(x0, backupCard.yMax + 24, c.width, zonesH));
             Ui.EndScroll(3000, view, contentH);
         }
 
@@ -901,6 +930,7 @@ namespace FreeVelo.UI
             if (workout) DrawWorkoutPanel();
             else DrawRideStrip();
             if (!_ride.IsGroupRide) DrawJunctionCard(workout);
+            if (_ride.GearsActive) DrawGearControl();
             if (_ride.IsGroupRide && _group != null) DrawGroupOverlay();
 
             // Cue
@@ -1095,6 +1125,7 @@ namespace FreeVelo.UI
                 if (s.EstimatedFtpW != AppSettings.FtpW && Ui.Button(new Rect(f.xMax - 230, f.y + 12, 214, 48), L.Get("apply_ftp"), ButtonKind.Primary, Icon.Check))
                 {
                     AppSettings.FtpW = s.EstimatedFtpW.Value;
+                    HistoryStore.RecordFtp(s.EstimatedFtpW.Value, "test");
                     Ui.Toast("✓ FTP " + AppSettings.FtpW + " W");
                 }
             }

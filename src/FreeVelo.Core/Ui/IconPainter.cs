@@ -47,6 +47,7 @@ namespace FreeVelo.Core.Ui
         TurnRight,
         Straight,
         Tow,
+        Minus,
     }
 
     /// <summary>
@@ -264,6 +265,9 @@ namespace FreeVelo.Core.Ui
                     break;
                 case Icon.Plus:
                     s.Add(new Polyline(2.4f, V(12, 5), V(12, 19)));
+                    s.Add(new Polyline(2.4f, V(5, 12), V(19, 12)));
+                    break;
+                case Icon.Minus:
                     s.Add(new Polyline(2.4f, V(5, 12), V(19, 12)));
                     break;
                 case Icon.Close:

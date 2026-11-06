@@ -106,12 +106,30 @@ namespace FreeVelo.App
 
             SetUpAtmosphere();
             WorkoutStore.ProcessImports();
+
+            // Phase 3: history (old FIT files are read once in the background), training plan, Zwift controllers.
+            HistoryStore.ImportMissingRides();
+            if (HistoryStore.Data.ftpHistory.Count == 0) HistoryStore.RecordFtp(AppSettings.FtpW, "manual");
+            PlanStore.UpdateForToday();
+            _ride.RideSaved += OnRideSaved;
+            _ble.Hub.ControllerButton += _ride.OnControllerButton;
+        }
+
+        /// <summary>A ride ended: into the history, and into the training plan if it was today's workout.</summary>
+        private void OnRideSaved(FreeVelo.Ride.RideSummary summary)
+        {
+            if (summary.Record == null) return;
+            HistoryStore.Add(summary.Record);
+            summary.PlanSession = PlanStore.RecordRide(summary.Record);
+            if (summary.PlanSession != null) FreeVelo.UI.Ui.Toast(L.Get("plan_session_done"));
         }
 
         /// <summary>Back from the file picker (or any other app): import waiting workout files.</summary>
         private void OnApplicationFocus(bool hasFocus)
         {
-            if (hasFocus) WorkoutStore.ProcessImports();
+            if (!hasFocus) return;
+            WorkoutStore.ProcessImports();
+            PlanStore.UpdateForToday(); // a new day may have started while the app was open
         }
 
         /// <summary>Sun, ambient light and distance fog (hazy horizon, depth).</summary>
@@ -145,6 +163,7 @@ namespace FreeVelo.App
 
         private void Update()
         {
+            HistoryStore.Poll();
             if (_worldTask == null || !_worldTask.IsCompleted) return;
             var task = _worldTask;
             _worldTask = null;

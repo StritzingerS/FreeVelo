@@ -27,6 +27,28 @@ namespace FreeVelo.App
             set => SetFloat("difficulty", Mathf.Clamp01(value));
         }
 
+        /// <summary>Virtual gears (Off / Grade / Erg, see FreeVelo.Core.Physics.VirtualGearMode).</summary>
+        public static FreeVelo.Core.Physics.VirtualGearMode GearMode
+        {
+            get => (FreeVelo.Core.Physics.VirtualGearMode)PlayerPrefs.GetInt("gearMode", 0);
+            set => SetInt("gearMode", (int)value);
+        }
+
+        /// <summary>
+        /// Settings that go into a backup. Not included: the rider's server identity (riderId / riderSecret – the server
+        /// registers the name again) and the Strava login (connect again on the new phone).
+        /// </summary>
+        public static readonly string[] BackupIntKeys = { "ftp", "powerSource", "gearMode" };
+        public static readonly string[] BackupFloatKeys = { "weight", "difficulty" };
+        public static readonly string[] BackupStringKeys = { "lang", "zones", "friends", "friendCode", "serverUrl" };
+
+        /// <summary>After a backup was restored: forget cached values.</summary>
+        public static void ReloadAfterRestore()
+        {
+            _language = null;
+            _zones = null;
+        }
+
         public static PowerSource PowerSource
         {
             get => (PowerSource)PlayerPrefs.GetInt("powerSource", (int)PowerSource.Trainer);

@@ -23,14 +23,26 @@ to wake up.
 - Workout editor, power zones settings, power curve in the ride summary, Strava upload with offline queue
 
 ### C. Training plans & history
-- [ ] Ride history (saved rides with summary), power curve over time
-- [ ] Fitness / fatigue / form (CTL / ATL / TSB) from the rides' TSS
-- [ ] Adaptive training plans over several weeks
-- [ ] Backup: export / import of settings, workouts and ride history
+- [x] Ride history: one summary per ride (`history.json`), saved FIT files read once at the first start
+      (`FitReader`), FTP history (manual changes and accepted tests)
+- [x] Fitness / fatigue / form (CTL 42 d / ATL 7 d / TSB), weekly volume, power curve (90 days vs. all time)
+- [x] Training plans: templates Base, FTP Build, VO2max Block, Maintenance (4–12 weeks, 3–5 days a week);
+      recovery week every 4th week, FTP test at the end of build blocks; adaptation rules 1–7 of CONCEPT.md
+      (`PlanAdapter`, tested); today's session on the home screen, started with the plan's intensity
+- [x] Group and free rides count as load (CTL/ATL) only; a session is done when its workout was ridden
+- [x] Backup: one ZIP (settings, rides, history, own workouts, plan) via the share sheet; restored by picking it in the
+      import file picker. Not included: server identity and Strava login
+- [ ] Test on the phone: plan for a few weeks, history after importing the existing rides, backup to another phone
 
 ### D. Controls
-- [ ] Zwift Click / Play (BLE, community-documented protocol) – prototype, see CONCEPT.md
-- [ ] Virtual gears (SIM mode)
+- [x] Virtual gears, 24 gears (0.75–5.5), both variants of CONCEPT.md 4.4 selectable in Settings → Controls:
+      "Grade" (SIM grade so the trainer brakes like the road in the virtual gear) and "ERG" (SIM via ERG: road power
+      at cadence × virtual gear); on-screen + / − while riding; in ERG workout blocks + / − change the block intensity
+- [x] Zwift Click V2 (and Click / Play / Ride): own module `FreeVelo.Devices.Zwift` after the community-documented
+      protocol (RideOn handshake, keep-alive every 3 s, 0x23 button bitmap). + / A harder, − / B easier.
+      The Click V2 **left** unit is locked by Zwift (unlock by connecting it to Zwift, lasts about 24 h);
+      the right unit works on its own (+ harder, B easier). The app shows "locked" in Settings → Controls.
+- [ ] Test with the real Click V2 (both units, keep-alive, locked left unit) and decide Grade vs. ERG gears by feel
 
 ### Done when
 - A plan runs for weeks, rides upload to Strava automatically.

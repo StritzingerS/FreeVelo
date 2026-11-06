@@ -4,12 +4,14 @@ using System.IO;
 using System.Linq;
 using FreeVelo.App;
 using FreeVelo.Ble;
+using FreeVelo.Core.History;
 using FreeVelo.Core.Physics;
 using FreeVelo.Core.Recording;
 using FreeVelo.Core.Training;
 using FreeVelo.Core.Workouts;
 using FreeVelo.Core.World;
 using FreeVelo.Core.World.Gen;
+using FreeVelo.Devices.Zwift;
 using FreeVelo.Net;
 using FreeVelo.Shared.Api;
 using UnityEngine;
@@ -44,6 +46,12 @@ namespace FreeVelo.Ride
 
         /// <summary>Saved FIT file (null if nothing was recorded or saving failed).</summary>
         public string FitPath;
+
+        /// <summary>The ride's entry in the history (null without FIT file).</summary>
+        public RideRecord Record;
+
+        /// <summary>The training plan session this ride completed (set by the app).</summary>
+        public FreeVelo.Core.Plans.PlannedSession PlanSession;
     }
 
     /// <summary>
@@ -61,6 +69,18 @@ namespace FreeVelo.Ride
         private float _sampleTimer;
         private float _idleTime;
         private FtpTestKind? _ftpTest;
+        private double _intensitySum;
+        private int _intensitySeconds;
+        private int _pendingShift;
+        private bool _wasGroupRide;
+
+        /// <summary>Virtual gears (used when <see cref="AppSettings.GearMode"/> is not Off).</summary>
+        public VirtualGears Gears { get; } = new VirtualGears();
+
+        /// <summary>Virtual gears act now: a free / group ride or a free part of a workout (in ERG blocks, shifting changes the intensity).</summary>
+        public bool GearsActive => State == RideState.Riding && AppSettings.GearMode != VirtualGearMode.Off && !InErgBlock;
+
+        public bool InErgBlock => WorkoutState != null && WorkoutState.TargetW.HasValue && !WorkoutState.IsFinished;
 
         public RideState State { get; private set; } = RideState.Idle;
 
@@ -143,8 +163,8 @@ namespace FreeVelo.Ride
             _rideStartDistanceM = 0;
         }
 
-        /// <summary>Starts a ride; <paramref name="workout"/> null = free ride.</summary>
-        public void StartRide(Workout workout)
+        /// <summary>Starts a ride; <paramref name="workout"/> null = free ride; <paramref name="intensity"/> from the training plan.</summary>
+        public void StartRide(Workout workout, double intensity = 1.0)
         {
             _ble.ApplySettings();
             IsGroupRide = Group != null && Group.Lobby != null;
@@ -166,7 +186,11 @@ namespace FreeVelo.Ride
             CueText = null;
 
             Engine = workout != null ? new WorkoutEngine(workout, AppSettings.FtpW) : null;
+            if (Engine != null) Engine.GlobalIntensity = intensity;
             WorkoutState = Engine?.Current;
+            _intensitySum = 0;
+            _intensitySeconds = 0;
+            Gears.Set(Gears.NearestGear(Gears.ReferenceRatio));
             _ftpTest = FtpTestOf(workout);
 
             // Failing is the goal of a ramp test: no ERG reduction at low cadence.
@@ -182,6 +206,29 @@ namespace FreeVelo.Ride
         public void SkipBlock() => Engine?.SkipSegment();
 
         public void AdjustBlockIntensity(double delta) => Engine?.AdjustCurrentSegmentIntensity(delta);
+
+        /// <summary>
+        /// One shift (+1 harder, −1 easier) from the on-screen buttons or a Zwift controller: in an ERG block the block's
+        /// intensity changes by 1 %, otherwise the virtual gear.
+        /// </summary>
+        public void Shift(int steps)
+        {
+            if (State != RideState.Riding) return;
+            if (InErgBlock) AdjustBlockIntensity(0.01 * steps);
+            else if (AppSettings.GearMode != VirtualGearMode.Off) Gears.Shift(steps);
+        }
+
+        /// <summary>Zwift controller buttons (may come from the Bluetooth thread): + / A harder, − / B easier.</summary>
+        public void OnControllerButton(ZwiftButton button)
+        {
+            int step = button switch
+            {
+                ZwiftButton.ShiftUpRight or ZwiftButton.ShiftDownRight or ZwiftButton.A or ZwiftButton.ClickPlus or ZwiftButton.Up => +1,
+                ZwiftButton.ShiftUpLeft or ZwiftButton.ShiftDownLeft or ZwiftButton.B or ZwiftButton.ClickMinus or ZwiftButton.Down => -1,
+                _ => 0,
+            };
+            if (step != 0) System.Threading.Interlocked.Add(ref _pendingShift, step);
+        }
 
         public void EndRide()
         {
@@ -202,6 +249,7 @@ namespace FreeVelo.Ride
                 }
             }
 
+            _wasGroupRide = IsGroupRide;
             IsGroupRide = false;
             _physics.SpeedMps = 0; // the rider stops: no more wheel/world movement after the ride
             _ble.Hub.SetSimulation(0); // release ERG resistance
@@ -228,7 +276,31 @@ namespace FreeVelo.Ride
                 EstimatedFtpW = _ftpTest.HasValue && Engine != null ? FtpTests.EstimateFtp(_ftpTest.Value, power, Engine.Workout) : null,
                 FitPath = SaveFit(ftp),
             };
-            if (Summary.FitPath != null) RideSaved?.Invoke(Summary);
+            if (Summary.FitPath != null)
+            {
+                Summary.Record = BuildRecord(Summary, ftp);
+                RideSaved?.Invoke(Summary);
+            }
+        }
+
+        /// <summary>The ride's history entry: summary from the recorded seconds, plus what was ridden.</summary>
+        private RideRecord BuildRecord(RideSummary summary, int ftp)
+        {
+            var samples = _recording.Samples
+                .Select(s => new FitRecord(s.TimeUtc, s.PowerW, s.HeartRateBpm, s.CadenceRpm, s.DistanceM, s.SpeedMps, s.AltitudeM))
+                .ToList();
+            var record = RideAnalysis.Summarize(System.IO.Path.GetFileName(summary.FitPath), summary.Title, _recording.StartUtc, samples, ftp);
+            record.distanceM = Math.Round(summary.DistanceM, 1);
+            record.groupRide = _wasGroupRide;
+            record.estimatedFtpW = summary.EstimatedFtpW ?? 0;
+            if (Engine != null)
+            {
+                record.workoutId = Engine.Workout.Id ?? "";
+                record.workoutCompleted = _workoutComplete ? 1 : Math.Min(1, Engine.ElapsedS / Math.Max(1, Engine.TotalDurationS));
+                record.workoutIntensity = _intensitySeconds > 0 ? Math.Round(_intensitySum / _intensitySeconds, 3) : Engine.GlobalIntensity;
+            }
+
+            return record;
         }
 
         /// <summary>Writes the ride as FIT file to persistentDataPath/rides; returns the path.</summary>
@@ -305,6 +377,8 @@ namespace FreeVelo.Ride
             double cadence = live.CadenceRpm ?? 0;
 
             UpdatePower3s(power);
+            int shifts = System.Threading.Interlocked.Exchange(ref _pendingShift, 0);
+            if (shifts != 0) Shift(shifts);
 
             // Auto pause when the rider stops pedaling (keeps workout and recording aligned).
             _idleTime = power <= 0 && cadence <= 0 ? _idleTime + dt : 0;
@@ -338,6 +412,12 @@ namespace FreeVelo.Ride
                 while (_sampleTimer >= 1f)
                 {
                     _sampleTimer -= 1f;
+                    if (InErgBlock)
+                    {
+                        _intensitySum += WorkoutState.SegmentIntensity;
+                        _intensitySeconds++;
+                    }
+
                     // Whole seconds, strictly increasing (FIT records are 1 s apart).
                     var now = DateTime.UtcNow;
                     var samples = _recording.Samples;
@@ -367,9 +447,26 @@ namespace FreeVelo.Ride
             {
                 _ble.Hub.SetErgTarget(WorkoutState.TargetW.Value);
             }
-            else
+            else if (AppSettings.GearMode == VirtualGearMode.Off)
             {
                 _ble.Hub.SetSimulation(position.GradePercent, crr, _physics.WindResistanceCoefficient);
+            }
+            else
+            {
+                // Virtual gears: the bike stays in one gear, the trainer gets the road as felt in the virtual gear.
+                double grade = position.GradePercent * AppSettings.TrainerDifficulty;
+                double mass = _physics.TotalMassKg;
+                double cw = _physics.WindResistanceCoefficient;
+                if (AppSettings.GearMode == VirtualGearMode.Erg)
+                {
+                    _ble.Hub.SetErgTarget((int)Math.Round(Gears.ErgTarget(grade, cadence, mass, crr, cw)), virtualGears: true);
+                }
+                else
+                {
+                    double? trainerKmh = live.TrainerSpeedKmh;
+                    double trainerSpeed = trainerKmh.HasValue ? trainerKmh.Value / 3.6 : _physics.SpeedMps / Gears.Factor;
+                    _ble.Hub.SetSimulation(Gears.EffectiveGrade(grade, trainerSpeed, mass, crr, cw), crr, cw, scaleByDifficulty: false);
+                }
             }
 
             CompleteWorkoutIfDone(background);
