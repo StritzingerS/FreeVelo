@@ -20,6 +20,16 @@ namespace FreeVelo.Shared.Api
 
         /// <summary>Join a public group ride from the list: POST to this with the lobby id.</summary>
         public static string JoinPublic(string lobbyId) => $"/api/v1/lobbies/{lobbyId}/join";
+
+        /// <summary>POST with the friend codes: public rides plus private rides of friends.</summary>
+        public const string VisibleLobbies = "/api/v1/lobbies/visible";
+
+        public const string FriendRequests = "/api/v1/friends/requests";
+        public const string FriendInbox = "/api/v1/friends/inbox";
+
+        public static string AcceptFriend(string requestId) => $"/api/v1/friends/requests/{requestId}/accept";
+
+        public static string DeclineFriend(string requestId) => $"/api/v1/friends/requests/{requestId}/decline";
     }
 
     /// <summary>Machine-readable error codes in <see cref="ApiError.error"/>.</summary>
@@ -31,6 +41,8 @@ namespace FreeVelo.Shared.Api
         public const string LobbyNotFound = "lobby_not_found";
         public const string LobbyFull = "lobby_full";
         public const string TooManyRequests = "too_many_requests";
+        public const string RiderNotFound = "rider_not_found";
+        public const string RequestNotFound = "request_not_found";
     }
 
     public static class RiderRules
@@ -71,6 +83,12 @@ namespace FreeVelo.Shared.Api
     {
         public string riderId = "";
         public string secret = "";
+
+        /// <summary>
+        /// The rider's secret friend code (made by the app, kept on the phone). The server only remembers it in memory,
+        /// to show this rider's private rides to friends who have the code.
+        /// </summary>
+        public string friendCode = "";
     }
 
     [Serializable]
@@ -193,11 +211,58 @@ namespace FreeVelo.Shared.Api
         public string routeId = "";
         public string workoutName = "";
         public string hostName = "";
+
+        /// <summary>Private ride shown because friends ride in it.</summary>
+        public bool isPrivate;
+
+        /// <summary>Names of the friends in this ride (from the friend codes sent).</summary>
+        public string[] friends = new string[0];
     }
 
     [Serializable]
     public class LobbyList
     {
         public LobbySummary[] lobbies = new LobbySummary[0];
+    }
+
+    // ------------------------------------------------------------------ friends (codes kept on the phones)
+
+    /// <summary>The friend codes of the rider's friends (to see and join their private rides).</summary>
+    [Serializable]
+    public class FriendCodesRequest
+    {
+        public string[] friendCodes = new string[0];
+    }
+
+    [Serializable]
+    public class FriendRequestCreate
+    {
+        /// <summary>Rider to befriend (from the ride's rider list).</summary>
+        public string riderId = "";
+    }
+
+    /// <summary>A friend as stored on the phone: name and secret friend code.</summary>
+    [Serializable]
+    public class FriendInfo
+    {
+        public string name = "";
+        public string code = "";
+    }
+
+    [Serializable]
+    public class IncomingFriendRequest
+    {
+        public string id = "";
+        public string fromName = "";
+    }
+
+    /// <summary>What the app asks for every few seconds: new requests, and riders who accepted its requests.</summary>
+    [Serializable]
+    public class FriendInbox
+    {
+        public IncomingFriendRequest[] requests = new IncomingFriendRequest[0];
+
+        /// <summary>Riders who accepted this rider's requests (delivered once; the app stores them).</summary>
+        public FriendInfo[] accepted = new FriendInfo[0];
     }
 }

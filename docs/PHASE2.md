@@ -38,6 +38,9 @@ container (ASP.NET Core + SQLite), so it runs on Oracle Free or any small VPS / 
       rider list with gaps, emoji buttons and bubbles (six drawn icons – emoji fonts do not render reliably)
 - [x] Group ride HUD: connecting / towed status; Keep Together positions from the server (trainer gets the grade
       there), Free mode starts next to the group; workouts can be ridden inside a group ride (ERG)
+- [x] Friends: "+" in the waiting room sends a request, the other accepts; both phones store each other's secret
+      friend code (nothing stored on the server). Friends' private rides show up in the ride list and can be joined
+      without the 4-letter code; a new friend code locks everyone out
 - [ ] First real test with two phones (see `docs/SERVER.md` for running the server on a PC)
 
 ### E. Deployment

@@ -1,6 +1,8 @@
 using System.Net;
 using System.Security.Claims;
+using FreeVelo.Server.Friends;
 using FreeVelo.Server.Riders;
+using Microsoft.AspNetCore.Mvc;
 using FreeVelo.Shared.Api;
 
 namespace FreeVelo.Server.Lobbies;
@@ -17,22 +19,16 @@ public static class LobbyEndpoints
 
         group.MapGet(ApiRoutes.Lobbies, (LobbyRegistry lobbies, RiderStore riders) => Results.Ok(new LobbyList
         {
-            lobbies = lobbies.PublicLobbies().Select(l =>
-            {
-                var (host, members) = lobbies.Members(l);
-                return new LobbySummary
-                {
-                    id = l.Id,
-                    name = l.Name,
-                    mode = l.Mode,
-                    maxRiders = l.MaxRiders,
-                    riderCount = members.Length,
-                    routeId = l.RouteId,
-                    workoutName = l.WorkoutName,
-                    hostName = riders.Find(host)?.DisplayName ?? "",
-                };
-            }).ToArray(),
+            lobbies = lobbies.PublicLobbies().Select(l => Summary(l, lobbies, riders, new HashSet<string>())).ToArray(),
         }));
+
+        // Public rides plus private rides in which friends ride (the app sends its friends' codes).
+        group.MapPost(ApiRoutes.VisibleLobbies, (FriendCodesRequest req, LobbyRegistry lobbies, RiderStore riders, FriendService friends) =>
+        {
+            var friendRiders = friends.RidersOf(req.friendCodes ?? Array.Empty<string>());
+            var visible = lobbies.AllLobbies().Where(l => !l.IsPrivate || lobbies.Members(l).RiderIds.Any(friendRiders.Contains));
+            return Results.Ok(new LobbyList { lobbies = visible.Select(l => Summary(l, lobbies, riders, friendRiders)).ToArray() });
+        });
 
         group.MapPost(ApiRoutes.Lobbies, (CreateLobbyRequest req, ClaimsPrincipal user, LobbyRegistry lobbies, RiderStore riders) =>
         {
@@ -54,10 +50,12 @@ public static class LobbyEndpoints
             return Joined(lobbies.JoinByCode(req.code ?? "", rider.Id), lobbies, riders);
         }).RequireRateLimiting(CodeRateLimit);
 
-        group.MapPost("/api/v1/lobbies/{id}/join", (string id, ClaimsPrincipal user, LobbyRegistry lobbies, RiderStore riders) =>
+        // Join from the list: public rides, or private rides of friends (friend codes in the body).
+        group.MapPost("/api/v1/lobbies/{id}/join", (string id, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] FriendCodesRequest? req, ClaimsPrincipal user, LobbyRegistry lobbies, RiderStore riders, FriendService friends) =>
         {
             if (Http.CurrentRider(user, riders) is not { } rider) return Results.Unauthorized();
-            return Joined(lobbies.JoinPublic(id, rider.Id), lobbies, riders);
+            var friendRiders = friends.RidersOf(req?.friendCodes ?? Array.Empty<string>());
+            return Joined(lobbies.JoinPublic(id, rider.Id, l => lobbies.Members(l).RiderIds.Any(friendRiders.Contains)), lobbies, riders);
         });
 
         group.MapPost(ApiRoutes.LeaveLobby, (ClaimsPrincipal user, LobbyRegistry lobbies) =>
@@ -66,6 +64,24 @@ public static class LobbyEndpoints
             lobbies.Leave(riderId);
             return Results.NoContent();
         });
+    }
+
+    private static LobbySummary Summary(Lobby l, LobbyRegistry lobbies, RiderStore riders, HashSet<string> friendRiders)
+    {
+        var (host, members) = lobbies.Members(l);
+        return new LobbySummary
+        {
+            id = l.Id,
+            name = l.Name,
+            mode = l.Mode,
+            maxRiders = l.MaxRiders,
+            riderCount = members.Length,
+            routeId = l.RouteId,
+            workoutName = l.WorkoutName,
+            hostName = riders.Find(host)?.DisplayName ?? "",
+            isPrivate = l.IsPrivate,
+            friends = members.Where(friendRiders.Contains).Select(id => riders.Find(id)?.DisplayName ?? "").ToArray(),
+        };
     }
 
     private static IResult Joined((JoinResult Result, Lobby? Lobby) join, LobbyRegistry lobbies, RiderStore riders) => join.Result switch

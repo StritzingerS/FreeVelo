@@ -58,6 +58,9 @@ namespace FreeVelo.Shared.Api
         /// <summary>The stored identity (null until <see cref="CreateRiderAsync"/>).</summary>
         public RiderCredentials? Credentials { get; set; }
 
+        /// <summary>This phone's secret friend code, sent with every session (see <see cref="SessionRequest.friendCode"/>).</summary>
+        public string FriendCode { get; set; } = "";
+
         /// <summary>
         /// Called when the server no longer knew the rider (e.g. a free host that forgets its data on restart) and the
         /// rider was registered again with the same name: the app stores the new credentials.
@@ -83,7 +86,7 @@ namespace FreeVelo.Shared.Api
             SessionResponse session;
             try
             {
-                session = await Send<SessionResponse>(HttpMethod.Post, ApiRoutes.Session, new SessionRequest { riderId = Credentials.riderId, secret = Credentials.secret }, authorized: false, ct);
+                session = await Send<SessionResponse>(HttpMethod.Post, ApiRoutes.Session, new SessionRequest { riderId = Credentials.riderId, secret = Credentials.secret, friendCode = FriendCode }, authorized: false, ct);
             }
             catch (ApiException e) when (e.Code == ApiErrors.InvalidCredentials && !string.IsNullOrWhiteSpace(Credentials.displayName))
             {
@@ -91,7 +94,7 @@ namespace FreeVelo.Shared.Api
                 var renewed = await Send<RiderCredentials>(HttpMethod.Post, ApiRoutes.Riders, new CreateRiderRequest { displayName = Credentials.displayName }, authorized: false, ct);
                 Credentials = renewed;
                 CredentialsReplaced?.Invoke(renewed);
-                session = await Send<SessionResponse>(HttpMethod.Post, ApiRoutes.Session, new SessionRequest { riderId = renewed.riderId, secret = renewed.secret }, authorized: false, ct);
+                session = await Send<SessionResponse>(HttpMethod.Post, ApiRoutes.Session, new SessionRequest { riderId = renewed.riderId, secret = renewed.secret, friendCode = FriendCode }, authorized: false, ct);
             }
 
             _accessToken = session.accessToken;
@@ -122,6 +125,40 @@ namespace FreeVelo.Shared.Api
 
         public Task<LobbyDetails> JoinPublicAsync(string lobbyId, CancellationToken ct = default) =>
             Send<LobbyDetails>(HttpMethod.Post, ApiRoutes.JoinPublic(lobbyId), null, authorized: true, ct);
+
+        /// <summary>Joins a ride from the list: public, or private with a friend in it (their codes as proof).</summary>
+        public Task<LobbyDetails> JoinFromListAsync(string lobbyId, string[] friendCodes, CancellationToken ct = default) =>
+            Send<LobbyDetails>(HttpMethod.Post, ApiRoutes.JoinPublic(lobbyId), new FriendCodesRequest { friendCodes = friendCodes }, authorized: true, ct);
+
+        /// <summary>Public rides plus private rides of friends.</summary>
+        public Task<LobbyList> VisibleLobbiesAsync(string[] friendCodes, CancellationToken ct = default) =>
+            Send<LobbyList>(HttpMethod.Post, ApiRoutes.VisibleLobbies, new FriendCodesRequest { friendCodes = friendCodes }, authorized: true, ct);
+
+        // ------------------------------------------------------------------ friends
+
+        public Task RequestFriendAsync(string riderId, CancellationToken ct = default) =>
+            Send<object>(HttpMethod.Post, ApiRoutes.FriendRequests, new FriendRequestCreate { riderId = riderId }, authorized: true, ct);
+
+        public Task<FriendInbox> FriendInboxAsync(CancellationToken ct = default) =>
+            Send<FriendInbox>(HttpMethod.Get, ApiRoutes.FriendInbox, null, authorized: true, ct);
+
+        /// <summary>Accepts a request; returns the new friend (name + code) to store on the phone.</summary>
+        public Task<FriendInfo> AcceptFriendAsync(string requestId, CancellationToken ct = default) =>
+            Send<FriendInfo>(HttpMethod.Post, ApiRoutes.AcceptFriend(requestId), null, authorized: true, ct);
+
+        public Task DeclineFriendAsync(string requestId, CancellationToken ct = default) =>
+            Send<object>(HttpMethod.Post, ApiRoutes.DeclineFriend(requestId), null, authorized: true, ct);
+
+        /// <summary>A new random friend code (128 bits, URL-safe).</summary>
+        public static string NewFriendCode()
+        {
+            var bytes = new byte[16];
+            using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create()) rng.GetBytes(bytes);
+            return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        }
+
+        /// <summary>Forgets the current session (e.g. after the friend code changed, so the next one carries it).</summary>
+        public void ResetSession() => _accessToken = null;
 
         /// <summary>The ride the rider is in, or null.</summary>
         public Task<LobbyDetails?> CurrentLobbyAsync(CancellationToken ct = default) =>

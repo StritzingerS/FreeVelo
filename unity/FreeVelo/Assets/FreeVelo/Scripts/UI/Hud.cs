@@ -106,6 +106,7 @@ namespace FreeVelo.UI
 
             DrawWorldLoading();
             Ui.DrawToast(_w, _h);
+            DrawFriendRequests();
             Ui.DrawKeyboardBar(_w);
         }
 
@@ -612,7 +613,7 @@ namespace FreeVelo.UI
             float colW = (c.width - 24) / 2f;
             var zones = AppSettings.Zones;
             float zonesH = 92 + (zones.Zones.Count * 58);
-            float contentH = 8 + 280 + 24 + 160 + 24 + 170 + 24 + zonesH + 24;
+            float contentH = 8 + 280 + 24 + 160 + 24 + 240 + 24 + zonesH + 24;
             Ui.BeginScroll(3000, view, contentH);
             float x0 = 8, y0 = 8;
 
@@ -660,7 +661,7 @@ namespace FreeVelo.UI
                 SimulatedBleBackend.RiderPowerW = Mathf.Round(Ui.Slider(new Rect(sim.x + 16, sim.y + 88, sim.width - 32, 44), SimulatedBleBackend.RiderPowerW, 0f, 500f) / 5) * 5;
             }
 
-            var groupCard = new Rect(x0, app.yMax + 24, c.width, 170);
+            var groupCard = new Rect(x0, app.yMax + 24, c.width, 240);
             DrawGroupSettingsCard(groupCard);
             DrawZonesCard(new Rect(x0, groupCard.yMax + 24, c.width, zonesH));
             Ui.EndScroll(3000, view, contentH);

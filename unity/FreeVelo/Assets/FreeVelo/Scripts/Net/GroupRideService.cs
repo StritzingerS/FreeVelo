@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using FreeVelo.App;
@@ -47,6 +49,14 @@ namespace FreeVelo.Net
 
         public LobbySummary[] PublicLobbies { get; private set; } = new LobbySummary[0];
 
+        /// <summary>Friend requests waiting for an answer.</summary>
+        public List<IncomingFriendRequest> FriendRequests { get; } = new List<IncomingFriendRequest>();
+
+        /// <summary>Riders asked for friendship in this session (their "+" turns into "asked").</summary>
+        public HashSet<string> AskedRiders { get; } = new HashSet<string>();
+
+        private float _nextInboxAt;
+
         /// <summary>A request is running (buttons show a spinner state).</summary>
         public bool Busy { get; private set; }
 
@@ -89,9 +99,71 @@ namespace FreeVelo.Net
 
         // ------------------------------------------------------------------ group rides
 
+        /// <summary>Public rides and the private rides of friends.</summary>
         public async void RefreshPublicLobbies()
         {
-            await Run(async api => PublicLobbies = (await api.PublicLobbiesAsync()).lobbies ?? new LobbySummary[0], quiet: true);
+            await Run(async api => PublicLobbies = (await api.VisibleLobbiesAsync(FriendCodes())).lobbies ?? new LobbySummary[0], quiet: true);
+        }
+
+        private static string[] FriendCodes() => AppSettings.Friends.Select(f => f.code).ToArray();
+
+        // ------------------------------------------------------------------ friends
+
+        public async void RequestFriend(string riderId, string name)
+        {
+            await Run(async api =>
+            {
+                await api.RequestFriendAsync(riderId);
+                AskedRiders.Add(riderId);
+                Ui.Toast("✓ " + string.Format(L.Get("friend_asked"), name));
+            });
+        }
+
+        public async void AcceptFriend(IncomingFriendRequest request)
+        {
+            FriendRequests.Remove(request);
+            await Run(async api =>
+            {
+                var friend = await api.AcceptFriendAsync(request.id);
+                AppSettings.AddFriend(friend);
+                Ui.Toast("✓ " + string.Format(L.Get("friend_added"), friend.name));
+            });
+        }
+
+        public async void DeclineFriend(IncomingFriendRequest request)
+        {
+            FriendRequests.Remove(request);
+            await Run(async api => await api.DeclineFriendAsync(request.id), quiet: true);
+        }
+
+        /// <summary>New requests and accepted ones (every few seconds while the app is open).</summary>
+        private async void CheckInbox()
+        {
+            await Run(async api =>
+            {
+                var inbox = await api.FriendInboxAsync();
+                foreach (var request in inbox.requests ?? new IncomingFriendRequest[0])
+                {
+                    if (!FriendRequests.Any(r => r.id == request.id)) FriendRequests.Add(request);
+                }
+
+                foreach (var friend in inbox.accepted ?? new FriendInfo[0])
+                {
+                    AppSettings.AddFriend(friend);
+                    Ui.Toast("✓ " + string.Format(L.Get("friend_added"), friend.name));
+                }
+            }, quiet: true);
+        }
+
+        /// <summary>A new friend code: friends lose access to private rides until they befriend again.</summary>
+        public void ResetFriendCode()
+        {
+            AppSettings.ResetFriendCode();
+            if (_api != null)
+            {
+                _api.FriendCode = AppSettings.FriendCode;
+                _api.ResetSession();
+            }
         }
 
         /// <summary>After an app start: back into the ride the rider was in (if it is still open).</summary>
@@ -113,7 +185,7 @@ namespace FreeVelo.Net
 
         public async void JoinPublic(string lobbyId)
         {
-            await Run(async api => Lobby = await api.JoinPublicAsync(lobbyId));
+            await Run(async api => Lobby = await api.JoinFromListAsync(lobbyId, FriendCodes()));
         }
 
         public async void Leave()
@@ -204,6 +276,12 @@ namespace FreeVelo.Net
 
         private void Update()
         {
+            if (HasIdentity && HasServer && Time.unscaledTime > _nextInboxAt)
+            {
+                _nextInboxAt = Time.unscaledTime + 5f;
+                CheckInbox();
+            }
+
             if (Lobby != null && !_wantLive && Time.unscaledTime > _nextLobbyRefreshAt)
             {
                 // Waiting room: keep the member list fresh.
@@ -299,6 +377,7 @@ namespace FreeVelo.Net
             }
 
             _api.Credentials = AppSettings.Rider;
+            _api.FriendCode = AppSettings.FriendCode;
             return _api;
         }
 

@@ -132,28 +132,87 @@ namespace FreeVelo.UI
             }
 
             float y = join.yMax + 26;
+            float listW = (c.width * 0.62f) - 12;
+            var friendsArea = new Rect(c.x + listW + 24, y, c.width - listW - 24, c.yMax - y);
             GUI.Label(new Rect(c.x, y, 400, 20), L.Get("open_rides").ToUpperInvariant(), Theme.Overline);
-            if (Ui.Button(new Rect(c.xMax - 170, y - 12, 170, 40), L.Get("refresh"), ButtonKind.Ghost, Icon.Reset)) _nextListRefresh = 0;
+            if (Ui.Button(new Rect(c.x + listW - 170, y - 12, 170, 40), L.Get("refresh"), ButtonKind.Ghost, Icon.Reset)) _nextListRefresh = 0;
+            DrawFriends(friendsArea);
             y += 36;
             var lobbies = _group.PublicLobbies;
             if (lobbies.Length == 0)
             {
-                GUI.Label(new Rect(c.x, y, c.width, 30), L.Get("no_open_rides"), Theme.BodyMuted);
+                GUI.Label(new Rect(c.x, y, listW, 30), L.Get("no_open_rides"), Theme.BodyMuted);
                 return;
             }
 
             foreach (var lobby in lobbies.Take(4))
             {
-                var row = new Rect(c.x, y, c.width, 64);
+                var row = new Rect(c.x, y, listW, 64);
                 Ui.Card(row);
                 Ui.DrawIcon(new Rect(row.x + 20, row.center.y - 12, 24, 24), lobby.mode == LobbyMode.KeepTogether ? Icon.Group : Icon.Bike, Theme.Accent);
-                GUI.Label(new Rect(row.x + 58, row.y + 8, row.width - 300, 26), lobby.name, Clip(Theme.With(Theme.H3, size: 17)));
-                string meta = $"{lobby.hostName} · {L.Get(lobby.mode == LobbyMode.KeepTogether ? "keep_together" : "free_mode")} · {string.Format(L.Get("riders_count"), lobby.riderCount, lobby.maxRiders)}";
-                GUI.Label(new Rect(row.x + 58, row.y + 34, row.width - 300, 22), meta, Clip(Theme.Caption));
+                GUI.Label(new Rect(row.x + 58, row.y + 8, row.width - 220, 26), lobby.name, Clip(Theme.With(Theme.H3, size: 17)));
+                string meta = lobby.friends != null && lobby.friends.Length > 0
+                    ? $"<color=#35C97D>{L.Get("friends")}: {string.Join(", ", lobby.friends)}</color> · {string.Format(L.Get("riders_count"), lobby.riderCount, lobby.maxRiders)}"
+                    : $"{lobby.hostName} · {L.Get(lobby.mode == LobbyMode.KeepTogether ? "keep_together" : "free_mode")} · {string.Format(L.Get("riders_count"), lobby.riderCount, lobby.maxRiders)}";
+                GUI.Label(new Rect(row.x + 58, row.y + 34, row.width - 220, 22), meta, Clip(Theme.Caption));
                 bool full = lobby.riderCount >= lobby.maxRiders;
-                if (Ui.Button(new Rect(row.xMax - 156, row.y + 10, 140, 44), L.Get("join"), ButtonKind.Secondary, null, !full && !_group.Busy)) _group.JoinPublic(lobby.id);
+                if (Ui.Button(new Rect(row.xMax - 146, row.y + 10, 130, 44), L.Get("join"), ButtonKind.Secondary, null, !full && !_group.Busy)) _group.JoinPublic(lobby.id);
                 y += 74;
             }
+        }
+
+        private string _confirmRemoveFriend;
+        private bool _confirmFriendReset;
+
+        /// <summary>The friends stored on this phone (tap × to remove).</summary>
+        private void DrawFriends(Rect r)
+        {
+            GUI.Label(new Rect(r.x, r.y, r.width, 20), L.Get("friends").ToUpperInvariant(), Theme.Overline);
+            var friends = AppSettings.Friends;
+            float y = r.y + 36;
+            if (friends.Count == 0)
+            {
+                GUI.Label(new Rect(r.x, y, r.width, 70), L.Get("no_friends"), Theme.With(Theme.Caption, size: 14));
+                return;
+            }
+
+            foreach (var friend in friends.Take(6))
+            {
+                var row = new Rect(r.x, y, r.width, 46);
+                Ui.Rect(row, Theme.Surface2, Theme.RadiusSmall);
+                Ui.Dot(new Vector2(row.x + 18, row.center.y), 5, Theme.Success);
+                GUI.Label(new Rect(row.x + 32, row.y, row.width - 90, row.height), friend.name, Clip(Theme.With(Theme.Body, size: 16)));
+                bool confirm = _confirmRemoveFriend == friend.code;
+                if (Ui.Button(new Rect(row.xMax - (confirm ? 120 : 46), row.y + 4, confirm ? 116 : 42, 38), confirm ? L.Get("remove") : null, confirm ? ButtonKind.Danger : ButtonKind.Ghost, confirm ? (Icon?)null : Icon.Close))
+                {
+                    if (confirm)
+                    {
+                        AppSettings.RemoveFriend(friend.code);
+                        _confirmRemoveFriend = null;
+                    }
+                    else
+                    {
+                        _confirmRemoveFriend = friend.code;
+                    }
+                }
+
+                y += 52;
+            }
+        }
+
+        /// <summary>Friend requests (on every screen): accept or decline.</summary>
+        private void DrawFriendRequests()
+        {
+            if (_group == null || _group.FriendRequests.Count == 0) return;
+            var request = _group.FriendRequests[0];
+            float w = Mathf.Min(560, _w - 48);
+            var card = new Rect((_w - w) / 2f, 150, w, 132);
+            Ui.Card(card, Theme.Surface, 20);
+            Ui.Outline(card, Theme.Alpha(Theme.Accent, 0.6f), 2, 20);
+            Ui.DrawIcon(new Rect(card.x + 24, card.y + 24, 28, 28), Icon.Group, Theme.Accent);
+            GUI.Label(new Rect(card.x + 64, card.y + 18, card.width - 88, 40), string.Format(L.Get("friend_request"), request.fromName), Clip(Theme.With(Theme.H3, size: 19)));
+            if (Ui.Button(new Rect(card.x + 24, card.yMax - 64, (card.width - 64) / 2f, 48), L.Get("decline"), ButtonKind.Secondary)) _group.DeclineFriend(request);
+            if (Ui.Button(new Rect(card.center.x + 8, card.yMax - 64, (card.width - 64) / 2f, 48), L.Get("accept"), ButtonKind.Primary, Icon.Check)) _group.AcceptFriend(request);
         }
 
         /// <summary>In a group ride, before or after riding: the code to share, who is there, start or leave.</summary>
@@ -193,7 +252,17 @@ namespace FreeVelo.UI
                 string label = rider.displayName + (rider.id == myId ? $"  <color=#76828F>({L.Get("you")})</color>" : string.Empty);
                 Ui.Dot(new Vector2(people.x + 34, y + 16), 6, rider.id == lobby.hostRiderId ? Theme.Accent : Theme.Success);
                 GUI.Label(new Rect(people.x + 52, y, people.width - 180, 32), label, Clip(Theme.Body));
-                if (rider.id == lobby.hostRiderId) GUI.Label(new Rect(people.xMax - 124, y, 100, 32), L.Get("host"), Theme.With(Theme.Caption, anchor: TextAnchor.MiddleRight));
+                if (rider.id == lobby.hostRiderId) GUI.Label(new Rect(people.xMax - 170, y, 100, 32), L.Get("host"), Theme.With(Theme.Caption, anchor: TextAnchor.MiddleRight));
+                if (rider.id != myId)
+                {
+                    // Befriend: "+" (unless already a friend or asked in this session).
+                    bool friend = AppSettings.Friends.Any(f => f.name == rider.displayName);
+                    bool asked = _group.AskedRiders.Contains(rider.id);
+                    if (friend) Ui.DrawIcon(new Rect(people.xMax - 52, y + 4, 24, 24), Icon.Check, Theme.Success);
+                    else if (asked) GUI.Label(new Rect(people.xMax - 140, y, 116, 32), L.Get("asked"), Theme.With(Theme.Caption, anchor: TextAnchor.MiddleRight));
+                    else if (Ui.IconButton(new Rect(people.xMax - 62, y - 3, 38, 38), Icon.Plus, ButtonKind.Ghost, !_group.Busy)) _group.RequestFriend(rider.id, rider.displayName);
+                }
+
                 y += 38;
             }
 
@@ -222,6 +291,20 @@ namespace FreeVelo.UI
             }
 
             GUI.Label(new Rect(x, card.y + 146, colW, 22), L.Get("server_own_hint"), Theme.With(Theme.Caption, size: 13));
+
+            // Friend code: a new one cuts off everyone who had the old one.
+            if (Ui.Button(new Rect(x, card.yMax - 62, 300, 44), _confirmFriendReset ? L.Get("confirm_reset") : L.Get("reset_friend_code"), _confirmFriendReset ? ButtonKind.Danger : ButtonKind.Secondary, Icon.Reset))
+            {
+                if (_confirmFriendReset)
+                {
+                    _group.ResetFriendCode();
+                    Ui.Toast("✓ " + L.Get("friend_code_reset"));
+                }
+
+                _confirmFriendReset = !_confirmFriendReset;
+            }
+
+            GUI.Label(new Rect(x + 316, card.yMax - 62, card.width - 364, 44), L.Get("friend_code_hint"), Theme.With(Theme.Caption, size: 13));
 
             var rider = AppSettings.Rider;
             if (rider == null) return;

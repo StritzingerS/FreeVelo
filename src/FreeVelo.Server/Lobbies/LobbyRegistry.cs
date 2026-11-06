@@ -123,12 +123,24 @@ public sealed class LobbyRegistry
     }
 
     /// <summary>Joins a public ride from the list (private rides need the code).</summary>
-    public (JoinResult Result, Lobby? Lobby) JoinPublic(string lobbyId, string riderId)
+    public (JoinResult Result, Lobby? Lobby) JoinPublic(string lobbyId, string riderId, Func<Lobby, bool>? allowPrivate = null)
     {
         lock (_sync)
         {
             RemoveIdle();
-            return _byId.TryGetValue(lobbyId, out var lobby) && !lobby.IsPrivate ? JoinLocked(lobby, riderId) : (JoinResult.NotFound, null);
+            if (!_byId.TryGetValue(lobbyId, out var lobby)) return (JoinResult.NotFound, null);
+            if (lobby.IsPrivate && (allowPrivate == null || !allowPrivate(lobby))) return (JoinResult.NotFound, null);
+            return JoinLocked(lobby, riderId);
+        }
+    }
+
+    /// <summary>All open rides (public and private), for filtering by friends.</summary>
+    public IReadOnlyList<Lobby> AllLobbies()
+    {
+        lock (_sync)
+        {
+            RemoveIdle();
+            return _byId.Values.OrderByDescending(l => l.RiderIds.Count).ThenBy(l => l.Name).ToList();
         }
     }
 

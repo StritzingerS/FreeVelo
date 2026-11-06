@@ -192,6 +192,18 @@ namespace FreeVelo.App
             ["err_full"] = ("This ride is full.", "Diese Fahrt ist voll."),
             ["err_lobby"] = ("Check the ride name (2 to 40 characters).", "Prüfe den Namen der Fahrt (2 bis 40 Zeichen)."),
             ["err_too_many"] = ("Too many attempts – wait a minute.", "Zu viele Versuche – warte eine Minute."),
+            ["friends"] = ("Friends", "Freunde"),
+            ["no_friends"] = ("No friends yet. Add riders with + in a group ride's rider list.", "Noch keine Freunde. Füge Fahrer mit + in der Fahrerliste einer Gruppenfahrt hinzu."),
+            ["friend_request"] = ("{0} wants to be your friend", "{0} möchte mit dir befreundet sein"),
+            ["friend_asked"] = ("Friend request sent to {0}", "Freundschaftsanfrage an {0} gesendet"),
+            ["friend_added"] = ("{0} is now your friend", "{0} ist jetzt dein Freund"),
+            ["asked"] = ("asked", "angefragt"),
+            ["accept"] = ("Accept", "Annehmen"),
+            ["decline"] = ("Decline", "Ablehnen"),
+            ["remove"] = ("Remove", "Entfernen"),
+            ["reset_friend_code"] = ("New friend code", "Neuer Freundescode"),
+            ["friend_code_reset"] = ("New friend code – friends need to add you again", "Neuer Freundescode – Freunde müssen dich neu hinzufügen"),
+            ["friend_code_hint"] = ("Friends see your private rides through your friend code. A new code locks everyone out.", "Freunde sehen deine privaten Fahrten über deinen Freundescode. Ein neuer Code sperrt alle aus."),
             ["delete_identity"] = ("Delete my name from the server", "Meinen Namen vom Server löschen"),
         };
 

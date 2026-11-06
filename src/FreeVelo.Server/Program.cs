@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using FreeVelo.Server.Friends;
 using FreeVelo.Server.Live;
 using FreeVelo.Server.Lobbies;
 using FreeVelo.Server.Riders;
@@ -31,6 +32,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(sp => new Database(Path.Combine(server.DataDirectory, "freevelo.db")));
 builder.Services.AddSingleton<RiderStore>();
 builder.Services.AddSingleton<LobbyRegistry>();
+builder.Services.AddSingleton<FriendService>();
 builder.Services.AddSingleton(sp => new TokenService(jwt, signingKey, sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(live);
 builder.Services.AddSingleton<LiveHub>();
@@ -102,6 +104,7 @@ app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapRiderEndpoints();
 app.MapLobbyEndpoints();
+app.MapFriendEndpoints();
 
 // Live group ride: one WebSocket per app (binary messages, see FreeVelo.Shared.Live).
 app.Map(ApiRoutes.Live, async (HttpContext context, LiveHub hub) =>

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Security.Claims;
+using FreeVelo.Server.Friends;
 using FreeVelo.Server.Lobbies;
 using FreeVelo.Shared.Api;
 
@@ -26,10 +27,11 @@ public static class RiderEndpoints
             return Results.Json(new RiderCredentials { riderId = rider.Id, secret = secret, displayName = rider.DisplayName }, statusCode: StatusCodes.Status201Created);
         }).RequireRateLimiting(IdentityRateLimit);
 
-        app.MapPost(ApiRoutes.Session, (SessionRequest req, RiderStore riders, TokenService tokens, JwtOptions jwt) =>
+        app.MapPost(ApiRoutes.Session, (SessionRequest req, RiderStore riders, TokenService tokens, JwtOptions jwt, FriendService friends) =>
         {
             var rider = riders.Authenticate(req.riderId ?? "", req.secret ?? "");
             if (rider == null) return Http.Error(ApiErrors.InvalidCredentials, HttpStatusCode.Unauthorized);
+            friends.Register(rider.Id, req.friendCode);
             return Results.Ok(new SessionResponse
             {
                 accessToken = tokens.CreateAccessToken(rider),
@@ -52,10 +54,11 @@ public static class RiderEndpoints
         });
 
         // Removes the rider from the server (and from any group ride); the app forgets its identity.
-        me.MapDelete("", (ClaimsPrincipal user, RiderStore riders, LobbyRegistry lobbies) =>
+        me.MapDelete("", (ClaimsPrincipal user, RiderStore riders, LobbyRegistry lobbies, FriendService friends) =>
         {
             if (Http.CurrentRider(user, riders) is not { } rider) return Results.Unauthorized();
             lobbies.Leave(rider.Id);
+            friends.Forget(rider.Id);
             riders.Delete(rider.Id);
             return Results.NoContent();
         });

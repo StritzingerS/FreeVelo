@@ -133,6 +133,66 @@ namespace FreeVelo.App
             }
         }
 
+        // ------------------------------------------------------------------ friends (kept on this phone only)
+
+        /// <summary>This phone's secret friend code (made once; friends need it to see private rides).</summary>
+        public static string FriendCode
+        {
+            get
+            {
+                string code = PlayerPrefs.GetString("friendCode", string.Empty);
+                if (code.Length == 0)
+                {
+                    code = FreeVelo.Shared.Api.FreeVeloApi.NewFriendCode();
+                    PlayerPrefs.SetString("friendCode", code);
+                    PlayerPrefs.Save();
+                }
+
+                return code;
+            }
+        }
+
+        /// <summary>A new friend code: everyone who had the old one no longer sees this rider's private rides.</summary>
+        public static void ResetFriendCode()
+        {
+            PlayerPrefs.DeleteKey("friendCode");
+            PlayerPrefs.Save();
+        }
+
+        [System.Serializable]
+        private class FriendList
+        {
+            public FreeVelo.Shared.Api.FriendInfo[] friends = new FreeVelo.Shared.Api.FriendInfo[0];
+        }
+
+        public static List<FreeVelo.Shared.Api.FriendInfo> Friends
+        {
+            get
+            {
+                string json = PlayerPrefs.GetString("friends", string.Empty);
+                if (json.Length == 0) return new List<FreeVelo.Shared.Api.FriendInfo>();
+                var list = JsonUtility.FromJson<FriendList>(json);
+                return list?.friends != null ? list.friends.ToList() : new List<FreeVelo.Shared.Api.FriendInfo>();
+            }
+        }
+
+        /// <summary>Adds a friend (or updates the name of one with the same code).</summary>
+        public static void AddFriend(FreeVelo.Shared.Api.FriendInfo friend)
+        {
+            if (friend == null || string.IsNullOrEmpty(friend.code)) return;
+            var list = Friends.Where(f => f.code != friend.code).ToList();
+            list.Add(friend);
+            SaveFriends(list);
+        }
+
+        public static void RemoveFriend(string code) => SaveFriends(Friends.Where(f => f.code != code).ToList());
+
+        private static void SaveFriends(List<FreeVelo.Shared.Api.FriendInfo> list)
+        {
+            PlayerPrefs.SetString("friends", JsonUtility.ToJson(new FriendList { friends = list.OrderBy(f => f.name).ToArray() }));
+            PlayerPrefs.Save();
+        }
+
         /// <summary>Devices that are connected automatically when found.</summary>
         public static IReadOnlyCollection<string> RememberedDevices =>
             PlayerPrefs.GetString("devices", string.Empty).Split(',').Where(s => s.Length > 0).ToList();
