@@ -101,6 +101,8 @@ namespace FreeVelo.App
             ["max_power"] = ("Max power", "Max. Leistung"),
             ["new_ftp"] = ("Estimated FTP", "Geschätzte FTP"),
             ["apply_ftp"] = ("Apply new FTP", "Neue FTP übernehmen"),
+            ["recent_rides"] = ("Recent rides", "Letzte Fahrten"),
+            ["no_rides"] = ("No rides yet – a ride is saved as a FIT file when you end it.", "Noch keine Fahrten – eine Fahrt wird beim Beenden als FIT-Datei gespeichert."),
             ["ftp"] = ("FTP", "FTP"),
             ["weight"] = ("Weight", "Gewicht"),
             ["difficulty"] = ("Trainer difficulty", "Trainer-Schwierigkeit"),

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using FreeVelo.App;
@@ -628,7 +629,9 @@ namespace FreeVelo.UI
             float colW = (c.width - 24) / 2f;
             var zones = AppSettings.Zones;
             float zonesH = 92 + (zones.Zones.Count * 58);
-            float contentH = 8 + 280 + 24 + 160 + 24 + 240 + 24 + zonesH + 24;
+            var rides = RecentRides();
+            float ridesH = 92 + (Mathf.Max(1, rides.Length) * 66);
+            float contentH = 8 + 280 + 24 + 160 + 24 + 240 + 24 + ridesH + 24 + zonesH + 24;
             Ui.BeginScroll(3000, view, contentH);
             float x0 = 8, y0 = 8;
 
@@ -678,8 +681,69 @@ namespace FreeVelo.UI
 
             var groupCard = new Rect(x0, app.yMax + 24, c.width, 240);
             DrawGroupSettingsCard(groupCard);
-            DrawZonesCard(new Rect(x0, groupCard.yMax + 24, c.width, zonesH));
+            var ridesCard = new Rect(x0, groupCard.yMax + 24, c.width, ridesH);
+            DrawRecentRidesCard(ridesCard, rides);
+            DrawZonesCard(new Rect(x0, ridesCard.yMax + 24, c.width, zonesH));
             Ui.EndScroll(3000, view, contentH);
+        }
+
+        private string[] _recentRides = new string[0];
+        private float _recentRidesAt = -100f;
+
+        /// <summary>The newest FIT files in persistentDataPath/rides (re-read every few seconds).</summary>
+        private string[] RecentRides()
+        {
+            if (Time.unscaledTime - _recentRidesAt < 3f) return _recentRides;
+            _recentRidesAt = Time.unscaledTime;
+            try
+            {
+                string folder = System.IO.Path.Combine(Application.persistentDataPath, "rides");
+                _recentRides = System.IO.Directory.Exists(folder)
+                    ? System.IO.Directory.GetFiles(folder, "*.fit").OrderByDescending(System.IO.File.GetLastWriteTimeUtc).Take(8).ToArray()
+                    : new string[0];
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                _recentRides = new string[0];
+            }
+
+            return _recentRides;
+        }
+
+        /// <summary>Saved rides (FIT files are written automatically when a ride ends): share or copy to Downloads.</summary>
+        private void DrawRecentRidesCard(Rect card, string[] rides)
+        {
+            Ui.Card(card);
+            SectionTitle(card, L.Get("recent_rides"), Icon.Route);
+            float y = card.y + 76;
+            if (rides.Length == 0)
+            {
+                GUI.Label(new Rect(card.x + 24, y, card.width - 48, 56), L.Get("no_rides"), Theme.Caption);
+                return;
+            }
+
+            foreach (string path in rides)
+            {
+                var row = new Rect(card.x + 16, y, card.width - 32, 58);
+                Ui.Rect(row, Theme.Surface2, Theme.RadiusSmall);
+                string name = System.IO.Path.GetFileNameWithoutExtension(path);
+                string when = "", title = name;
+                if (name.Length > 17 && DateTime.TryParseExact(name.Substring(0, 16), "yyyy-MM-dd_HH-mm", null, System.Globalization.DateTimeStyles.None, out var start))
+                {
+                    when = start.ToString("dd.MM.yyyy  HH:mm");
+                    title = name.Substring(17).Replace('-', ' ');
+                }
+
+                float buttonsW = 2 * 52 + 10;
+                GUI.Label(new Rect(row.x + 16, row.y + 6, row.width - buttonsW - 40, 26), title, Theme.With(Theme.Body, size: 17));
+                GUI.Label(new Rect(row.x + 16, row.y + 30, row.width - buttonsW - 40, 22), when, Theme.Caption);
+                if (Ui.IconButton(new Rect(row.xMax - buttonsW - 6, row.y + 3, 52, 52), Icon.Share, ButtonKind.Secondary))
+                    Ui.Toast(FileActions.Share(path, L.Get("share")));
+                if (Ui.IconButton(new Rect(row.xMax - 58, row.y + 3, 52, 52), Icon.Download, ButtonKind.Secondary))
+                    Ui.Toast(FileActions.SaveToDownloads(path));
+                y += 66;
+            }
         }
 
         /// <summary>Power zones: colour, name, range; the boundary between two zones is moved with the stepper.</summary>
