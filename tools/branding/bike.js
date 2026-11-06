@@ -2,8 +2,8 @@
 // traced in the pixel coordinates of a 2000 × 1294 side-view photo, no brand markings.
 const P = {
   rear: [618, 800], front: [1390, 800], R: 254,
-  bb: [928, 850], seat: [826, 482], post: [780, 340],
-  headTop: [1258, 400], headBot: [1298, 560], stay: [832, 580],
+  bb: [928, 850], seat: [834, 452], post: [786, 340],
+  headTop: [1262, 446], headBot: [1298, 560], stay: [832, 580],
 };
 const p = a => a.join(' ');
 module.exports.P = P;
