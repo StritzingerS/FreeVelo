@@ -46,6 +46,7 @@ public sealed class LiveHub
         var lobby = _lobbies.Of(riderId);
         if (lobby == null)
         {
+            _log.LogInformation("Live: rider {Rider} connected without a ride", riderId[..6]);
             await socket.SendAsync(LiveCodec.Encode(new ByeMessage { Code = (ushort)LiveCloseCodes.NotInRide }), WebSocketMessageType.Binary, true, aborted);
             await socket.CloseAsync(LiveCloseCodes.NotInRide, "not_in_ride", aborted);
             return;
@@ -55,6 +56,8 @@ public sealed class LiveHub
         string name = _riders.Find(riderId)?.DisplayName ?? "";
         lock (session.Sync) session.Attach(riderId, name, connection);
         _lobbies.Touch(riderId);
+        _log.LogInformation("Live: {Name} ({Rider}) connected to ride {Lobby}", name, riderId[..6], lobby.Code);
+        var started = DateTime.UtcNow;
 
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(aborted, connection.Closed);
         var sending = connection.SendLoop(aborted);
@@ -68,6 +71,7 @@ public sealed class LiveHub
         }
         finally
         {
+            _log.LogInformation("Live: {Name} ({Rider}) disconnected from ride {Lobby} after {Seconds:0} s ({State}, {Status})", name, riderId[..6], lobby.Code, (DateTime.UtcNow - started).TotalSeconds, socket.State, socket.CloseStatus);
             lock (session.Sync) session.Detach(riderId, connection);
             connection.Close(WebSocketCloseStatus.NormalClosure, "bye");
             await sending;

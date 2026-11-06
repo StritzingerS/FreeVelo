@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using FreeVelo.Shared.Live;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -132,11 +134,9 @@ namespace FreeVelo.Shared.Api
         public async Task<WebSocket> ConnectLiveAsync(CancellationToken ct = default)
         {
             string token = await AccessTokenAsync(ct);
-            var socket = new ClientWebSocket();
-            socket.Options.SetRequestHeader("Authorization", "Bearer " + token);
-            socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
-            await socket.ConnectAsync(LiveUri(_http.BaseAddress ?? throw new InvalidOperationException("No server address")), ct);
-            return socket;
+            // Own small client: ClientWebSocket fails to connect under Unity's Mono runtime.
+            var headers = new Dictionary<string, string> { ["Authorization"] = "Bearer " + token };
+            return await TinyWebSocket.ConnectAsync(LiveUri(_http.BaseAddress ?? throw new InvalidOperationException("No server address")), headers, ct);
         }
 
         public static Uri LiveUri(Uri baseAddress)
