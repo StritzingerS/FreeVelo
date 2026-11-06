@@ -5,4 +5,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Climbs copied from GPX tracks (tools/climbs/process_gpx.py) -->
+    <EmbeddedResource Include="World\Gen\Climbs\*.csv" LogicalName="FreeVelo.Climbs.%(Filename).csv" />
+  </ItemGroup>
+
 </Project>

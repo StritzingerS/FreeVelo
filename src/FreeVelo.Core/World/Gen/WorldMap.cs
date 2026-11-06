@@ -30,8 +30,10 @@ namespace FreeVelo.Core.World.Gen
     /// <summary>A road between two nodes: points every few metres with distance and elevation.</summary>
     public sealed class RoadEdge
     {
-        internal RoadEdge(int id, int from, int to, double[] x, double[] z, bool mainLoop, RoadSurface surface)
+        internal RoadEdge(int id, int from, int to, double[] x, double[] z, bool mainLoop, RoadSurface surface, RoadKind kind = RoadKind.Home, string? climbId = null)
         {
+            Kind = kind;
+            ClimbId = climbId;
             Id = id;
             From = from;
             To = to;
@@ -66,6 +68,12 @@ namespace FreeVelo.Core.World.Gen
         public bool IsMainLoop { get; }
 
         public RoadSurface Surface { get; }
+
+        /// <summary>Home world, access road, climb or the summit connector.</summary>
+        public RoadKind Kind { get; }
+
+        /// <summary>For climbs: the climb's id (<see cref="ClimbData"/>).</summary>
+        public string? ClimbId { get; }
 
         /// <summary>Paved width in metres.</summary>
         public double Width => Surface == RoadSurface.Asphalt ? 6.5 : 4.0;
@@ -183,8 +191,14 @@ namespace FreeVelo.Core.World.Gen
 
         public List<Bridge> Bridges { get; } = new List<Bridge>();
 
-        /// <summary>Area covered by roads and water (without margin).</summary>
+        /// <summary>Area of the rolling home world: its roads and water (without margin).</summary>
         public (double MinX, double MinZ, double MaxX, double MaxZ) Bounds { get; private set; }
+
+        /// <summary>The mountain with the two famous climbs (null for worlds generated without it).</summary>
+        public Mountain? Mountain { get; private set; }
+
+        /// <summary>Area of the mountain roads (access roads, climbs, connector), without margin.</summary>
+        public (double MinX, double MinZ, double MaxX, double MaxZ) MountainBounds { get; private set; }
 
         /// <summary>Main loop edges in riding order (starting at node 0).</summary>
         public List<int> MainLoopEdges { get; } = new List<int>();
@@ -258,7 +272,77 @@ namespace FreeVelo.Core.World.Gen
                 distance += e.Length;
             }
 
-            return new Route(name, points, isLoop);
+            var route = new Route(name, points, isLoop);
+            var climbs = new List<ClimbSegment>();
+            double at = startDistanceM;
+            foreach (var step in steps)
+            {
+                var e = Edges[step.Edge];
+                if (e.Kind == RoadKind.Climb && step.Forward)
+                {
+                    var data = Mountain?.Find(e.ClimbId!)?.Data;
+                    climbs.Add(new ClimbSegment(e.ClimbId!, data?.Name ?? e.ClimbId!, at, at + e.Length, e.E[e.E.Length - 1] - e.E[0]));
+                }
+
+                at += e.Length;
+            }
+
+            route.Climbs = climbs;
+            return route;
+        }
+
+        /// <summary>
+        /// The loop around the mountain starting at the foot of <paramref name="climbId"/>: up that climb, over the
+        /// connector, down the other climb and its access road, along the main loop (the shorter way) and back up the
+        /// first access road to the foot. Null if the world has no such climb.
+        /// </summary>
+        public Route? ClimbLoop(string climbId)
+        {
+            var m = Mountain;
+            var first = m?.Find(climbId);
+            if (m == null || first == null) return null;
+            var other = first == m.Stelvio ? m.Alpe : m.Stelvio;
+            int accessFirst = first == m.Stelvio ? m.AccessStelvioEdge : m.AccessAlpeEdge;
+            int accessOther = first == m.Stelvio ? m.AccessAlpeEdge : m.AccessStelvioEdge;
+            int junctionFirst = first == m.Stelvio ? m.JunctionStelvio : m.JunctionAlpe;
+            int junctionOther = first == m.Stelvio ? m.JunctionAlpe : m.JunctionStelvio;
+
+            var steps = new List<DirectedEdge>
+            {
+                new DirectedEdge(first.Edge, true),
+                new DirectedEdge(m.ConnectorEdge, first == m.Stelvio),
+                new DirectedEdge(other.Edge, false),
+                new DirectedEdge(accessOther, false),
+            };
+            steps.AddRange(MainLoopBetween(junctionOther, junctionFirst));
+            steps.Add(new DirectedEdge(accessFirst, true));
+            return BuildRoute(first.Data.Name, steps, isLoop: true, 0);
+        }
+
+        /// <summary>Main loop edges from node <paramref name="from"/> to node <paramref name="to"/>, the shorter way round.</summary>
+        private List<DirectedEdge> MainLoopBetween(int from, int to)
+        {
+            var loop = MainLoopEdges;
+            int n = loop.Count;
+            int start = loop.FindIndex(e => Edges[e].From == from);
+            var forward = new List<DirectedEdge>();
+            double forwardLength = 0;
+            for (int k = 0, i = start; k < n && Edges[loop[i]].From != to; k++, i = (i + 1) % n)
+            {
+                forward.Add(new DirectedEdge(loop[i], true));
+                forwardLength += Edges[loop[i]].Length;
+            }
+
+            int end = loop.FindIndex(e => Edges[e].To == from);
+            var backward = new List<DirectedEdge>();
+            double backwardLength = 0;
+            for (int k = 0, i = end; k < n && Edges[loop[i]].To != to; k++, i = (i - 1 + n) % n)
+            {
+                backward.Add(new DirectedEdge(loop[i], false));
+                backwardLength += Edges[loop[i]].Length;
+            }
+
+            return forwardLength <= backwardLength ? forward : backward;
         }
 
         private static double Grade(RoadEdge e, int i)
@@ -270,16 +354,26 @@ namespace FreeVelo.Core.World.Gen
 
         // ------------------------------------------------------------------ generation
 
-        public static WorldMap Generate(int seed)
+        public static WorldMap Generate(int seed) => Generate(seed, searchMountain: false);
+
+        /// <summary>
+        /// <paramref name="searchMountain"/>: place the mountain by the full search instead of trying the stored placement
+        /// first (several seconds; for tests and other seeds – the result is the same for the default world).
+        /// </summary>
+        public static WorldMap Generate(int seed, bool searchMountain)
         {
             var map = new WorldMap(seed);
             var random = new Random(seed);
             var loop = MainLoopCurve(random);
             var links = map.LinkRoads(random, loop);
-            map.BuildGraph(loop, links);
-            map.Bounds = BoundsOf(map.Edges);
+            map.Bounds = BoundsOf(new[] { loop }.Concat(links.Select(l => l.Path)));
             map.River = map.MakeRiver(random);
             map._riverIndex = new SegmentIndex(map.River.X, map.River.Z, 60);
+
+            // The mountain beside the home world (placement is deterministic; the home world stays the same).
+            map.Mountain = Mountain.Plan(map, loop, links.Select(l => l.Path).ToList(), links.SelectMany(l => new[] { l.S1, l.S2 }).ToList(), useHint: !searchMountain);
+            map.BuildGraph(loop, links, map.Mountain);
+            map.MountainBounds = BoundsOf(map.Edges.Where(e => e.Kind != RoadKind.Home).Select(e => (IReadOnlyList<double>)e.X).Zip(map.Edges.Where(e => e.Kind != RoadKind.Home).Select(e => (IReadOnlyList<double>)e.Z), (x, z) => (x, z)));
             map.FindBridges();
             map.SetElevations();
             map.MakeLakes(random);
@@ -379,10 +473,18 @@ namespace FreeVelo.Core.World.Gen
             return true;
         }
 
-        private void BuildGraph(Polyline loop, List<Link> links)
+        private void BuildGraph(Polyline loop, List<Link> links, Mountain? mountain)
         {
-            // Junctions along the loop, in riding order; node 0 is the start.
-            var junctions = links.SelectMany((l, i) => new[] { (S: l.S1, Link: i, End: 0), (S: l.S2, Link: i, End: 1) }).OrderBy(j => j.S).ToList();
+            // Junctions along the loop, in riding order; node 0 is the start. Mountain access roads count as
+            // "links" number links.Count (Stelvio) and links.Count + 1 (Alpe d'Huez).
+            var junctions = links.SelectMany((l, i) => new[] { (S: l.S1, Link: i, End: 0), (S: l.S2, Link: i, End: 1) }).ToList();
+            if (mountain != null)
+            {
+                junctions.Add((mountain.LoopStelvio, links.Count, 0));
+                junctions.Add((mountain.LoopAlpe, links.Count + 1, 0));
+            }
+
+            junctions = junctions.OrderBy(j => j.S).ToList();
             var nodeOf = new Dictionary<(int Link, int End), int>();
             foreach (var j in junctions)
             {
@@ -412,9 +514,53 @@ namespace FreeVelo.Core.World.Gen
                 // The curve starts and ends exactly on the loop points.
                 AddEdge(nodeOf[(i, 0)], nodeOf[(i, 1)], links[i].Path, mainLoop: false, links[i].Surface);
             }
+
+            if (mountain == null) return;
+
+            // Mountain: feet, summits, access roads, climbs (foot → summit) and the connector between the summits.
+            int Node((double X, double Z) p)
+            {
+                var node = new RoadNode(Nodes.Count, p.X, p.Z);
+                Nodes.Add(node);
+                return node.Id;
+            }
+
+            var s = mountain.Stelvio;
+            var a = mountain.Alpe;
+            int footS = Node(s.Foot), topS = Node(s.Point(s.Data.X.Length - 1));
+            int footA = Node(a.Foot), topA = Node(a.Point(a.Data.X.Length - 1));
+            Nodes[footS].Elevation = s.FootElevation;
+            Nodes[topS].Elevation = s.SummitElevation;
+            Nodes[footA].Elevation = a.FootElevation;
+            Nodes[topA].Elevation = a.SummitElevation;
+            mountain.JunctionStelvio = nodeOf[(links.Count, 0)];
+            mountain.JunctionAlpe = nodeOf[(links.Count + 1, 0)];
+
+            AddEdge(mountain.JunctionStelvio, footS, mountain.AccessStelvioPath, false, RoadSurface.Asphalt, RoadKind.Access);
+            mountain.AccessStelvioEdge = Edges.Count - 1;
+            AddEdge(footS, topS, ClimbPath(s), false, RoadSurface.Asphalt, RoadKind.Climb, s.Data.Id);
+            s.Edge = Edges.Count - 1;
+            AddEdge(topS, topA, mountain.ConnectorPath, false, RoadSurface.Asphalt, RoadKind.Connector);
+            mountain.ConnectorEdge = Edges.Count - 1;
+            AddEdge(footA, topA, ClimbPath(a), false, RoadSurface.Asphalt, RoadKind.Climb, a.Data.Id);
+            a.Edge = Edges.Count - 1;
+            AddEdge(mountain.JunctionAlpe, footA, mountain.AccessAlpePath, false, RoadSurface.Asphalt, RoadKind.Access);
+            mountain.AccessAlpeEdge = Edges.Count - 1;
         }
 
-        private void AddEdge(int from, int to, Polyline path, bool mainLoop, RoadSurface surface)
+        private static Polyline ClimbPath(PlacedClimb climb)
+        {
+            var path = new Polyline();
+            for (int i = 0; i < climb.Data.X.Length; i++)
+            {
+                var (x, z) = climb.Point(i);
+                path.Add(x, z);
+            }
+
+            return path;
+        }
+
+        private void AddEdge(int from, int to, Polyline path, bool mainLoop, RoadSurface surface, RoadKind kind = RoadKind.Home, string? climbId = null)
         {
             var x = path.X.ToArray();
             var z = path.Z.ToArray();
@@ -422,21 +568,24 @@ namespace FreeVelo.Core.World.Gen
             z[0] = Nodes[from].Z;
             x[x.Length - 1] = Nodes[to].X;
             z[z.Length - 1] = Nodes[to].Z;
-            var edge = new RoadEdge(Edges.Count, from, to, x, z, mainLoop, surface);
+            var edge = new RoadEdge(Edges.Count, from, to, x, z, mainLoop, surface, kind, climbId);
             Edges.Add(edge);
             Nodes[from].Edges.Add(edge.Id);
             Nodes[to].Edges.Add(edge.Id);
         }
 
-        private static (double, double, double, double) BoundsOf(List<RoadEdge> edges)
+        private static (double, double, double, double) BoundsOf(IEnumerable<Polyline> paths) =>
+            BoundsOf(paths.Select(p => ((IReadOnlyList<double>)p.X, (IReadOnlyList<double>)p.Z)));
+
+        private static (double, double, double, double) BoundsOf(IEnumerable<(IReadOnlyList<double> X, IReadOnlyList<double> Z)> paths)
         {
             double minX = double.MaxValue, minZ = double.MaxValue, maxX = double.MinValue, maxZ = double.MinValue;
-            foreach (var e in edges)
+            foreach (var (xs, zs) in paths)
             {
-                minX = Math.Min(minX, e.X.Min());
-                maxX = Math.Max(maxX, e.X.Max());
-                minZ = Math.Min(minZ, e.Z.Min());
-                maxZ = Math.Max(maxZ, e.Z.Max());
+                minX = Math.Min(minX, xs.Min());
+                maxX = Math.Max(maxX, xs.Max());
+                minZ = Math.Min(minZ, zs.Min());
+                maxZ = Math.Max(maxZ, zs.Max());
             }
 
             return (minX, minZ, maxX, maxZ);
@@ -575,8 +724,11 @@ namespace FreeVelo.Core.World.Gen
         /// </summary>
         private void SetElevations()
         {
+            var mountainNodes = new HashSet<int>(Edges.Where(e => e.Kind != RoadKind.Home).SelectMany(e => new[] { e.From, e.To }));
+            var homeNodes = new HashSet<int>(Edges.Where(e => e.Kind == RoadKind.Home).SelectMany(e => new[] { e.From, e.To }));
             foreach (var node in Nodes)
             {
+                if (mountainNodes.Contains(node.Id) && !homeNodes.Contains(node.Id)) continue; // feet and summits: set by the plan
                 double sum = 0;
                 int count = 0;
                 for (int dx = -1; dx <= 1; dx++)
@@ -593,6 +745,12 @@ namespace FreeVelo.Core.World.Gen
 
             foreach (var e in Edges)
             {
+                if (e.Kind != RoadKind.Home)
+                {
+                    MountainElevations(e);
+                    continue;
+                }
+
                 int n = e.X.Length;
                 var raw = new double[n];
                 for (int i = 0; i < n; i++) raw[i] = BaseHeight(e.X[i], e.Z[i]);
@@ -610,6 +768,50 @@ namespace FreeVelo.Core.World.Gen
                 for (int pass = 0; pass < 4; pass++) LimitGrade(e, smooth);
                 Array.Copy(smooth, e.E, n);
             }
+        }
+
+        /// <summary>
+        /// Climbs: the GPX elevations (shifted to the world's height). Connector: level between the equal summits with a
+        /// gentle rise in the middle. Access roads: an even gradient from the junction to the foot, eased at both ends,
+        /// lifted over the river where they cross it.
+        /// </summary>
+        private void MountainElevations(RoadEdge e)
+        {
+            int n = e.X.Length;
+            var m = Mountain!;
+            if (e.Kind == RoadKind.Climb)
+            {
+                var climb = m.Find(e.ClimbId!)!;
+                for (int i = 0; i < n; i++) e.E[i] = climb.Elevation(i);
+                return;
+            }
+
+            double a = Nodes[e.From].Elevation, b = Nodes[e.To].Elevation;
+            var h = new double[n];
+            for (int i = 0; i < n; i++)
+            {
+                double f = e.D[i] / e.Length;
+                if (e.Kind == RoadKind.Connector)
+                {
+                    h[i] = a + ((b - a) * f) + (12 * Math.Sin(Math.PI * f));
+                }
+                else
+                {
+                    // Even gradient with 150 m easing at both ends
+                    double ease = Math.Min(1, Math.Min(e.D[i], e.Length - e.D[i]) / 150);
+                    double t = f + ((SmoothStep(f) - f) * (1 - ease));
+                    h[i] = a + ((b - a) * t);
+                }
+            }
+
+            foreach (var bridge in Bridges.Where(br => br.Edge == e.Id))
+            {
+                double deck = bridge.WaterLevel + 4.5;
+                for (int i = 0; i < n; i++) h[i] = Math.Max(h[i], deck - (0.055 * Math.Abs(e.D[i] - bridge.DistanceM)));
+            }
+
+            for (int pass = 0; pass < 4; pass++) LimitGrade(e, h);
+            Array.Copy(h, e.E, n);
         }
 
         private void FitEnds(RoadEdge e, double[] h)

@@ -74,6 +74,9 @@ namespace FreeVelo.Core.World
 
         public bool IsLoop { get; }
 
+        /// <summary>Famous climbs ridden uphill on this route (foot → summit), for the climb timer.</summary>
+        public IReadOnlyList<ClimbSegment> Climbs { get; internal set; } = Array.Empty<ClimbSegment>();
+
         public double LengthM => Points[Points.Count - 1].DistanceM;
 
         public double TotalAscentM
@@ -231,5 +234,25 @@ namespace FreeVelo.Core.World
         }
 
         private static double Hypot(double a, double b) => Math.Sqrt((a * a) + (b * b));
+    }
+
+    /// <summary>A climb on a route: where it starts (foot) and ends (summit), in route distance.</summary>
+    public sealed class ClimbSegment
+    {
+        public ClimbSegment(string id, string name, double startM, double endM, double gainM)
+        {
+            Id = id;
+            Name = name;
+            StartM = startM;
+            EndM = endM;
+            GainM = gainM;
+        }
+
+        public string Id { get; }
+        public string Name { get; }
+        public double StartM { get; }
+        public double EndM { get; }
+        public double GainM { get; }
+        public double LengthM => EndM - StartM;
     }
 }

@@ -25,7 +25,9 @@ public class WorldMapTests
         Assert.True(Map.Nodes.Count >= 4, "several junctions");
         Assert.True(Map.Edges.Count(e => !e.IsMainLoop) >= 2, "link roads besides the main loop");
         Assert.Contains(Map.Edges, e => e.Surface != Physics.RoadSurface.Asphalt);
-        foreach (var node in Map.Nodes) Assert.True(node.Edges.Count >= 3, $"node {node.Id} is a junction");
+        // Home world: every node is a junction (the mountain's feet and summits just connect two roads)
+        var homeNodes = Map.Edges.Where(e => e.Kind == RoadKind.Home).SelectMany(e => new[] { e.From, e.To }).Distinct();
+        foreach (int id in homeNodes) Assert.True(Map.Nodes[id].Edges.Count >= 3, $"node {id} is a junction");
     }
 
     [Fact]
@@ -41,7 +43,9 @@ public class WorldMapTests
             {
                 double ds = e.D[i] - e.D[i - 1];
                 Assert.InRange(ds, 3, 7); // evenly sampled
-                Assert.True(Math.Abs(e.E[i] - e.E[i - 1]) / ds <= WorldMap.MaxGrade + 0.002, $"edge {e.Id} too steep at {e.D[i]:0} m");
+                // The famous climbs are copied as they are (up to ~15 % locally); everything else stays within 9 %.
+                double max = e.Kind == RoadKind.Climb ? 0.25 : WorldMap.MaxGrade + 0.002;
+                Assert.True(Math.Abs(e.E[i] - e.E[i - 1]) / ds <= max, $"edge {e.Id} too steep at {e.D[i]:0} m");
             }
         }
     }
@@ -121,7 +125,7 @@ public class WorldMapTests
             var s = path.Route.Sample(d);
             double step = Math.Sqrt(Math.Pow(s.X - last.X, 2) + Math.Pow(s.Z - last.Z, 2));
             Assert.True(step < 12, $"jump of {step:0.0} m at {d} m");
-            Assert.True(Math.Abs(s.Y - last.Y) < 1.5, $"height jump at {d} m");
+            Assert.True(Math.Abs(s.Y - last.Y) < 2.5, $"height jump at {d} m"); // climbs reach ~20 % over 10 m
             last = s;
         }
 

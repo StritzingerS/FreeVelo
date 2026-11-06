@@ -162,14 +162,18 @@ namespace FreeVelo.Core.World.Gen
             return options.OrderBy(o => o.TurnDegrees).ToList();
         }
 
-        private static int DefaultChoice(DirectedEdge arriving, List<TurnOption> options)
+        private bool IsMainLoopEdge(DirectedEdge e) => _map.Edges[e.Edge].IsMainLoop;
+
+        private int DefaultChoice(DirectedEdge arriving, List<TurnOption> options)
         {
             int best = 0;
             double bestScore = double.MaxValue;
             for (int i = 0; i < options.Count; i++)
             {
-                // Straight on, and stay on the main loop while on it.
+                // Straight on, and stay on the main loop while on it (the mountain's access roads are only taken on
+                // purpose: never by default from the main loop).
                 double score = Math.Abs(options[i].TurnDegrees) - (options[i].IsMainLoop ? 60 : 0);
+                if (options[i].IsMainLoop && IsMainLoopEdge(arriving)) score -= 1000;
                 if (score < bestScore)
                 {
                     bestScore = score;

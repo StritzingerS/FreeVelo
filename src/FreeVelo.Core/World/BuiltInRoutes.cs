@@ -16,7 +16,14 @@ namespace FreeVelo.Core.World
         {
             // The main loop of the generated world (road network with junctions, river, lakes).
             [DefaultId] = () => Gen.WorldMap.Default.MainLoop,
+
+            // Round the mountain from the foot of each famous climb (up, over the top, down the other side, back).
+            [StelvioId] = () => Gen.WorldMap.Default.ClimbLoop(Gen.ClimbData.Stelvio)!,
+            [AlpeId] = () => Gen.WorldMap.Default.ClimbLoop(Gen.ClimbData.AlpeDHuez)!,
         };
+
+        public const string StelvioId = "climb-stelvio";
+        public const string AlpeId = "climb-alpe-dhuez";
 
         private static readonly Dictionary<string, Route> Cache = new Dictionary<string, Route>();
 
