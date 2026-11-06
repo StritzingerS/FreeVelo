@@ -21,6 +21,7 @@ namespace FreeVelo.Shared.Live
         Roster = 11,
         Snapshot = 12,
         EmojiEvent = 13,
+        Bye = 14,
     }
 
     /// <summary>Emoji reactions (shown above the avatar and in a feed).</summary>
@@ -146,6 +147,17 @@ namespace FreeVelo.Shared.Live
         public Emoji Emoji;
     }
 
+    /// <summary>
+    /// Server → app, right before the server ends the connection: why (the same codes as the WebSocket close status,
+    /// e.g. 4410 = left the ride). Sent as a message too, because some proxies drop or delay close frames.
+    /// </summary>
+    public sealed class ByeMessage : LiveMessage
+    {
+        public override LiveMessageType Type => LiveMessageType.Bye;
+
+        public ushort Code;
+    }
+
     /// <summary>Encodes and decodes live messages (binary, little-endian).</summary>
     public static class LiveCodec
     {
@@ -206,6 +218,9 @@ namespace FreeVelo.Shared.Live
                     case EmojiEventMessage m:
                         w.Write(m.Slot);
                         w.Write((byte)m.Emoji);
+                        break;
+                    case ByeMessage m:
+                        w.Write(m.Code);
                         break;
                     default:
                         throw new ArgumentException("Unknown message " + message.GetType().Name);
@@ -273,6 +288,9 @@ namespace FreeVelo.Shared.Live
                         break;
                     case LiveMessageType.EmojiEvent:
                         message = new EmojiEventMessage { Slot = r.ReadUInt16(), Emoji = (Emoji)r.ReadByte() };
+                        break;
+                    case LiveMessageType.Bye:
+                        message = new ByeMessage { Code = r.ReadUInt16() };
                         break;
                     default:
                         throw new FormatException("Unknown message type " + (int)type);

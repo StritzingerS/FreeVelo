@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using System.Threading.Channels;
+using FreeVelo.Shared.Live;
 
 namespace FreeVelo.Server.Live;
 
@@ -33,9 +34,14 @@ public sealed class LiveConnection
 
     public void Send(byte[] frame) => _outbox.Writer.TryWrite(frame);
 
-    /// <summary>Closes the connection after the queued frames are sent.</summary>
+    /// <summary>Closes the connection after the queued frames are sent (with a bye message carrying the reason).</summary>
     public void Close(WebSocketCloseStatus status, string reason)
     {
+        if (_closeRequest == null && status != WebSocketCloseStatus.NormalClosure)
+        {
+            _outbox.Writer.TryWrite(LiveCodec.Encode(new ByeMessage { Code = (ushort)status }));
+        }
+
         _closeRequest ??= (status, reason);
         _outbox.Writer.TryComplete();
     }

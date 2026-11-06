@@ -111,14 +111,25 @@ namespace FreeVelo.Shared.Live
                     }
                     while (!result.EndOfMessage);
 
+                    LiveMessage message;
                     try
                     {
-                        _state.Apply(LiveCodec.Decode(buffer, length), _clock());
+                        message = LiveCodec.Decode(buffer, length);
                     }
                     catch (FormatException)
                     {
-                        // Unknown message (newer server): ignore.
+                        continue; // unknown message (newer server): ignore
                     }
+
+                    if (message is ByeMessage bye)
+                    {
+                        // The server ends the connection; the reason arrives here even if a proxy loses the close frame.
+                        CloseStatus = bye.Code;
+                        _ = CloseAsync();
+                        return;
+                    }
+
+                    _state.Apply(message, _clock());
                 }
             }
             catch (Exception e) when (e is WebSocketException || e is OperationCanceledException || e is ObjectDisposedException)

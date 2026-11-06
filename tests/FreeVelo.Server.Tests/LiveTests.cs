@@ -209,6 +209,8 @@ public sealed class LiveTests : IDisposable
         await anna.Client.PostAsync(ApiRoutes.LeaveLobby, null);
         await annaLive.WaitClosed();
         Assert.Equal(LiveCloseCodes.LeftRide, annaLive.CloseStatus);
+        // The reason also came as a message (some proxies lose close frames).
+        Assert.Equal((ushort)LiveCloseCodes.LeftRide, annaLive.All<ByeMessage>().Single().Code);
         await samiLive.WaitFor<RosterMessage>(r => r.Riders.Count == 1);
         await samiLive.WaitFor<SnapshotMessage>(s => s.Riders.Count == 1);
     }
@@ -297,6 +299,8 @@ public class LiveCodecTests
         });
         Assert.Equal(77u, snapshot.Tick);
         Assert.Equal(RiderFlags.Active | RiderFlags.Connected, snapshot.Riders[0].Flags);
+
+        Assert.Equal(4410, ((ByeMessage)RoundTrip(new ByeMessage { Code = 4410 })).Code);
 
         var emoji = (EmojiEventMessage)RoundTrip(new EmojiEventMessage { Slot = 4, Emoji = Emoji.Bolt });
         Assert.Equal((4, Emoji.Bolt), (emoji.Slot, emoji.Emoji));

@@ -46,6 +46,7 @@ public sealed class LiveHub
         var lobby = _lobbies.Of(riderId);
         if (lobby == null)
         {
+            await socket.SendAsync(LiveCodec.Encode(new ByeMessage { Code = (ushort)LiveCloseCodes.NotInRide }), WebSocketMessageType.Binary, true, aborted);
             await socket.CloseAsync(LiveCloseCodes.NotInRide, "not_in_ride", aborted);
             return;
         }
