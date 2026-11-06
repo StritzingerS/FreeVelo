@@ -42,7 +42,8 @@ public sealed class LobbySession
         LobbyId = lobbyId;
         Mode = mode;
         _time = time;
-        if (mode == LobbyMode.KeepTogether) Group = new KeepTogetherGroup(BuiltInRoutes.Get(routeId));
+        // The anchor starts 25 m in, so riders joining at the back of the group do not start before the line.
+        if (mode == LobbyMode.KeepTogether) Group = new KeepTogetherGroup(BuiltInRoutes.Get(routeId), KeepTogetherGroup.MaxOffsetM);
     }
 
     public object Sync { get; } = new();

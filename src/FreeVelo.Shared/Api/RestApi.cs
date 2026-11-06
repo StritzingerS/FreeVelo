@@ -1,7 +1,9 @@
+using System;
+
 namespace FreeVelo.Shared.Api
 {
     // REST messages between the app and the server (JSON, camelCase).
-    // Public fields instead of properties, so Unity's JsonUtility can read and write them too.
+    // Public fields instead of properties and [Serializable], so Unity's JsonUtility can read and write them too.
 
     public static class ApiRoutes
     {
@@ -37,6 +39,7 @@ namespace FreeVelo.Shared.Api
         public const int MaxDisplayNameLength = 24;
     }
 
+    [Serializable]
     public class ApiError
     {
         public string error = "";
@@ -45,6 +48,7 @@ namespace FreeVelo.Shared.Api
     // ------------------------------------------------------------------ riders (no email, no password)
 
     /// <summary>First start of the app: only a display name.</summary>
+    [Serializable]
     public class CreateRiderRequest
     {
         public string displayName = "";
@@ -54,6 +58,7 @@ namespace FreeVelo.Shared.Api
     /// The rider's identity, stored on the device. The secret is shown only once; it is the rider's "password",
     /// but nobody has to remember or type it.
     /// </summary>
+    [Serializable]
     public class RiderCredentials
     {
         public string riderId = "";
@@ -61,12 +66,14 @@ namespace FreeVelo.Shared.Api
         public string displayName = "";
     }
 
+    [Serializable]
     public class SessionRequest
     {
         public string riderId = "";
         public string secret = "";
     }
 
+    [Serializable]
     public class SessionResponse
     {
         public string accessToken = "";
@@ -77,12 +84,14 @@ namespace FreeVelo.Shared.Api
         public RiderInfo rider = new RiderInfo();
     }
 
+    [Serializable]
     public class RiderInfo
     {
         public string id = "";
         public string displayName = "";
     }
 
+    [Serializable]
     public class UpdateRiderRequest
     {
         public string displayName = "";
@@ -126,6 +135,7 @@ namespace FreeVelo.Shared.Api
     }
 
     /// <summary>Fixed when the group ride is created.</summary>
+    [Serializable]
     public class CreateLobbyRequest
     {
         public string name = "";
@@ -145,12 +155,14 @@ namespace FreeVelo.Shared.Api
         public string workoutName = "";
     }
 
+    [Serializable]
     public class JoinByCodeRequest
     {
         public string code = "";
     }
 
     /// <summary>A group ride as members see it (with the code to pass on).</summary>
+    [Serializable]
     public class LobbyDetails
     {
         public string id = "";
@@ -170,6 +182,7 @@ namespace FreeVelo.Shared.Api
     }
 
     /// <summary>A public group ride in the list.</summary>
+    [Serializable]
     public class LobbySummary
     {
         public string id = "";
@@ -182,6 +195,7 @@ namespace FreeVelo.Shared.Api
         public string hostName = "";
     }
 
+    [Serializable]
     public class LobbyList
     {
         public LobbySummary[] lobbies = new LobbySummary[0];

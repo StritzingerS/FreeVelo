@@ -28,10 +28,10 @@ namespace FreeVelo.Shared.Live
     {
         ThumbsUp = 1,
         Fire = 2,
-        Muscle = 3,
-        Sweat = 4,
-        Wave = 5,
-        Clap = 6,
+        Heart = 3,
+        Bolt = 4,
+        Sweat = 5,
+        Wave = 6,
     }
 
     [Flags]

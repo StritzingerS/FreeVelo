@@ -1,5 +1,6 @@
 using System.Linq;
 using FreeVelo.Ble;
+using FreeVelo.Net;
 using FreeVelo.Core.World;
 using FreeVelo.Ride;
 using FreeVelo.UI;
@@ -15,6 +16,7 @@ namespace FreeVelo.App
     {
         private BleService _ble;
         private RideController _ride;
+        private GroupRideService _group;
         private RiderAvatar _avatar;
         private Camera _camera;
         private float _lean;
@@ -61,11 +63,17 @@ namespace FreeVelo.App
             var world = gameObject.AddComponent<WorldBuilder>();
             _ride = gameObject.AddComponent<RideController>();
             var hud = gameObject.AddComponent<Hud>();
+            _group = gameObject.AddComponent<GroupRideService>();
+            var groupAvatars = gameObject.AddComponent<GroupAvatars>();
 
             var route = BuiltInRoutes.Get(BuiltInRoutes.DefaultId); // same route the server uses for group rides
             world.Build(route);
             _ride.Initialize(_ble, route);
             hud.Initialize(_ble, _ride);
+            _ride.Group = _group;
+            groupAvatars.Initialize(world, _group, route);
+            hud.InitializeGroup(_group, groupAvatars);
+            _group.RestoreLobby(); // back into the group ride after an app restart
             _avatar = RiderAvatar.Create(world, new Color(0.1f, 0.45f, 0.85f));
 
             _camera = Camera.main;
@@ -133,8 +141,9 @@ namespace FreeVelo.App
             var rotation = Quaternion.Euler(pitch, heading, -(_lean + _avatar.StopLeanDeg));
             var right = Quaternion.Euler(0, heading, 0) * Vector3.right;
 
-            // Ride on the right half of the road.
-            var position = new Vector3((float)sample.X, (float)sample.Y + 0.05f, (float)sample.Z) + (right * 1.4f);
+            // Ride on the right half of the road (in a group ride in the own lane, so riders do not overlap).
+            float lateral = _ride.IsGroupRide ? GroupAvatars.Lateral(_group.State.MyHomeLaneM) : GroupAvatars.BaseLateralM;
+            var position = new Vector3((float)sample.X, (float)sample.Y + 0.05f, (float)sample.Z) + (right * lateral);
             _avatar.transform.SetPositionAndRotation(position, rotation);
 
             bool riding = _ride.State == RideState.Riding;

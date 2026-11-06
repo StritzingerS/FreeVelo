@@ -21,6 +21,7 @@ namespace FreeVelo.UI
         private enum Page
         {
             Home,
+            Group,
             Workouts,
             Devices,
             Settings,
@@ -72,6 +73,8 @@ namespace FreeVelo.UI
             float offsetX = safe.x, offsetY = Screen.height - safe.yMax;
             _full = new Rect(-offsetX / scale, -offsetY / scale, Screen.width / scale, Screen.height / scale);
             GUI.matrix = Matrix4x4.TRS(new Vector3(offsetX, offsetY, 0), Quaternion.identity, new Vector3(scale, scale, 1));
+            _guiScale = scale;
+            _guiOffset = new Vector2(offsetX, offsetY);
 
             if (!string.IsNullOrEmpty(WorkoutStore.LastMessage))
             {
@@ -126,6 +129,7 @@ namespace FreeVelo.UI
             switch (_page)
             {
                 case Page.Home: DrawHome(content); break;
+                case Page.Group: DrawGroup(content); break;
                 case Page.Workouts: DrawWorkouts(content); break;
                 case Page.Devices: DrawDevices(content); break;
                 case Page.Settings: DrawSettings(content); break;
@@ -145,6 +149,7 @@ namespace FreeVelo.UI
             var items = new (Page Page, Icon Icon, string Label)[]
             {
                 (Page.Home, Icon.Bike, L.Get("ride")),
+                (Page.Group, Icon.Group, L.Get("group")),
                 (Page.Workouts, Icon.List, L.Get("workouts")),
                 (Page.Devices, Icon.Bluetooth, L.Get("devices")),
                 (Page.Settings, Icon.Gear, L.Get("settings")),
@@ -152,14 +157,14 @@ namespace FreeVelo.UI
             float y = 120;
             foreach (var item in items)
             {
-                var r = new Rect(8, y, RailW - 16, 84);
+                var r = new Rect(8, y, RailW - 16, 80);
                 bool selected = _page == item.Page;
                 var pill = new Rect(r.center.x - 30, r.y + 8, 60, 38);
                 if (selected) Ui.Rect(pill, Theme.Alpha(Theme.Accent, 0.18f), 19);
                 Ui.DrawIcon(new Rect(pill.center.x - 13, pill.center.y - 13, 26, 26), item.Icon, selected ? Theme.Accent : Theme.Muted);
                 GUI.Label(new Rect(r.x, r.y + 50, r.width, 24), item.Label, Theme.With(Theme.Caption, selected ? Theme.Text : Theme.Muted, 14, TextAnchor.MiddleCenter));
                 if (GUI.Button(r, GUIContent.none, GUIStyle.none)) Navigate(item.Page);
-                y += 92;
+                y += 86;
             }
 
             // Connection indicator at the bottom: trainer status.
@@ -195,6 +200,12 @@ namespace FreeVelo.UI
                 x += Ui.Chip(new Rect(x, hero.y + 82, 0, 30), $"{route.LengthM / 1000:0.0} km", Theme.Info, Icon.Route) + 8;
                 Ui.Chip(new Rect(x, hero.y + 82, 0, 30), $"{route.TotalAscentM:0} m ↑", Theme.Success);
                 DrawElevation(new Rect(hero.x + 24, hero.y + 124, hero.width - 236, 88), route, -1);
+            }
+
+            if (_group?.Lobby != null)
+            {
+                // In a group ride: starting here (or a workout below) rides with the group.
+                Ui.Chip(new Rect(hero.xMax - 196, hero.yMax - 118, 0, 30), _group.Lobby.name, Theme.Accent, Icon.Group, filled: true);
             }
 
             if (Ui.Button(new Rect(hero.xMax - 196, hero.yMax - 76, 172, 56), L.Get("start"), ButtonKind.Primary, Icon.Play)) _ride.StartRide(null);
@@ -594,7 +605,7 @@ namespace FreeVelo.UI
             float colW = (c.width - 24) / 2f;
             var zones = AppSettings.Zones;
             float zonesH = 92 + (zones.Zones.Count * 58);
-            float contentH = 8 + 280 + 24 + 160 + 24 + zonesH + 24;
+            float contentH = 8 + 280 + 24 + 160 + 24 + 170 + 24 + zonesH + 24;
             Ui.BeginScroll(3000, view, contentH);
             float x0 = 8, y0 = 8;
 
@@ -642,7 +653,9 @@ namespace FreeVelo.UI
                 SimulatedBleBackend.RiderPowerW = Mathf.Round(Ui.Slider(new Rect(sim.x + 16, sim.y + 88, sim.width - 32, 44), SimulatedBleBackend.RiderPowerW, 0f, 500f) / 5) * 5;
             }
 
-            DrawZonesCard(new Rect(x0, app.yMax + 24, c.width, zonesH));
+            var groupCard = new Rect(x0, app.yMax + 24, c.width, 170);
+            DrawGroupSettingsCard(groupCard);
+            DrawZonesCard(new Rect(x0, groupCard.yMax + 24, c.width, zonesH));
             Ui.EndScroll(3000, view, contentH);
         }
 
@@ -784,6 +797,7 @@ namespace FreeVelo.UI
 
             if (workout) DrawWorkoutPanel();
             else DrawRouteProgress();
+            if (_ride.IsGroupRide && _group != null) DrawGroupOverlay();
 
             // Cue
             if (!string.IsNullOrEmpty(_ride.CueText) && _ride.ClockS < _ride.CueUntil)

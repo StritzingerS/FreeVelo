@@ -9,6 +9,8 @@ using FreeVelo.Core.Recording;
 using FreeVelo.Core.Training;
 using FreeVelo.Core.Workouts;
 using FreeVelo.Core.World;
+using FreeVelo.Net;
+using FreeVelo.Shared.Api;
 using UnityEngine;
 
 namespace FreeVelo.Ride
@@ -99,6 +101,12 @@ namespace FreeVelo.Ride
 
         private readonly Queue<(float T, double P)> _powerWindow = new Queue<(float, double)>();
 
+        /// <summary>Group rides (set by the app; null = solo only).</summary>
+        public GroupRideService Group { get; set; }
+
+        /// <summary>The current ride is a group ride (live with the others).</summary>
+        public bool IsGroupRide { get; private set; }
+
         public void Initialize(BleService ble, Route route)
         {
             _ble = ble;
@@ -116,7 +124,9 @@ namespace FreeVelo.Ride
         public void StartRide(Workout workout)
         {
             _ble.ApplySettings();
-            _recording = new RideRecording(DateTime.UtcNow, workout != null ? workout.Name.Get(AppSettings.Language) : L.Get("free_ride"));
+            IsGroupRide = Group != null && Group.Lobby != null;
+            string title = workout != null ? workout.Name.Get(AppSettings.Language) : IsGroupRide ? Group.Lobby.name : L.Get("free_ride");
+            _recording = new RideRecording(DateTime.UtcNow, title);
             _lastSegmentIndex = -1;
             _workoutComplete = false;
             _sampleTimer = 0;
@@ -136,6 +146,7 @@ namespace FreeVelo.Ride
             // Failing is the goal of a ramp test: no ERG reduction at low cadence.
             _ble.Hub.LowCadenceProtectionEnabled = _ftpTest != FtpTestKind.Ramp;
             State = RideState.Riding;
+            if (IsGroupRide) Group.StartLive();
             RideKeepAlive.Start(_recording.Name, L.Get("ride_running"));
             _notificationTimer = 0;
         }
@@ -151,6 +162,8 @@ namespace FreeVelo.Ride
             if (State != RideState.Riding) return;
             State = RideState.Finished;
             RideKeepAlive.Stop();
+            if (IsGroupRide) Group.StopLive(); // still in the group ride (waiting room) until the rider leaves it
+            IsGroupRide = false;
             _physics.SpeedMps = 0; // the rider stops: no more wheel/world movement after the ride
             _ble.Hub.SetSimulation(0); // release ERG resistance
             _ble.Hub.LowCadenceProtectionEnabled = true;
@@ -262,6 +275,7 @@ namespace FreeVelo.Ride
             double crr = RoadSurfaces.RollingResistance(position.Surface);
             _physics.Step(IsPaused ? 0 : power, position.GradePercent, crr, dt);
             DistanceM += _physics.SpeedMps * dt;
+            if (IsGroupRide) ApplyGroup(cadence);
 
             if (running)
             {
@@ -318,6 +332,32 @@ namespace FreeVelo.Ride
             }
 
             CompleteWorkoutIfDone(background);
+        }
+
+        /// <summary>
+        /// Group ride, every step (also in the background): Keep Together places the rider where the server's group
+        /// simulation says (the trainer still gets the grade of that spot); Free mode starts next to the group once.
+        /// Jumps into the group do not count as ridden distance. Then the own state goes to the server.
+        /// </summary>
+        private void ApplyGroup(double cadence)
+        {
+            if (Group.Mode == LobbyMode.KeepTogether)
+            {
+                if (Group.TryGetOwnPosition(out double groupDistance, out float groupSpeed, out bool welcomed))
+                {
+                    if (welcomed) _rideStartDistanceM += groupDistance - DistanceM;
+                    DistanceM = groupDistance;
+                    _physics.SpeedMps = groupSpeed;
+                }
+            }
+            else if (Group.TryTakeStartDistance(out double start))
+            {
+                _rideStartDistanceM += start - DistanceM;
+                DistanceM = start;
+            }
+
+            // Mass set at the start of the ride (PlayerPrefs cannot be read from the background thread).
+            Group.Publish(DistanceM, _physics.SpeedMps, Power3s / Math.Max(1.0, _physics.RiderMassKg), cadence);
         }
 
         /// <summary>Background tick from the Android plugin (Unity paused): Bluetooth, trainer and ride go on.</summary>

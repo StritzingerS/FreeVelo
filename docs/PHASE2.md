@@ -29,10 +29,16 @@ container (ASP.NET Core + SQLite), so it runs on Oracle Free or any small VPS / 
 - [x] Emoji reactions (relay, max. one per second per rider)
 
 ### D. Unity app
-- [ ] First start: display name (rider created in the background, secret kept on the device)
-- [ ] Group rides: create (private with code / public), join with the 4-letter code, public list, share the code
-- [ ] Other riders in the world (interpolated avatars, name tags), rider list with W/kg, emoji feed
-- [ ] Group ride HUD (gap to the group, towing indicator)
+- [x] Client code in `FreeVelo.Shared` (tested against the real server): REST client (`FreeVeloApi`), live
+      connection (`LiveLink`), group state with smoothing between snapshots (`GroupRideState`)
+- [x] First start: display name + server address (rider created in the background, secret kept on the device)
+- [x] Group rides: create (Keep Together / Free, private with code / public), join with the 4-letter code, public
+      list, share the code (share sheet + clipboard), waiting room with riders, leave; restored after an app restart
+- [x] Other riders in the world (avatars in jersey colours, own lanes, cornering lean), name tags with W/kg,
+      rider list with gaps, emoji buttons and bubbles (six drawn icons – emoji fonts do not render reliably)
+- [x] Group ride HUD: connecting / towed status; Keep Together positions from the server (trainer gets the grade
+      there), Free mode starts next to the group; workouts can be ridden inside a group ride (ERG)
+- [ ] First real test with two phones (see `docs/SERVER.md` for running the server on a PC)
 
 ### E. Deployment
 - [ ] Oracle Free VM setup guide: Docker, Caddy (HTTPS via Let's Encrypt), free domain (e.g. DuckDNS)

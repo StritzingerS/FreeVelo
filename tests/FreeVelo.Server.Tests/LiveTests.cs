@@ -72,8 +72,9 @@ public sealed class LiveClient : IAsyncDisposable
                 using var timeout = new CancellationTokenSource(2000);
                 await _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", timeout.Token);
             }
-            catch (Exception e) when (e is WebSocketException or OperationCanceledException or InvalidOperationException)
+            catch (Exception)
             {
+                // Cleanup only: the server may be closing the same socket at this moment.
             }
         }
 
@@ -177,9 +178,10 @@ public sealed class LiveTests : IDisposable
         await using var samiLive = await LiveClient.Connect(_server, sami);
         await using var annaLive = await LiveClient.Connect(_server, anna);
         var welcome = await samiLive.WaitFor<WelcomeMessage>();
+        await annaLive.WaitFor<WelcomeMessage>(); // Anna is connected before Sami reacts
 
         await samiLive.Send(new EmojiMessage { Emoji = Emoji.Fire });
-        await samiLive.Send(new EmojiMessage { Emoji = Emoji.Clap }); // within a second: dropped
+        await samiLive.Send(new EmojiMessage { Emoji = Emoji.Heart }); // within a second: dropped
         var e = await annaLive.WaitFor<EmojiEventMessage>();
         Assert.Equal(Emoji.Fire, e.Emoji);
         Assert.Equal(welcome.YourSlot, e.Slot);
@@ -296,8 +298,8 @@ public class LiveCodecTests
         Assert.Equal(77u, snapshot.Tick);
         Assert.Equal(RiderFlags.Active | RiderFlags.Connected, snapshot.Riders[0].Flags);
 
-        var emoji = (EmojiEventMessage)RoundTrip(new EmojiEventMessage { Slot = 4, Emoji = Emoji.Muscle });
-        Assert.Equal((4, Emoji.Muscle), (emoji.Slot, emoji.Emoji));
+        var emoji = (EmojiEventMessage)RoundTrip(new EmojiEventMessage { Slot = 4, Emoji = Emoji.Bolt });
+        Assert.Equal((4, Emoji.Bolt), (emoji.Slot, emoji.Emoji));
     }
 
     [Fact]

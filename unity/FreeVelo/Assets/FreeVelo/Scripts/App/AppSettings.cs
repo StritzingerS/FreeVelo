@@ -66,6 +66,56 @@ namespace FreeVelo.App
             _zones = null;
         }
 
+        // ------------------------------------------------------------------ group rides
+
+        /// <summary>Address of the FreeVelo server, e.g. https://freevelo.duckdns.org or http://192.168.1.20:8080.</summary>
+        public static string ServerUrl
+        {
+            get => PlayerPrefs.GetString("serverUrl", string.Empty);
+            set
+            {
+                PlayerPrefs.SetString("serverUrl", (value ?? string.Empty).Trim().TrimEnd('/'));
+                PlayerPrefs.Save();
+            }
+        }
+
+        /// <summary>
+        /// The rider's identity on the server (id + secret from the first start; no email, no password).
+        /// Null until a display name was entered.
+        /// </summary>
+        public static FreeVelo.Shared.Api.RiderCredentials Rider
+        {
+            get
+            {
+                string id = PlayerPrefs.GetString("riderId", string.Empty);
+                if (id.Length == 0) return null;
+                return new FreeVelo.Shared.Api.RiderCredentials
+                {
+                    riderId = id,
+                    secret = PlayerPrefs.GetString("riderSecret", string.Empty),
+                    displayName = PlayerPrefs.GetString("riderName", string.Empty),
+                };
+            }
+
+            set
+            {
+                if (value == null)
+                {
+                    PlayerPrefs.DeleteKey("riderId");
+                    PlayerPrefs.DeleteKey("riderSecret");
+                    PlayerPrefs.DeleteKey("riderName");
+                }
+                else
+                {
+                    PlayerPrefs.SetString("riderId", value.riderId);
+                    PlayerPrefs.SetString("riderSecret", value.secret);
+                    PlayerPrefs.SetString("riderName", value.displayName);
+                }
+
+                PlayerPrefs.Save();
+            }
+        }
+
         /// <summary>Devices that are connected automatically when found.</summary>
         public static IReadOnlyCollection<string> RememberedDevices =>
             PlayerPrefs.GetString("devices", string.Empty).Split(',').Where(s => s.Length > 0).ToList();
