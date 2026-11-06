@@ -8,17 +8,12 @@ using UnityEngine;
 namespace FreeVelo.UI
 {
     /// <summary>
-    /// The road network in the interface: the junction card (left / straight / right), the minimap, the elevation
-    /// ahead, and a note while the world is still being generated.
+    /// The road network in the interface: the junction card (left / straight / right), the elevation ahead, and a
+    /// note while the world is still being generated.
     /// </summary>
     public sealed partial class Hud
     {
-        private const int MapSize = 256;
         private WorldBuilder _world;
-        private Texture2D _mapTexture;
-        private double _mapMinX;
-        private double _mapMinZ;
-        private double _mapScale;
 
         public void InitializeWorld(WorldBuilder world) => _world = world;
 
@@ -72,16 +67,14 @@ namespace FreeVelo.UI
 
         // ------------------------------------------------------------------ route strip
 
-        /// <summary>Bottom strip in free rides: elevation of the next 3 km and the minimap.</summary>
+        /// <summary>Bottom strip in free rides: elevation of the next 3 km (or of the main loop in group rides).</summary>
         private void DrawRideStrip()
         {
             var route = _ride.Route;
             if (route == null) return;
             var card = new Rect(24, _h - 120, _w - 48, 96);
             Ui.Card(card, Theme.Alpha(Theme.Background, 0.85f));
-            float mapSide = card.height - 12;
-            var map = new Rect(card.xMax - mapSide - 6, card.y + 6, mapSide, mapSide);
-            var graph = new Rect(card.x + 16, card.y + 30, card.width - mapSide - 48, card.height - 40);
+            var graph = new Rect(card.x + 16, card.y + 30, card.width - 32, card.height - 40);
 
             double d = _ride.DistanceM;
             if (route.IsLoop)
@@ -94,8 +87,6 @@ namespace FreeVelo.UI
                 GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), L.Get("ahead_3km"), Theme.Caption);
                 DrawElevationAhead(graph, route, d);
             }
-
-            DrawMiniMap(map);
         }
 
         /// <summary>Profile from 300 m behind to 3 km ahead (as far as the way is known: up to the next junction).</summary>
@@ -135,78 +126,6 @@ namespace FreeVelo.UI
                 float jx = r.x + (r.width * (float)((junction.DistanceM - from) / (to - from)));
                 Ui.Rect(new Rect(jx - 1, r.y, 2, r.height), Theme.Alpha(Theme.Warning, 0.9f), 1);
             }
-        }
-
-        /// <summary>Top-down map of the road network (generated once) with the rider's position.</summary>
-        private void DrawMiniMap(Rect r)
-        {
-            var map = _ride.Map;
-            if (map == null) return;
-            if (_mapTexture == null) _mapTexture = BuildMapTexture(map);
-            Ui.Rect(r, Theme.Alpha(Theme.Surface, 0.9f), Theme.RadiusSmall);
-            GUI.DrawTexture(new Rect(r.x + 3, r.y + 3, r.width - 6, r.height - 6), _mapTexture);
-
-            var p = _ride.Position;
-            float u = (float)((p.X - _mapMinX) * _mapScale / MapSize), v = (float)((p.Z - _mapMinZ) * _mapScale / MapSize);
-            var dot = new Vector2(r.x + 3 + (u * (r.width - 6)), r.y + 3 + ((1 - v) * (r.height - 6)));
-            Ui.Dot(dot, 5.5f, Color.white);
-            Ui.Dot(dot, 4f, Theme.Accent);
-        }
-
-        private Texture2D BuildMapTexture(WorldMap map)
-        {
-            var (minX, minZ, maxX, maxZ) = map.Bounds;
-            double margin = 120;
-            _mapMinX = minX - margin;
-            _mapMinZ = minZ - margin;
-            _mapScale = MapSize / System.Math.Max(maxX - minX + (2 * margin), maxZ - minZ + (2 * margin));
-            var pixels = new Color32[MapSize * MapSize];
-            for (int i = 0; i < pixels.Length; i++) pixels[i] = new Color32(0, 0, 0, 0);
-
-            void Plot(double x, double z, int radius, Color32 c)
-            {
-                int px = (int)((x - _mapMinX) * _mapScale), pz = (int)((z - _mapMinZ) * _mapScale);
-                for (int dz = -radius; dz <= radius; dz++)
-                {
-                    for (int dx = -radius; dx <= radius; dx++)
-                    {
-                        int qx = px + dx, qz = pz + dz;
-                        if (qx < 0 || qz < 0 || qx >= MapSize || qz >= MapSize || (dx * dx) + (dz * dz) > radius * radius) continue;
-                        pixels[(qz * MapSize) + qx] = c;
-                    }
-                }
-            }
-
-            var water = new Color32(80, 140, 200, 255);
-            foreach (var lake in map.Lakes)
-            {
-                for (int a = 0; a < 90; a++)
-                {
-                    double angle = a * System.Math.PI * 2 / 90;
-                    for (double q = 0; q < 1; q += 0.1)
-                    {
-                        double rr = lake.RadiusAt(angle) * q;
-                        Plot(lake.X + (System.Math.Cos(angle) * rr), lake.Z + (System.Math.Sin(angle) * rr), 1, water);
-                    }
-                }
-            }
-
-            if (map.River != null)
-            {
-                for (int i = 0; i < map.River.X.Length; i++) Plot(map.River.X[i], map.River.Z[i], 1, water);
-            }
-
-            foreach (var e in map.Edges)
-            {
-                var c = e.IsMainLoop ? new Color32(240, 244, 248, 255) : e.Surface == RoadSurface.Asphalt ? new Color32(255, 160, 100, 255) : new Color32(210, 180, 130, 255);
-                for (int i = 0; i < e.X.Length; i += 2) Plot(e.X[i], e.Z[i], 1, c);
-            }
-
-            // The texture's first row is the bottom; GUI draws it upright.
-            var texture = new Texture2D(MapSize, MapSize, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
-            texture.SetPixels32(pixels);
-            texture.Apply();
-            return texture;
         }
     }
 }
