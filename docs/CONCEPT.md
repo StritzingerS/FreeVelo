@@ -37,7 +37,7 @@
 | BLE on Android | Own Kotlin plugin (`.aar`), exposed to C# via a thin bridge |
 | Server | **ASP.NET Core (.NET 10 LTS)**, WebSockets + MessagePack, PostgreSQL (or SQLite) |
 | Hosting | **Oracle Cloud Always Free** (ARM VM), Caddy as reverse proxy with Let's Encrypt, free domain (e.g. DuckDNS) |
-| Auth | Email + password (**Argon2id**), email verification + password reset (Brevo free SMTP), JWT access + refresh tokens. Login mandatory |
+| Identity | **No email, no password:** on first start the app creates a rider with just a display name; the server returns a random secret that stays on the device and is used to get a JWT session. Private group rides are protected by a **4-letter invite code** |
 | Client data | SQLite on device + FIT files; manual backup export/import (ZIP) |
 | Strava | Server only proxies OAuth token exchange/refresh (keeps client secret). Upload goes device → Strava directly |
 | License | **PolyForm Noncommercial 1.0.0** (source-available, no commercial use by others); contributor agreement in `CONTRIBUTING.md`; only CC0 / redistributable assets in the repo |
@@ -66,7 +66,7 @@
          │ iOS: Swift plugin (later) · Windows: WinRT (later) │
          ▼                                                    ▼
   Trainer / HRM / PM / Zwift Click        FreeVelo.Server (ASP.NET Core, Oracle Free VM)
-                                          Accounts · Lobbies · Realtime relay ·
+                                          Riders · Lobbies · Realtime relay ·
                                           Keep-Together anchor sim · Strava OAuth proxy
 ```
 
@@ -251,18 +251,21 @@ After a test the app **proposes** the new FTP (accept/reject). FTP history is st
 ## 9. Multiplayer
 
 ### 9.1 Server responsibilities (data minimization)
-Stored: email, display name, password hash, account metadata. **No rides, no FTP, no weight.**
+Stored: rider id, display name, hash of the device secret, created / last seen. **No email, no rides, no FTP, no weight.**
 Transient (RAM only, during a ride): lobby state, rider positions, current W/kg, emoji reactions.
-GDPR: privacy policy, account deletion in the app, minimal logs.
+GDPR: privacy policy, rider deletion in the app, minimal logs.
 
 ### 9.2 Lobbies
-- **Public lobby list.** Login required.
+- **Private by default:** every group ride gets a **4-letter code** (letters without I, L, O, e.g. `KPWD`), unique among
+  open rides. Friends join with the code (sent via WhatsApp etc.); joining by code is rate-limited against guessing.
+- **Public rides** (optional) also appear in the lobby list and can be joined from it.
+- A rider is in one group ride at a time; the host role passes on when the host leaves.
 - Creator sets (fixed after creation): name, **route _or_ workout**, mode (**Keep Together** / **Free**), max riders (default 8).
   - Route chosen → everyone rides this route (GPX routes are sent to joiners as a compressed route package via the server).
   - Workout chosen → a random built-in route (looping) is used. The creator's workout is **proposed** to everyone.
     Each rider may pick another workout or free ride (ERG workout inside a group ride is always possible).
 - **Join anytime:** joiners spawn at the group's current position.
-- Lobby is closed when the last rider leaves.
+- Lobby is closed when the last rider leaves (or after 30 min without activity).
 - Emoji reactions (👍 🔥 💪 😅 👋 …) shown above the avatar + in a feed.
 
 ### 9.3 Network
@@ -329,11 +332,15 @@ ESA WorldCover (fallback land cover)                    │
 
 ---
 
-## 11. Accounts, Offline & Strava
+## 11. Identity, Offline & Strava
 
-- **Login mandatory.** Session (refresh token) is cached on device, so **solo rides work offline** after a first login.
-  Multiplayer, route import (OSM/DEM) and Strava upload need internet. Uploads are queued until online.
-- Password: Argon2id (salted), rate-limited login, email verification, password reset via email.
+- **No accounts with email and password.** First start: enter a display name → the server creates a rider and returns
+  a random 256-bit secret, stored on the device. The app gets a session (JWT) with rider id + secret whenever needed.
+  Nothing personal is on the server, so a new phone simply means a new rider (type the name again).
+- **Solo rides need no server at all** (work offline from the first start). Multiplayer, route import (OSM/DEM) and
+  Strava upload need internet. Uploads are queued until online.
+- Abuse protection: rate limits per client IP (creating riders, sessions, joining by code). A server-wide access code
+  can be added later if strangers ever become a problem.
 - **Strava:** OAuth via server proxy (client secret only on server). Access/refresh tokens stored on device (Android Keystore).
   Upload FIT automatically after ride (toggle). Garmin Connect via Strava → Garmin sync or manual FIT import.
   Apply to Strava for higher athlete capacity. Fallback: user-supplied API key.
@@ -345,7 +352,7 @@ ESA WorldCover (fallback land cover)                    │
 - Zones: power + HR zone definitions (% or absolute).
 - Trainer: difficulty (0–100 %), road feel on/off + intensity, ERG smoothing, power source, power match.
 - Controls: Zwift Click/Play mapping, number of virtual gears, ERG step size.
-- Language (de/en), units (metric), Strava connection, backup export/import, account (change password, delete).
+- Language (de/en), units (metric), Strava connection, backup export/import, rider (change display name, delete).
 
 ---
 

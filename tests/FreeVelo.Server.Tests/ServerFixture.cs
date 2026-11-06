@@ -1,40 +1,11 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.RegularExpressions;
-using FreeVelo.Server.Email;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace FreeVelo.Server.Tests;
-
-/// <summary>Collects sent emails instead of sending them.</summary>
-public sealed class CapturingEmailSender : IEmailSender
-{
-    private readonly List<EmailMessage> _sent = new();
-
-    public IReadOnlyList<EmailMessage> Sent
-    {
-        get
-        {
-            lock (_sent) return _sent.ToList();
-        }
-    }
-
-    public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
-    {
-        lock (_sent) _sent.Add(message);
-        return Task.CompletedTask;
-    }
-
-    /// <summary>Token from the last link to <paramref name="to"/> that points at <paramref name="path"/>.</summary>
-    public string LastToken(string to, string path)
-    {
-        var mail = Sent.Last(m => m.To == to && m.Body.Contains(path + "?token="));
-        return Uri.UnescapeDataString(Regex.Match(mail.Body, Regex.Escape(path) + @"\?token=([^\s]+)").Groups[1].Value);
-    }
-}
 
 /// <summary>A clock the tests can move forward.</summary>
 public sealed class ManualTimeProvider : TimeProvider
@@ -47,16 +18,19 @@ public sealed class ManualTimeProvider : TimeProvider
     public void Advance(TimeSpan by) => Now += by;
 }
 
-/// <summary>The real server in memory, with its own temporary data folder, fast Argon2 and captured emails.</summary>
+/// <summary>The real server in memory, with its own temporary data folder and a clock the tests control.</summary>
 public sealed class ServerFactory : WebApplicationFactory<Program>
 {
     private readonly string _dataDirectory = Path.Combine(Path.GetTempPath(), "freevelo-test-" + Guid.NewGuid().ToString("N"));
 
-    public ServerFactory(int authRequestsPerMinute = 1000) => AuthRequestsPerMinute = authRequestsPerMinute;
+    private readonly int _identityPerMinute;
+    private readonly int _codeJoinsPerMinute;
 
-    public int AuthRequestsPerMinute { get; }
-
-    public CapturingEmailSender Emails { get; } = new();
+    public ServerFactory(int identityPerMinute = 1000, int codeJoinsPerMinute = 1000)
+    {
+        _identityPerMinute = identityPerMinute;
+        _codeJoinsPerMinute = codeJoinsPerMinute;
+    }
 
     public ManualTimeProvider Time { get; } = new();
 
@@ -65,15 +39,9 @@ public sealed class ServerFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Server:DataDirectory", _dataDirectory);
-        builder.UseSetting("Server:PublicBaseUrl", "https://freevelo.test");
-        builder.UseSetting("Argon2:MemoryKiB", "1024");
-        builder.UseSetting("Argon2:Iterations", "1");
-        builder.UseSetting("RateLimit:AuthRequestsPerMinute", AuthRequestsPerMinute.ToString());
-        builder.ConfigureTestServices(services =>
-        {
-            services.AddSingleton<IEmailSender>(Emails);
-            services.AddSingleton<TimeProvider>(Time);
-        });
+        builder.UseSetting("RateLimit:IdentityRequestsPerMinute", _identityPerMinute.ToString());
+        builder.UseSetting("RateLimit:CodeJoinsPerMinute", _codeJoinsPerMinute.ToString());
+        builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(Time));
     }
 
     protected override void Dispose(bool disposing)

@@ -3,7 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
 
-namespace FreeVelo.Server.Accounts;
+namespace FreeVelo.Server.Riders;
 
 public sealed class JwtOptions
 {
@@ -13,13 +13,11 @@ public sealed class JwtOptions
     /// <summary>HMAC key (base64, at least 32 bytes). Empty: a key is generated once and kept in the data folder.</summary>
     public string SigningKey { get; set; } = "";
 
-    public TimeSpan AccessTokenLifetime { get; set; } = TimeSpan.FromMinutes(15);
-
-    /// <summary>Long, so solo rides work offline for weeks after one login.</summary>
-    public TimeSpan RefreshTokenLifetime { get; set; } = TimeSpan.FromDays(90);
+    /// <summary>A new session costs one request with the stored secret, so the app simply gets one per app start.</summary>
+    public TimeSpan AccessTokenLifetime { get; set; } = TimeSpan.FromHours(12);
 }
 
-/// <summary>Short-lived JWT access tokens (HMAC-SHA256); the account id is the subject.</summary>
+/// <summary>Access tokens (JWT, HMAC-SHA256); the rider id is the subject.</summary>
 public sealed class TokenService
 {
     private readonly JwtOptions _options;
@@ -34,17 +32,13 @@ public sealed class TokenService
 
     public SymmetricSecurityKey Key { get; }
 
-    public string CreateAccessToken(Account account)
+    public string CreateAccessToken(Rider rider)
     {
         var now = _time.GetUtcNow().UtcDateTime;
         var token = new JwtSecurityToken(
             JwtOptions.Issuer,
             JwtOptions.Audience,
-            new[]
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, account.Id),
-                new Claim("name", account.DisplayName),
-            },
+            new[] { new Claim(JwtRegisteredClaimNames.Sub, rider.Id) },
             notBefore: now,
             expires: now + _options.AccessTokenLifetime,
             signingCredentials: new SigningCredentials(Key, SecurityAlgorithms.HmacSha256));
@@ -62,11 +56,9 @@ public sealed class TokenService
         }
 
         string path = Path.Combine(dataDirectory, "jwt-signing.key");
-        if (!File.Exists(path))
-        {
-            File.WriteAllText(path, Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)));
-        }
-
+        if (!File.Exists(path)) File.WriteAllText(path, Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)));
         return new SymmetricSecurityKey(Convert.FromBase64String(File.ReadAllText(path).Trim()));
     }
+
+    public static string? RiderId(ClaimsPrincipal user) => user.FindFirstValue(JwtRegisteredClaimNames.Sub);
 }

@@ -8,28 +8,27 @@ container (ASP.NET Core + SQLite), so it runs on Oracle Free or any small VPS / 
 
 ## Backlog
 
-### A. Server (`src/FreeVelo.Server`) – accounts
+### A. Server (`src/FreeVelo.Server`) – riders & group rides
 - [x] ASP.NET Core project, health endpoint, configuration, Dockerfile, CI build + tests
-- [x] SQLite storage (accounts only – data minimization: no rides, FTP or weight on the server)
-- [x] Register (email, display name, password), Argon2id password hashes
-- [x] Email verification and password reset (SMTP, e.g. Brevo free tier; log-only sender for development)
-- [x] Login with JWT access token + refresh token (rotation, logout), rate-limited login
-- [x] Delete account (GDPR), change display name / password
+- [x] SQLite storage (riders only – data minimization: no email, rides, FTP or weight on the server)
+- [x] Riders without email or password: display name → server-generated device secret → JWT session;
+      rename, delete; rate limits per client IP
+- [x] Group rides (in memory): create (name, route or workout, mode Keep Together / Free, max riders, private or
+      public), 4-letter invite code for private rides, public list, join, leave, host hand-over, idle cleanup
 
 ### B. Shared protocol (`src/FreeVelo.Shared`) – client + server
 - [ ] Network messages (rider state 4 Hz, snapshots, lobby events, emoji) – compact binary encoding without
       external dependencies (works with Unity IL2CPP)
 - [ ] Keep Together algorithm (server-authoritative anchor, elastic offsets, towing riders who stop)
 
-### C. Server – lobbies & realtime
-- [ ] Lobby list, create (name, route or workout, mode Keep Together / Free, max riders), join, leave
+### C. Server – realtime
 - [ ] WebSocket realtime: rider states in, snapshots out at 4 Hz; join mid-ride at the group's position
 - [ ] Keep Together anchor simulation on the server; Free mode relays positions
 - [ ] Emoji reactions
 
 ### D. Unity app
-- [ ] Login / register / password reset screens, session cached on the device (solo rides work offline)
-- [ ] Lobby list, create and join
+- [ ] First start: display name (rider created in the background, secret kept on the device)
+- [ ] Group rides: create (private with code / public), join with the 4-letter code, public list, share the code
 - [ ] Other riders in the world (interpolated avatars, name tags), rider list with W/kg, emoji feed
 - [ ] Group ride HUD (gap to the group, towing indicator)
 

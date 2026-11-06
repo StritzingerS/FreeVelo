@@ -17,7 +17,7 @@ Source-available indoor cycling training app for small groups of friends – fre
 | `src/FreeVelo.Core` | C# training core: physics, workouts, workout engine, zones, metrics, FTP tests |
 | `src/FreeVelo.Devices` | C# protocol library: FTMS (ERG/SIM), Cycling Power, Heart Rate, BLE byte logs (.NET Standard 2.1, shared with Unity) |
 | `src/FreeVelo.Shared` | C# network messages shared by app and server (.NET Standard 2.1) |
-| `src/FreeVelo.Server` | ASP.NET Core server: accounts (later lobbies, realtime, Strava OAuth) – one Docker container with SQLite |
+| `src/FreeVelo.Server` | ASP.NET Core server: riders (no email/password) and group rides with 4-letter codes (later realtime, Strava OAuth) – one Docker container with SQLite |
 | `tests/` | xUnit tests |
 | `android/ble` | Kotlin Bluetooth LE library (scan, connect, GATT queue, byte log) – later the Unity plugin |
 | `android/testapp` | Native Android test app for trainers and sensors |

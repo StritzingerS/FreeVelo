@@ -3,36 +3,22 @@ using Microsoft.Data.Sqlite;
 namespace FreeVelo.Server.Storage;
 
 /// <summary>
-/// The server's SQLite database. Data minimization: only accounts and their tokens – no rides, FTP or weight.
+/// The server's SQLite database. Data minimization: only riders (display name + secret hash) – no email, rides,
+/// FTP or weight. Group rides live in memory only.
 /// Schema changes are numbered migrations tracked with <c>PRAGMA user_version</c>.
 /// </summary>
 public sealed class Database
 {
     private static readonly string[] Migrations =
     {
-        // 1: accounts, refresh tokens, one-time tokens (email verification, password reset)
+        // 1: riders – a display name and the hash of the device's secret (no email, no password)
         """
-        CREATE TABLE accounts (
+        CREATE TABLE riders (
             id              TEXT PRIMARY KEY,
-            email           TEXT NOT NULL UNIQUE,
+            secret_hash     TEXT NOT NULL,
             display_name    TEXT NOT NULL,
-            password_hash   TEXT NOT NULL,
-            email_verified  INTEGER NOT NULL DEFAULT 0,
-            created_utc     TEXT NOT NULL
-        );
-        CREATE TABLE refresh_tokens (
-            token_hash      TEXT PRIMARY KEY,
-            account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-            family          TEXT NOT NULL,
-            expires_utc     TEXT NOT NULL,
-            revoked         INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE INDEX refresh_tokens_account ON refresh_tokens(account_id);
-        CREATE TABLE one_time_tokens (
-            token_hash      TEXT PRIMARY KEY,
-            account_id      TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-            purpose         TEXT NOT NULL,
-            expires_utc     TEXT NOT NULL
+            created_utc     TEXT NOT NULL,
+            last_seen_utc   TEXT NOT NULL
         );
         """,
     };
