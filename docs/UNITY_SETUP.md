@@ -14,7 +14,7 @@ You need this once on your PC. Time: about 45–60 minutes (mostly downloads, ~1
 ## 2. Clone the repository
 
 1. GitHub Desktop → **File → Clone repository** → `StritzingerS/FreeVelo` → choose a folder, e.g. `C:\dev\FreeVelo`.
-2. Switch to the branch **`phase1-solo-training`** (Current branch dropdown at the top).
+2. Stay on the branch **`main`** (Current branch dropdown at the top).
 
 ## 3. Install Unity 6
 

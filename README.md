@@ -9,7 +9,7 @@ Source-available indoor cycling training app for small groups of friends – fre
 - Strava auto upload, FIT export
 - Android first, later iOS & Windows · German & English
 
-**Status:** phase 1 (solo training) – see [docs/PHASE1.md](docs/PHASE1.md). Concept: [docs/CONCEPT.md](docs/CONCEPT.md), testing: [docs/TESTING.md](docs/TESTING.md), Unity setup: [docs/UNITY_SETUP.md](docs/UNITY_SETUP.md).
+**Status:** phase 1 (solo training) complete, phase 2 (server & riding together) next – see [docs/PHASE1.md](docs/PHASE1.md). Concept: [docs/CONCEPT.md](docs/CONCEPT.md), testing: [docs/TESTING.md](docs/TESTING.md), Unity setup: [docs/UNITY_SETUP.md](docs/UNITY_SETUP.md).
 
 ## Repository layout
 | Path | Content |
