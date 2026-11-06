@@ -85,7 +85,7 @@ namespace FreeVelo.App
             _ride.Path = path;
             hud.Initialize(_ble, _ride);
             _ride.Group = _group;
-            groupAvatars.Initialize(world, _group, map.MainLoop);
+            groupAvatars.Initialize(world, _group, () => _group.Lobby != null ? FreeVelo.Core.World.BuiltInRoutes.Get(_group.Lobby.routeId) : map.MainLoop);
             hud.InitializeGroup(_group, groupAvatars);
             hud.InitializeWorld(world);
             var strava = gameObject.AddComponent<StravaService>();

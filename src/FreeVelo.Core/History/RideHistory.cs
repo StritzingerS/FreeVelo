@@ -54,7 +54,19 @@ namespace FreeVelo.Core.History
         /// <summary>Best average power for <see cref="RideAnalysis.CurveDurations"/> (0 if the ride was shorter).</summary>
         public int[] powerCurve = new int[0];
 
+        /// <summary>Famous climbs ridden from the foot to the top in this ride.</summary>
+        public ClimbEffort[] climbs = new ClimbEffort[0];
+
         public DateTime StartUtc => DateTimeOffset.FromUnixTimeSeconds(startUtc).UtcDateTime;
+    }
+
+    /// <summary>A famous climb ridden from the foot to the top.</summary>
+    [Serializable]
+    public class ClimbEffort
+    {
+        public string id = "";
+        public string name = "";
+        public double timeS;
     }
 
     /// <summary>A change of the FTP setting.</summary>
@@ -248,6 +260,21 @@ namespace FreeVelo.Core.History
             }
 
             return best;
+        }
+
+        /// <summary>Best time and number of ascents per climb id.</summary>
+        public static Dictionary<string, (double BestS, int Count)> ClimbRecords(IEnumerable<RideRecord> rides)
+        {
+            var result = new Dictionary<string, (double, int)>();
+            foreach (var r in rides)
+            {
+                foreach (var c in r.climbs ?? new ClimbEffort[0])
+                {
+                    result[c.id] = result.TryGetValue(c.id, out var old) ? (Math.Min(old.Item1, c.timeS), old.Item2 + 1) : (c.timeS, 1);
+                }
+            }
+
+            return result;
         }
 
         public static DateTime Monday(DateTime day) => day.Date.AddDays(-(((int)day.DayOfWeek + 6) % 7));

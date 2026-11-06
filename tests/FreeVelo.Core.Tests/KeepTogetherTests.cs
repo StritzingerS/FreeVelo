@@ -145,4 +145,17 @@ public class KeepTogetherTests
         Assert.Same(a, BuiltInRoutes.Get("unknown"));
         Assert.InRange(a.LengthM, 9_500, 10_500);
     }
+
+    [Fact]
+    public void GroupRidesRoundTheMountain()
+    {
+        // A Keep Together lobby on a climb route: the anchor moves on (slower uphill) and laps the loop.
+        var route = BuiltInRoutes.Get(BuiltInRoutes.StelvioId);
+        Assert.True(route.IsLoop);
+        var group = new KeepTogetherGroup(route, KeepTogetherGroup.MaxOffsetM);
+        group.Join("anna");
+        group.Join("ben");
+        Ride(group, 300, ("anna", 3), ("ben", 3));
+        Assert.InRange(group.AnchorDistanceM, 300, 2500); // climbing at 3 W/kg: well below flat-road speed
+    }
 }

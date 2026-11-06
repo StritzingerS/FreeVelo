@@ -193,7 +193,17 @@ namespace FreeVelo.UI
 
         // ------------------------------------------------------------------ home
 
-        private void DrawHome(Rect c)
+        private void DrawHome(Rect page)
+        {
+            // Hero, quick start, devices (~628) and the climbs below: scrolls on small screens.
+            var view = new Rect(page.x - 8, page.y, page.width + 16, page.height);
+            float contentH = 628 + 24 + ClimbSectionH + 16;
+            Ui.BeginScroll(900, view, contentH);
+            DrawHomeContent(new Rect(8, 0, page.width, contentH));
+            Ui.EndScroll(900, view, contentH);
+        }
+
+        private void DrawHomeContent(Rect c)
         {
             var route = _ride.Route;
             Header(c, L.Get("ride"));
@@ -284,6 +294,8 @@ namespace FreeVelo.UI
             }
 
             if (Ui.Button(new Rect(dev.xMax - 140, dev.center.y - 22, 124, 44), L.Get("manage"), ButtonKind.Secondary)) Navigate(Page.Devices);
+
+            DrawClimbCards(c.x, dev.yMax + 24, c.width);
         }
 
         private void DrawElevation(Rect r, FreeVelo.Core.World.Route route, double position)
@@ -900,6 +912,7 @@ namespace FreeVelo.UI
             if (workout) DrawWorkoutPanel();
             else DrawRideStrip();
             if (!_ride.IsGroupRide) DrawJunctionCard(workout);
+            DrawClimbTimer(workout);
             if (_ride.GearsActive) DrawGearControl();
             if (_ride.IsGroupRide && _group != null) DrawGroupOverlay();
 
@@ -1032,7 +1045,7 @@ namespace FreeVelo.UI
             Ui.Rect(_full, new Color(0, 0, 0, 0.45f), 0);
             float cw = Mathf.Min(900, _w - 80);
             const int tileCount = 6, cols = 3; // always two full rows
-            float contentH = 108 + (((tileCount + cols - 1) / cols) * 92) + 8 + (s.PowerCurve != null && s.PowerCurve.Count > 0 ? 146 : 0) + (s.EstimatedFtpW.HasValue ? 88 : 0) + 104;
+            float contentH = 108 + (((tileCount + cols - 1) / cols) * 92) + 8 + (s.PowerCurve != null && s.PowerCurve.Count > 0 ? 146 : 0) + (s.EstimatedFtpW.HasValue ? 88 : 0) + SummaryClimbsH(s) + 104;
             float ch = Mathf.Min(_h - 56, contentH);
             var r = new Rect((_w - cw) / 2f, (_h - ch) / 2f, cw, ch);
             Ui.Card(r, Theme.Surface, 24);
@@ -1084,6 +1097,8 @@ namespace FreeVelo.UI
 
                 y += 146;
             }
+
+            y = DrawSummaryClimbs(s, x, y, w);
 
             // FTP test result
             if (s.EstimatedFtpW.HasValue)

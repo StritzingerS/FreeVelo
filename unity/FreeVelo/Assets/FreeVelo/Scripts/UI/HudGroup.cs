@@ -5,6 +5,7 @@ using FreeVelo.Net;
 using FreeVelo.Shared.Api;
 using FreeVelo.Shared.Live;
 using FreeVelo.World;
+using FreeVelo.Core.World;
 using UnityEngine;
 
 namespace FreeVelo.UI
@@ -81,13 +82,20 @@ namespace FreeVelo.UI
         }
 
         /// <summary>Not in a ride: join with a code, create one, or pick an open ride.</summary>
+        private int _newRoute;
+
+        /// <summary>Routes a group ride can take: the main loop or round the mountain from either climb.</summary>
+        private static readonly string[] RouteIds = { BuiltInRoutes.DefaultId, BuiltInRoutes.StelvioId, BuiltInRoutes.AlpeId };
+
+        private static string RouteName(string id) => id == BuiltInRoutes.StelvioId ? "Stelvio" : id == BuiltInRoutes.AlpeId ? "Alpe d'Huez" : L.Get("main_loop");
+
         private void DrawGroupStart(Rect c)
         {
             float colW = (c.width - 24) / 2f;
             string me = AppSettings.Rider?.displayName ?? string.Empty;
 
             // Join with code
-            var join = new Rect(c.x, c.y, colW, 300);
+            var join = new Rect(c.x, c.y, colW, 356);
             Ui.Card(join);
             SectionTitle(join, L.Get("join_with_code"), Icon.Group);
             GUI.Label(new Rect(join.x + 24, join.y + 64, join.width - 48, 22), L.Get("code_hint"), Theme.Caption);
@@ -104,7 +112,7 @@ namespace FreeVelo.UI
             }
 
             // Create
-            var create = new Rect(c.x + colW + 24, c.y, colW, 300);
+            var create = new Rect(c.x + colW + 24, c.y, colW, 356);
             Ui.Card(create);
             SectionTitle(create, L.Get("create_ride"), Icon.Plus);
             _rideNameInput ??= string.Format(L.Get("default_ride_name"), me);
@@ -112,6 +120,7 @@ namespace FreeVelo.UI
             _rideNameInput = Field(new Rect(x, create.y + 62, w, 48), _rideNameInput, LobbyRules.MaxNameLength, L.Get("ride_name"));
             _newMode = Ui.Segmented(new Rect(x, create.y + 120, w, 44), new[] { L.Get("keep_together"), L.Get("free_mode") }, _newMode);
             GUI.Label(new Rect(x, create.y + 166, w, 40), L.Get(_newMode == 0 ? "keep_together_hint" : "free_mode_hint"), Theme.With(Theme.Caption, size: 13));
+            _newRoute = Ui.Segmented(new Rect(x, create.y + 210, w, 44), RouteIds.Select(RouteName).ToArray(), _newRoute);
             _newVisibility = Ui.Segmented(new Rect(x, create.yMax - 84, w - 172, 56), new[] { L.Get("private"), L.Get("public") }, _newVisibility);
             bool nameOk = _rideNameInput.Trim().Length >= LobbyRules.MinNameLength;
             if (Ui.Button(new Rect(create.xMax - 180, create.yMax - 84, 156, 56), L.Get("create"), ButtonKind.Primary, null, nameOk && !_group.Busy))
@@ -121,6 +130,7 @@ namespace FreeVelo.UI
                     name = _rideNameInput.Trim(),
                     mode = _newMode == 0 ? LobbyMode.KeepTogether : LobbyMode.Free,
                     isPrivate = _newVisibility == 0,
+                    routeId = RouteIds[_newRoute],
                 });
             }
 
@@ -169,7 +179,7 @@ namespace FreeVelo.UI
                 if (friendsRide) Ui.Chip(new Rect(row.x + 66 + nameW, row.y + 10, 0, 24), L.Get("friends_ride"), Theme.Success, null, filled: true);
                 string meta = lobby.friends != null && lobby.friends.Length > 0
                     ? $"<color=#35C97D>{L.Get("friends")}: {string.Join(", ", lobby.friends)}</color> · {string.Format(L.Get("riders_count"), lobby.riderCount, lobby.maxRiders)}"
-                    : $"{lobby.hostName} · {L.Get(lobby.mode == LobbyMode.KeepTogether ? "keep_together" : "free_mode")} · {string.Format(L.Get("riders_count"), lobby.riderCount, lobby.maxRiders)}";
+                    : $"{lobby.hostName} · {RouteName(lobby.routeId)} · {L.Get(lobby.mode == LobbyMode.KeepTogether ? "keep_together" : "free_mode")} · {string.Format(L.Get("riders_count"), lobby.riderCount, lobby.maxRiders)}";
                 GUI.Label(new Rect(row.x + 58, row.y + 34, row.width - 220, 22), meta, Clip(Theme.Caption));
                 bool full = lobby.riderCount >= lobby.maxRiders;
                 if (Ui.Button(new Rect(row.xMax - 146, row.y + 10, 130, 44), L.Get("join"), ButtonKind.Secondary, null, !full && !_group.Busy)) _group.JoinPublic(lobby.id);

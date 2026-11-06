@@ -50,5 +50,23 @@ to wake up.
       number of virtual gears (12–30), ERG step per press (1–5 %)
 - [ ] Test with the real Click V2 (both units, keep-alive, locked left unit) and decide Grade vs. ERG gears by feel
 
+### E. The mountain – two legendary climbs
+- [x] Climb data from GPX (`tools/climbs/process_gpx.py`): Passo dello Stelvio (24.3 km, +1842 m, Ø 7.6 %) and
+      Alpe d'Huez (13.8 km, +1118 m, Ø 8.1 %), every 5 m with the original length, turns, elevation and gradient
+      (elevation smoothed over 200 m against GPS spikes). The GPX source files are not in the repo.
+- [x] Mountain range next to the home world (`Mountain`, `MountainTerrain`, `MountainLook`): both climbs end at a
+      shared summit (1577 m in-game), joined by a 1 km road over the top, so you ride down the other climb.
+      Two valleys; the Alpe d'Huez valley is higher, its access road (7.0 km) and the Stelvio's (6.9 km) take
+      up the difference at about 5 %. Forest → spruce/pine → treeline 550 m below the summit → meadows, rock, snow.
+      Summit signs at the top.
+- [x] Free ride: the access roads branch off the main loop at two junctions; the main loop always stays the
+      default, so you only get to the mountain by choosing the turn.
+- [x] Home page: "Legendary climbs" cards (profile, length, gain, best time) start a ride at the foot of a climb
+      (route `climb-stelvio` / `climb-alpe-dhuez`: up, over the top, down the other side and back).
+- [x] Group rides: the lobby chooses its route (main loop or one of the climbs); Keep Together runs on it.
+- [x] Climb timer while riding (time, km to the summit, gap to the best time), result in the ride summary,
+      best times and ascents in the history, climbs in the ride detail.
+- [ ] Look at the mountain on a phone: far tiles, fog, colours, frame rate of the streamed near tiles
+
 ### Done when
 - A plan runs for weeks, rides upload to Strava automatically.

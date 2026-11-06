@@ -260,7 +260,7 @@ namespace FreeVelo.UI
             var rides = HistoryStore.Rides;
             var view = new Rect(c.x - 8, c.y, c.width + 16, c.height);
             int shown = Mathf.Min(rides.Count, 30);
-            float contentH = 220 + 16 + CalendarCardH + 16 + 200 + 16 + 230 + 24 + 30 + (Mathf.Max(1, shown) * 62) + 16;
+            float contentH = 220 + 16 + CalendarCardH + 16 + 200 + 16 + 230 + 24 + HistoryClimbsH() + (HistoryClimbsH() > 0 ? 16 : 0) + 30 + (Mathf.Max(1, shown) * 62) + 16;
             Ui.BeginScroll(3102, view, contentH);
             float x0 = 8, w = c.width;
             var today = DateTime.Now.Date;
@@ -325,8 +325,16 @@ namespace FreeVelo.UI
                 fy += 30;
             }
 
+            // Legendary climbs: best times
+            y = curveCard.yMax + 16;
+            if (HistoryClimbsH() > 0)
+            {
+                DrawHistoryClimbs(x0, y, w);
+                y += HistoryClimbsH() + 16;
+            }
+
             // Rides
-            y = curveCard.yMax + 24;
+            y += 8;
             GUI.Label(new Rect(x0, y, 400, 20), string.Format(L.Get("rides_count"), rides.Count).ToUpperInvariant(), Theme.Overline);
             if (HistoryStore.Importing) GUI.Label(new Rect(x0 + w - 300, y, 300, 20), L.Get("history_importing"), Theme.With(Theme.Caption, anchor: TextAnchor.MiddleRight));
             y += 30;

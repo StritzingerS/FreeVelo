@@ -14,6 +14,7 @@ using FreeVelo.Core.World.Gen;
 using FreeVelo.Devices.Zwift;
 using FreeVelo.Net;
 using FreeVelo.Shared.Api;
+using FreeVelo.UI;
 using UnityEngine;
 
 namespace FreeVelo.Ride
@@ -52,6 +53,9 @@ namespace FreeVelo.Ride
 
         /// <summary>The training plan session this ride completed (set by the app).</summary>
         public FreeVelo.Core.Plans.PlannedSession PlanSession;
+
+        /// <summary>Famous climbs ridden to the top in this ride.</summary>
+        public List<ClimbEffort> Climbs = new List<ClimbEffort>();
     }
 
     /// <summary>
@@ -73,6 +77,21 @@ namespace FreeVelo.Ride
         private int _intensitySeconds;
         private int _pendingShift;
         private bool _wasGroupRide;
+        private bool _fixedRoute;
+        private double _lastClimbM = double.NaN;
+        private readonly List<ClimbEffort> _climbEfforts = new List<ClimbEffort>();
+
+        /// <summary>The famous climb the rider is on (foot passed, summit not yet reached), or null.</summary>
+        public ClimbSegment ActiveClimb { get; private set; }
+
+        /// <summary>Ride time when <see cref="ActiveClimb"/> started.</summary>
+        public double ActiveClimbStartS { get; private set; }
+
+        /// <summary>Metres ridden on <see cref="ActiveClimb"/>.</summary>
+        public double ActiveClimbProgressM { get; private set; }
+
+        /// <summary>The current ride follows a fixed route (a climb started from the menu).</summary>
+        public bool IsClimbRide => _fixedRoute;
 
         /// <summary>Virtual gears (used when <see cref="AppSettings.GearMode"/> is not Off).</summary>
         public VirtualGears Gears { get; private set; } = new VirtualGears();
@@ -163,14 +182,38 @@ namespace FreeVelo.Ride
             _rideStartDistanceM = 0;
         }
 
+        /// <summary>
+        /// Starts a ride at the foot of a famous climb (from the menu): round the mountain – up, over the top, down the
+        /// other side and back – optionally with a workout.
+        /// </summary>
+        public void StartClimb(string climbId, Workout workout = null)
+        {
+            var route = BuiltInRoutes.Get(climbId == ClimbData.Stelvio ? BuiltInRoutes.StelvioId : BuiltInRoutes.AlpeId);
+            lock (BleService.Sync)
+            {
+                Route = route;
+                Path = null;
+                DistanceM = 0;
+                _rideStartDistanceM = 0;
+                _fixedRoute = true;
+            }
+
+            StartRide(workout);
+        }
+
         /// <summary>Starts a ride; <paramref name="workout"/> null = free ride; <paramref name="intensity"/> from the training plan.</summary>
         public void StartRide(Workout workout, double intensity = 1.0)
         {
             _ble.ApplySettings();
             IsGroupRide = Group != null && Group.Lobby != null;
-            // Group rides follow the main loop (the server's Keep Together simulation uses the same route).
-            if (IsGroupRide && Map != null) Route = Map.MainLoop;
-            else if (Path != null) Route = Path.Route;
+            // Group rides follow the lobby's route (main loop or round the mountain; the server's Keep Together
+            // simulation uses the same route).
+            if (IsGroupRide && Map != null)
+            {
+                Route = BuiltInRoutes.Get(Group.Lobby.routeId);
+                _fixedRoute = false;
+            }
+            else if (!_fixedRoute && Path != null) Route = Path.Route;
             string title = workout != null ? workout.Name.Get(AppSettings.Language) : IsGroupRide ? Group.Lobby.name : L.Get("free_ride");
             _recording = new RideRecording(DateTime.UtcNow, title);
             _lastSegmentIndex = -1;
@@ -190,6 +233,9 @@ namespace FreeVelo.Ride
             WorkoutState = Engine?.Current;
             _intensitySum = 0;
             _intensitySeconds = 0;
+            _climbEfforts.Clear();
+            ActiveClimb = null;
+            _lastClimbM = double.NaN;
             if (Gears.Count != AppSettings.GearCount) Gears = new VirtualGears(AppSettings.GearCount);
             Gears.Set(Gears.NearestGear(Gears.ReferenceRatio));
             _ftpTest = FtpTestOf(workout);
@@ -231,19 +277,21 @@ namespace FreeVelo.Ride
             if (State != RideState.Riding) return;
             State = RideState.Finished;
             RideKeepAlive.Stop();
-            if (IsGroupRide)
+            if (IsGroupRide) Group.StopLive(); // still in the group ride (waiting room) until the rider leaves it
+            if ((IsGroupRide || _fixedRoute) && Map != null)
             {
-                Group.StopLive(); // still in the group ride (waiting room) until the rider leaves it
-                if (Map != null)
+                // Back on the road network: from the place on the main loop, or (after a ride round the mountain) at
+                // the start of the main loop.
+                bool onLoop = Route == Map.MainLoop;
+                lock (BleService.Sync)
                 {
-                    // Back on the road network from the place on the main loop.
-                    lock (BleService.Sync)
-                    {
-                        Path = NetworkPath.OnMainLoop(Map, DistanceM, DistanceM);
-                        Route = Path.Route;
-                    }
+                    Path = NetworkPath.OnMainLoop(Map, onLoop ? DistanceM : 0, DistanceM);
+                    Route = Path.Route;
                 }
             }
+
+            _fixedRoute = false;
+            ActiveClimb = null;
 
             _wasGroupRide = IsGroupRide;
             IsGroupRide = false;
@@ -269,6 +317,7 @@ namespace FreeVelo.Ride
                 AscentM = stats.AscentM,
                 Kcal = stats.WorkKj,
                 PowerCurve = PowerMetrics.PowerCurve(power),
+                Climbs = new List<ClimbEffort>(_climbEfforts),
                 EstimatedFtpW = _ftpTest.HasValue && Engine != null ? FtpTests.EstimateFtp(_ftpTest.Value, power, Engine.Workout) : null,
                 FitPath = SaveFit(ftp),
             };
@@ -288,6 +337,7 @@ namespace FreeVelo.Ride
             var record = RideAnalysis.Summarize(System.IO.Path.GetFileName(summary.FitPath), summary.Title, _recording.StartUtc, samples, ftp);
             record.distanceM = Math.Round(summary.DistanceM, 1);
             record.groupRide = _wasGroupRide;
+            record.climbs = _climbEfforts.ToArray();
             record.estimatedFtpW = summary.EstimatedFtpW ?? 0;
             if (Engine != null)
             {
@@ -387,6 +437,7 @@ namespace FreeVelo.Ride
             DistanceM += _physics.SpeedMps * dt;
             if (IsGroupRide) ApplyGroup(cadence, dt);
             else if (Path != null && Path.Update(DistanceM)) Route = Path.Route; // next junction reached: chosen road added
+            UpdateClimb();
 
             if (running)
             {
@@ -466,6 +517,46 @@ namespace FreeVelo.Ride
             }
 
             CompleteWorkoutIfDone(background);
+        }
+
+        /// <summary>
+        /// Climb timer: starts when the rider passes the foot of a famous climb (on the route, uphill) and stops at the
+        /// summit; the time is the ride time in between (pauses don't count).
+        /// </summary>
+        private void UpdateClimb()
+        {
+            var route = Route;
+            double d = route.IsLoop ? ((DistanceM % route.LengthM) + route.LengthM) % route.LengthM : DistanceM;
+            if (ActiveClimb == null)
+            {
+                foreach (var c in route.Climbs)
+                {
+                    bool crossed = double.IsNaN(_lastClimbM) || _lastClimbM <= c.StartM + 0.001;
+                    if (crossed && d >= c.StartM && d < c.StartM + 50)
+                    {
+                        ActiveClimb = c;
+                        ActiveClimbStartS = ElapsedS;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                var c = ActiveClimb;
+                ActiveClimbProgressM = Math.Max(0, d - c.StartM);
+                if (d >= c.EndM - 0.5)
+                {
+                    _climbEfforts.Add(new ClimbEffort { id = c.Id, name = c.Name, timeS = Math.Round(ElapsedS - ActiveClimbStartS, 1) });
+                    ShowCue(string.Format(L.Get("summit_reached"), c.Name, Ui.Clock(ElapsedS - ActiveClimbStartS)));
+                    ActiveClimb = null;
+                }
+                else if (d < c.StartM - 20 || d > c.EndM + 200)
+                {
+                    ActiveClimb = null; // left the climb (route changed)
+                }
+            }
+
+            _lastClimbM = d;
         }
 
         /// <summary>

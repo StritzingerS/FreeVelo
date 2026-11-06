@@ -79,4 +79,15 @@ public class HistoryTests
         Assert.Equal((monday, 2, 5400), (weeks[1].Monday, weeks[1].Rides, weeks[1].Seconds));
         Assert.Equal(new[] { 500, 420 }, TrainingLoad.BestPowerCurve(rides).Take(2));
     }
+
+    [Fact]
+    public void ClimbRecordsKeepTheBestTimeAndCountAscents()
+    {
+        RideRecord Ride(params (string Id, double T)[] climbs) => new() { climbs = climbs.Select(c => new ClimbEffort { id = c.Id, name = c.Id, timeS = c.T }).ToArray() };
+        var rides = new[] { Ride(("stelvio", 5400)), Ride(("stelvio", 5100), ("alpe-dhuez", 3300)), new RideRecord { climbs = null! } };
+
+        var records = TrainingLoad.ClimbRecords(rides);
+        Assert.Equal((5100.0, 2), records["stelvio"]);
+        Assert.Equal((3300.0, 1), records["alpe-dhuez"]);
+    }
 }

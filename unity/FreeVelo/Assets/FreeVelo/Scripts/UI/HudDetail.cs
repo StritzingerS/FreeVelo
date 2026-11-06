@@ -45,7 +45,7 @@ namespace FreeVelo.UI
             if (Ui.IconButton(new Rect(c.x, c.y, 52, 52), Icon.ChevronLeft, ButtonKind.Secondary)) Navigate(Page.Training);
             var when = r.StartUtc.ToLocalTime();
             GUI.Label(new Rect(c.x + 68, c.y - 2, c.width - 260, 34), r.title, Clip(Theme.H2));
-            GUI.Label(new Rect(c.x + 68, c.y + 30, c.width - 260, 22), when.ToString("dddd, dd.MM.yyyy · HH:mm") + (r.groupRide ? " · " + L.Get("group") : ""), Theme.Caption);
+            GUI.Label(new Rect(c.x + 68, c.y + 30, c.width - 260, 22), when.ToString("dddd, dd.MM.yyyy · HH:mm") + (r.groupRide ? " · " + L.Get("group") : "") + ClimbsText(r), Clip(Theme.Caption));
 
             string fit = Path.Combine(HistoryStore.RidesFolder, r.id);
             if (File.Exists(fit))
