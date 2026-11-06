@@ -333,9 +333,21 @@ namespace FreeVelo.UI
                 var when = r.StartUtc.ToLocalTime();
                 GUI.Label(new Rect(row.x + 16, row.y + 6, 160, 22), when.ToString("ddd dd.MM.yy"), Theme.With(Theme.Caption, size: 14));
                 GUI.Label(new Rect(row.x + 16, row.y + 26, 160, 22), when.ToString("HH:mm"), Theme.With(Theme.Caption, Theme.Muted, 13));
-                GUI.Label(new Rect(row.x + 170, row.y, w * 0.32f, row.height), r.title, Clip(Theme.With(Theme.Body, size: 16, anchor: TextAnchor.MiddleLeft)));
-                float sx = row.x + 170 + w * 0.32f + 8;
-                float sw = (row.xMax - 16 - sx) / 4f;
+                GUI.Label(new Rect(row.x + 170, row.y, w * 0.26f, row.height), r.title, Clip(Theme.With(Theme.Body, size: 16, anchor: TextAnchor.MiddleLeft)));
+
+                // Actions on the FIT file: Strava, share, Downloads (as long as the file is on the phone)
+                const float buttonsW = (3 * 46) + 16;
+                string fitPath = System.IO.Path.Combine(HistoryStore.RidesFolder, r.id);
+                if (System.IO.File.Exists(fitPath))
+                {
+                    float bx = row.xMax - buttonsW - 4;
+                    StravaRideButton(new Rect(bx, row.y + 4, 46, 46), fitPath, r.title);
+                    if (Ui.IconButton(new Rect(bx + 54, row.y + 4, 46, 46), Icon.Share, ButtonKind.Ghost)) Ui.Toast(FileActions.Share(fitPath, L.Get("share")));
+                    if (Ui.IconButton(new Rect(bx + 108, row.y + 4, 46, 46), Icon.Download, ButtonKind.Ghost)) Ui.Toast(FileActions.SaveToDownloads(fitPath));
+                }
+
+                float sx = row.x + 170 + w * 0.26f + 8;
+                float sw = (row.xMax - buttonsW - 16 - sx) / 4f;
                 Stat(new Rect(sx, row.y, sw, row.height), Ui.Clock(r.durationS));
                 Stat(new Rect(sx + sw, row.y, sw, row.height), r.normalizedPowerW > 0 ? $"{r.normalizedPowerW} W NP" : "–");
                 Stat(new Rect(sx + 2 * sw, row.y, sw, row.height), $"{r.tss:0} TSS");

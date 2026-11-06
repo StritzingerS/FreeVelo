@@ -10,7 +10,6 @@ namespace FreeVelo.UI
     /// <summary>Virtual gears (ride screen buttons, settings), Zwift controller status, backup.</summary>
     public sealed partial class Hud
     {
-        private const float ControlsCardH = 220;
         private const float BackupCardH = 150;
 
         /// <summary>Ride screen: harder (+) / easier (−) with the current virtual gear, right side.</summary>
@@ -29,11 +28,10 @@ namespace FreeVelo.UI
         private void DrawControlsCard(Rect card)
         {
             Ui.Card(card);
-            SectionTitle(card, L.Get("controls"), Icon.Cadence);
+            SectionTitle(card, L.Get("virtual_gears"), Icon.Cadence);
 
-            GUI.Label(new Rect(card.x + 24, card.y + 68, 400, 22), L.Get("virtual_gears"), Theme.Caption);
             var options = new[] { L.Get("off"), L.Get("gears_grade"), L.Get("gears_erg") };
-            int mode = Ui.Segmented(new Rect(card.x + 24, card.y + 94, 480, 50), options, (int)AppSettings.GearMode);
+            int mode = Ui.Segmented(new Rect(card.x + 24, card.y + 76, card.width - 48, 50), options, (int)AppSettings.GearMode);
             if (mode != (int)AppSettings.GearMode) AppSettings.GearMode = (VirtualGearMode)mode;
             string hint = AppSettings.GearMode switch
             {
@@ -41,7 +39,7 @@ namespace FreeVelo.UI
                 VirtualGearMode.Erg => L.Get("gears_erg_hint"),
                 _ => L.Get("gears_off_hint"),
             };
-            GUI.Label(new Rect(card.x + 24, card.y + 152, card.width - 48, 64), hint, Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+            GUI.Label(new Rect(card.x + 24, card.y + 140, card.width - 48, 110), hint, Theme.With(Theme.Caption, Theme.Muted, wrap: true));
         }
 
         /// <summary>Devices page: the Zwift controller(s) next to trainer, power meter and heart rate.</summary>

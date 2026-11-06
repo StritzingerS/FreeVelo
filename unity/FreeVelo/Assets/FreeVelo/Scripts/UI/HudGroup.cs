@@ -287,10 +287,33 @@ namespace FreeVelo.UI
         }
 
         /// <summary>Settings card: server address and display name.</summary>
-        private void DrawGroupSettingsCard(Rect card)
+        private const float ServerCardH = 210;
+
+        /// <summary>Settings → Profile: the name the others see in group rides.</summary>
+        private void DrawNameCard(Rect card)
         {
             Ui.Card(card);
-            SectionTitle(card, L.Get("group_rides"), Icon.Group);
+            SectionTitle(card, L.Get("your_name"), Icon.Group);
+            float x = card.x + 24, w = card.width - 48;
+            var rider = AppSettings.Rider;
+            if (rider == null)
+            {
+                GUI.Label(new Rect(x, card.y + 72, w, 80), L.Get("name_not_set"), Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+                return;
+            }
+
+            _nameInput ??= rider.displayName;
+            _nameInput = Field(new Rect(x, card.y + 92, w - 112, 52), _nameInput, RiderRules.MaxDisplayNameLength, rider.displayName);
+            bool changed = _nameInput.Trim() != rider.displayName && _nameInput.Trim().Length >= RiderRules.MinDisplayNameLength;
+            if (Ui.Button(new Rect(x + w - 100, card.y + 92, 100, 52), "OK", ButtonKind.Secondary, null, changed && !_group.Busy)) _group.Rename(_nameInput);
+            GUI.Label(new Rect(x, card.y + 156, w, 60), L.Get("name_settings_hint"), Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+        }
+
+        /// <summary>Settings → Riding together: server address and friend code.</summary>
+        private void DrawServerCard(Rect card)
+        {
+            Ui.Card(card);
+            SectionTitle(card, L.Get("group_rides"), Icon.Signal);
             float colW = (card.width - 72) / 2f;
             float x = card.x + 24;
 
@@ -306,10 +329,12 @@ namespace FreeVelo.UI
                 Ui.Toast("✓ " + L.Get("saved"));
             }
 
-            GUI.Label(new Rect(x, card.y + 146, colW, 22), L.Get("server_own_hint"), Theme.With(Theme.Caption, size: 13));
+            GUI.Label(new Rect(x, card.y + 150, colW, 44), L.Get("server_own_hint"), Theme.With(Theme.Caption, size: 13, wrap: true));
 
             // Friend code: a new one cuts off everyone who had the old one.
-            if (Ui.Button(new Rect(x, card.yMax - 62, 300, 44), _confirmFriendReset ? L.Get("confirm_reset") : L.Get("reset_friend_code"), _confirmFriendReset ? ButtonKind.Danger : ButtonKind.Secondary, Icon.Reset))
+            float x2 = x + colW + 24;
+            GUI.Label(new Rect(x2, card.y + 66, colW, 22), L.Get("friends"), Theme.Caption);
+            if (Ui.Button(new Rect(x2, card.y + 92, colW, 52), _confirmFriendReset ? L.Get("confirm_reset") : L.Get("reset_friend_code"), _confirmFriendReset ? ButtonKind.Danger : ButtonKind.Secondary, Icon.Reset))
             {
                 if (_confirmFriendReset)
                 {
@@ -320,16 +345,7 @@ namespace FreeVelo.UI
                 _confirmFriendReset = !_confirmFriendReset;
             }
 
-            GUI.Label(new Rect(x + 316, card.yMax - 62, card.width - 364, 44), L.Get("friend_code_hint"), Theme.With(Theme.Caption, size: 13));
-
-            var rider = AppSettings.Rider;
-            if (rider == null) return;
-            float x2 = x + colW + 24;
-            _nameInput ??= rider.displayName;
-            GUI.Label(new Rect(x2, card.y + 66, colW, 22), L.Get("your_name"), Theme.Caption);
-            _nameInput = Field(new Rect(x2, card.y + 92, colW - 112, 52), _nameInput, RiderRules.MaxDisplayNameLength, rider.displayName);
-            bool changed = _nameInput.Trim() != rider.displayName && _nameInput.Trim().Length >= RiderRules.MinDisplayNameLength;
-            if (Ui.Button(new Rect(x2 + colW - 100, card.y + 92, 100, 52), "OK", ButtonKind.Secondary, null, changed && !_group.Busy)) _group.Rename(_nameInput);
+            GUI.Label(new Rect(x2, card.y + 150, colW, 44), L.Get("friend_code_hint"), Theme.With(Theme.Caption, size: 13, wrap: true));
         }
 
         // ------------------------------------------------------------------ during the ride

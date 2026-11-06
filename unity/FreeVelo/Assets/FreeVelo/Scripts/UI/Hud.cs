@@ -651,14 +651,20 @@ namespace FreeVelo.UI
             float colW = (c.width - 24) / 2f;
             var zones = AppSettings.Zones;
             float zonesH = 92 + (zones.Zones.Count * 58);
-            var rides = RecentRides();
-            float ridesH = 92 + (Mathf.Max(1, rides.Length) * 66);
-            float contentH = 8 + 280 + 24 + 160 + 24 + 240 + 24 + ControlsCardH + 24 + StravaCardH + 24 + ridesH + 24 + BackupCardH + 24 + zonesH + 24;
+            bool sim = _ble.BackendName == "Simulator";
+            const float sectionH = 40, gap = 24;
+            float contentH = 8
+                + sectionH + 280 + gap + zonesH + gap              // profile
+                + sectionH + 280 + gap + (sim ? 160 + gap : 0)     // trainer
+                + sectionH + ServerCardH + gap                     // riding together
+                + sectionH + StravaCardH + gap + BackupCardH + gap // data
+                + sectionH + 160 + gap;                            // app
             Ui.BeginScroll(3000, view, contentH);
-            float x0 = 8, y0 = 8;
+            float x0 = 8, y = 8;
 
-            // Rider
-            var rider = new Rect(x0, y0, colW, 280);
+            // ---- Profile: FTP & weight, name, power zones
+            y = SettingsSection(x0, y, L.Get("section_profile"));
+            var rider = new Rect(x0, y, colW, 280);
             Ui.Card(rider);
             SectionTitle(rider, L.Get("rider"), Icon.Bike);
             GUI.Label(new Rect(rider.x + 24, rider.y + 68, 300, 22), L.Get("ftp"), Theme.Caption);
@@ -668,13 +674,19 @@ namespace FreeVelo.UI
                 AppSettings.FtpW = ftp;
                 HistoryStore.RecordFtp(ftp, "manual");
             }
+
             GUI.Label(new Rect(rider.x + 24, rider.y + 156, 300, 22), L.Get("weight"), Theme.Caption);
             int weight = Ui.Stepper(new Rect(rider.x + 24, rider.y + 180, rider.width - 48, 52), Mathf.RoundToInt(AppSettings.RiderWeightKg), "kg", 1, 5, 30, 200);
             if (weight != Mathf.RoundToInt(AppSettings.RiderWeightKg)) AppSettings.RiderWeightKg = weight;
             GUI.Label(new Rect(rider.x + 24, rider.yMax - 40, rider.width - 48, 24), $"{AppSettings.FtpW / Mathf.Max(1f, AppSettings.RiderWeightKg):0.00} W/kg", Theme.With(Theme.Caption, Theme.Accent));
+            DrawNameCard(new Rect(x0 + colW + 24, y, colW, 280));
+            y += 280 + gap;
+            DrawZonesCard(new Rect(x0, y, c.width, zonesH));
+            y += zonesH + gap;
 
-            // Trainer
-            var trainer = new Rect(x0 + colW + 24, y0, colW, 280);
+            // ---- Trainer: difficulty, power source, virtual gears
+            y = SettingsSection(x0, y, L.Get("section_trainer"));
+            var trainer = new Rect(x0, y, colW, 280);
             Ui.Card(trainer);
             SectionTitle(trainer, L.Get("trainer"), Icon.Trainer);
             GUI.Label(new Rect(trainer.x + 24, trainer.y + 68, 300, 22), L.Get("difficulty"), Theme.Caption);
@@ -686,99 +698,46 @@ namespace FreeVelo.UI
             int source = Ui.Segmented(new Rect(trainer.x + 24, trainer.y + 182, trainer.width - 48, 50), new[] { L.Get("trainer"), L.Get("power_meter") }, AppSettings.PowerSource == PowerSource.Trainer ? 0 : 1);
             var newSource = source == 0 ? PowerSource.Trainer : PowerSource.PowerMeter;
             if (newSource != AppSettings.PowerSource) AppSettings.PowerSource = newSource;
-
-            // App
-            var app = new Rect(x0, rider.yMax + 24, colW, 160);
-            Ui.Card(app);
-            SectionTitle(app, L.Get("app"), Icon.Gear);
-            GUI.Label(new Rect(app.x + 24, app.y + 68, 300, 22), L.Get("language"), Theme.Caption);
-            int lang = Ui.Segmented(new Rect(app.x + 24, app.y + 94, app.width - 48, 50), new[] { "English", "Deutsch" }, AppSettings.Language == "de" ? 1 : 0);
-            string newLang = lang == 1 ? "de" : "en";
-            if (newLang != AppSettings.Language) AppSettings.Language = newLang;
-
-            if (_ble.BackendName == "Simulator")
+            DrawControlsCard(new Rect(x0 + colW + 24, y, colW, 280));
+            y += 280 + gap;
+            if (sim)
             {
-                var sim = new Rect(trainer.x, trainer.yMax + 24, colW, 160);
-                Ui.Card(sim);
-                SectionTitle(sim, L.Get("sim_power"), Icon.Bolt);
-                GUI.Label(new Rect(sim.xMax - 124, sim.y + 22, 100, 26), $"{SimulatedBleBackend.RiderPowerW:0} W", Theme.With(Theme.H3, anchor: TextAnchor.MiddleRight));
-                SimulatedBleBackend.RiderPowerW = Mathf.Round(Ui.Slider(new Rect(sim.x + 16, sim.y + 88, sim.width - 32, 44), SimulatedBleBackend.RiderPowerW, 0f, 500f) / 5) * 5;
+                var simCard = new Rect(x0, y, colW, 160);
+                Ui.Card(simCard);
+                SectionTitle(simCard, L.Get("sim_power"), Icon.Bolt);
+                GUI.Label(new Rect(simCard.xMax - 124, simCard.y + 22, 100, 26), $"{SimulatedBleBackend.RiderPowerW:0} W", Theme.With(Theme.H3, anchor: TextAnchor.MiddleRight));
+                SimulatedBleBackend.RiderPowerW = Mathf.Round(Ui.Slider(new Rect(simCard.x + 16, simCard.y + 88, simCard.width - 32, 44), SimulatedBleBackend.RiderPowerW, 0f, 500f) / 5) * 5;
+                y += 160 + gap;
             }
 
-            var groupCard = new Rect(x0, app.yMax + 24, c.width, 240);
-            DrawGroupSettingsCard(groupCard);
-            var controlsCard = new Rect(x0, groupCard.yMax + 24, c.width, ControlsCardH);
-            DrawControlsCard(controlsCard);
-            var stravaCard = new Rect(x0, controlsCard.yMax + 24, c.width, StravaCardH);
-            DrawStravaCard(stravaCard);
-            var ridesCard = new Rect(x0, stravaCard.yMax + 24, c.width, ridesH);
-            DrawRecentRidesCard(ridesCard, rides);
-            var backupCard = new Rect(x0, ridesCard.yMax + 24, c.width, BackupCardH);
-            DrawBackupCard(backupCard);
-            DrawZonesCard(new Rect(x0, backupCard.yMax + 24, c.width, zonesH));
+            // ---- Riding together: server, friend code
+            y = SettingsSection(x0, y, L.Get("section_together"));
+            DrawServerCard(new Rect(x0, y, c.width, ServerCardH));
+            y += ServerCardH + gap;
+
+            // ---- Data: Strava, backup
+            y = SettingsSection(x0, y, L.Get("section_data"));
+            DrawStravaCard(new Rect(x0, y, c.width, StravaCardH));
+            y += StravaCardH + gap;
+            DrawBackupCard(new Rect(x0, y, c.width, BackupCardH));
+            y += BackupCardH + gap;
+
+            // ---- App: language
+            y = SettingsSection(x0, y, L.Get("app"));
+            var app = new Rect(x0, y, colW, 160);
+            Ui.Card(app);
+            SectionTitle(app, L.Get("language"), Icon.Gear);
+            int lang = Ui.Segmented(new Rect(app.x + 24, app.y + 80, app.width - 48, 50), new[] { "English", "Deutsch" }, AppSettings.Language == "de" ? 1 : 0);
+            string newLang = lang == 1 ? "de" : "en";
+            if (newLang != AppSettings.Language) AppSettings.Language = newLang;
             Ui.EndScroll(3000, view, contentH);
         }
 
-        private string[] _recentRides = new string[0];
-        private float _recentRidesAt = -100f;
-
-        /// <summary>The newest FIT files in persistentDataPath/rides (re-read every few seconds).</summary>
-        private string[] RecentRides()
+        /// <summary>Section heading in the settings; returns where the cards start.</summary>
+        private static float SettingsSection(float x, float y, string title)
         {
-            if (Time.unscaledTime - _recentRidesAt < 3f) return _recentRides;
-            _recentRidesAt = Time.unscaledTime;
-            try
-            {
-                string folder = System.IO.Path.Combine(Application.persistentDataPath, "rides");
-                _recentRides = System.IO.Directory.Exists(folder)
-                    ? System.IO.Directory.GetFiles(folder, "*.fit").OrderByDescending(System.IO.File.GetLastWriteTimeUtc).Take(8).ToArray()
-                    : new string[0];
-            }
-            catch (Exception e)
-            {
-                Debug.LogException(e);
-                _recentRides = new string[0];
-            }
-
-            return _recentRides;
-        }
-
-        /// <summary>Saved rides (FIT files are written automatically when a ride ends): share or copy to Downloads.</summary>
-        private void DrawRecentRidesCard(Rect card, string[] rides)
-        {
-            Ui.Card(card);
-            SectionTitle(card, L.Get("recent_rides"), Icon.Route);
-            float y = card.y + 76;
-            if (rides.Length == 0)
-            {
-                GUI.Label(new Rect(card.x + 24, y, card.width - 48, 56), L.Get("no_rides"), Theme.Caption);
-                return;
-            }
-
-            foreach (string path in rides)
-            {
-                var row = new Rect(card.x + 16, y, card.width - 32, 58);
-                Ui.Rect(row, Theme.Surface2, Theme.RadiusSmall);
-                string name = System.IO.Path.GetFileNameWithoutExtension(path);
-                string when = "", title = name;
-                if (name.Length > 17 && DateTime.TryParseExact(name.Substring(0, 16), "yyyy-MM-dd_HH-mm", null, System.Globalization.DateTimeStyles.None, out var start))
-                {
-                    when = start.ToString("dd.MM.yyyy  HH:mm");
-                    title = name.Substring(17).Replace('-', ' ');
-                }
-
-                float buttonsW = (3 * 52) + 20;
-                string strava = StravaStatusText(path);
-                if (strava.Length > 0) when += "   ·   " + strava;
-                GUI.Label(new Rect(row.x + 16, row.y + 6, row.width - buttonsW - 40, 26), title, Theme.With(Theme.Body, size: 17));
-                GUI.Label(new Rect(row.x + 16, row.y + 30, row.width - buttonsW - 40, 22), when, Theme.Caption);
-                StravaRideButton(new Rect(row.xMax - buttonsW - 6, row.y + 3, 52, 52), path, title);
-                if (Ui.IconButton(new Rect(row.xMax - buttonsW + 56, row.y + 3, 52, 52), Icon.Share, ButtonKind.Secondary))
-                    Ui.Toast(FileActions.Share(path, L.Get("share")));
-                if (Ui.IconButton(new Rect(row.xMax - 58, row.y + 3, 52, 52), Icon.Download, ButtonKind.Secondary))
-                    Ui.Toast(FileActions.SaveToDownloads(path));
-                y += 66;
-            }
+            GUI.Label(new Rect(x + 4, y + 8, 600, 22), title.ToUpperInvariant(), Theme.With(Theme.Overline, Theme.Accent));
+            return y + 40;
         }
 
         /// <summary>Power zones: colour, name, range; the boundary between two zones is moved with the stepper.</summary>
