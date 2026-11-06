@@ -305,7 +305,13 @@ namespace FreeVelo.Ride
                 // Saving the FIT file needs the main thread: in the background, finish when the app returns.
                 if (background)
                 {
+                    // The recording ends here (no more samples, no catch-up); release the trainer and tell the
+                    // rider, who cannot see the screen.
                     _finishPending = true;
+                    _physics.SpeedMps = 0;
+                    _ble.Hub.SetSimulation(0);
+                    RideKeepAlive.Update(L.Get("finished"));
+                    RideKeepAlive.Alert(L.Get("finished"), L.Get("finished_background"));
                 }
                 else
                 {
@@ -357,9 +363,10 @@ namespace FreeVelo.Ride
 
             _ble.StopBackgroundTicks();
             _ble.CancelBackgroundWrites();
+            RideKeepAlive.ClearAlert();
 
             // Catch up only what the background ticks did not cover (normally nothing).
-            if (_backgroundSinceUtc.HasValue && State == RideState.Riding)
+            if (_backgroundSinceUtc.HasValue && State == RideState.Riding && !_finishPending)
             {
                 lock (BleService.Sync)
                 {

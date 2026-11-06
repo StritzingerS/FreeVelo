@@ -44,7 +44,15 @@ namespace FreeVelo.App
             Call("stop");
         }
 
-        private static void Call(string method, params object[] args)
+        /// <summary>Alert with sound and vibration (e.g. workout finished while the app is in the background).</summary>
+        public static void Alert(string title, string text) => Call("alert", optional: true, title, text);
+
+        public static void ClearAlert() => Call("clearAlert", optional: true);
+
+        private static void Call(string method, params object[] args) => Call(method, false, args);
+
+        /// <param name="optional">Missing in an older plugin: skip it, but keep using the service.</param>
+        private static void Call(string method, bool optional, params object[] args)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             if (_missingPlugin) return;
@@ -63,7 +71,7 @@ namespace FreeVelo.App
             catch (Exception e)
             {
                 // An outdated freevelo-ble.aar has no RideService: ride without it, report once.
-                _missingPlugin = e.Message.Contains("ClassNotFound") || e.Message.Contains("NoSuchMethod");
+                _missingPlugin = !optional && (e.Message.Contains("ClassNotFound") || e.Message.Contains("NoSuchMethod"));
                 Debug.LogWarning("FreeVelo: ride service unavailable – " + e.Message);
             }
 #endif

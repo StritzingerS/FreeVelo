@@ -106,6 +106,7 @@ namespace FreeVelo.App
             ["min"] = ("min", "Min."),
             ["intensity"] = ("Intensity", "Intensität"),
             ["finished"] = ("Workout finished!", "Workout geschafft!"),
+            ["finished_background"] = ("You can stop pedaling. Open FreeVelo to save your ride.", "Du kannst aufhören zu treten. Öffne FreeVelo, um die Fahrt zu speichern."),
             ["share"] = ("Share FIT file", "FIT-Datei teilen"),
             ["save_downloads"] = ("Save to Downloads", "In Downloads speichern"),
             ["file_missing"] = ("File not found", "Datei nicht gefunden"),

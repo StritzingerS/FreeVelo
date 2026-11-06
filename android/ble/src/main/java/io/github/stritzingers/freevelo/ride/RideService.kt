@@ -71,7 +71,9 @@ class RideService : Service() {
 
     companion object {
         const val CHANNEL_ID = "freevelo_ride"
+        const val ALERT_CHANNEL_ID = "freevelo_alerts"
         const val NOTIFICATION_ID = 4711
+        const val ALERT_NOTIFICATION_ID = 4712
         const val ACTION_START = "io.github.stritzingers.freevelo.ride.START"
         const val ACTION_STOP = "io.github.stritzingers.freevelo.ride.STOP"
         const val EXTRA_TITLE = "title"
@@ -108,6 +110,48 @@ class RideService : Service() {
             context.stopService(Intent(context, RideService::class.java))
         }
 
+        /**
+         * The workout ended while the app was in the background: an alert with sound and vibration (the ongoing
+         * ride notification is silent), so the rider knows to stop. Tapping it opens the app, which saves the ride.
+         */
+        @JvmStatic
+        fun alert(context: Context, title: String, text: String) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (nm.getNotificationChannel(ALERT_CHANNEL_ID) == null) {
+                val channel = NotificationChannel(ALERT_CHANNEL_ID, "Workout", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Workout finished while FreeVelo is in the background"
+                    enableVibration(true)
+                }
+                nm.createNotificationChannel(channel)
+            }
+            val notification = Notification.Builder(context, ALERT_CHANNEL_ID)
+                .setSmallIcon(R.drawable.freevelo_notification)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(Notification.BigTextStyle().bigText(text))
+                .setAutoCancel(true)
+                .setCategory(Notification.CATEGORY_WORKOUT)
+                .setContentIntent(launchIntent(context))
+                .build()
+            nm.notify(ALERT_NOTIFICATION_ID, notification)
+        }
+
+        /** Removes the alert (the app is back in front). */
+        @JvmStatic
+        fun clearAlert(context: Context) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.cancel(ALERT_NOTIFICATION_ID)
+        }
+
+        private fun launchIntent(context: Context): PendingIntent? {
+            val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+            }
+            return launch?.let {
+                PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            }
+        }
+
         private fun ensureChannel(context: Context) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (nm.getNotificationChannel(CHANNEL_ID) != null) return
@@ -119,12 +163,7 @@ class RideService : Service() {
         }
 
         private fun buildNotification(context: Context, title: String, text: String, startedAtMillis: Long): Notification {
-            val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-            }
-            val content = launch?.let {
-                PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            }
+            val content = launchIntent(context)
             return Notification.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.freevelo_notification)
                 .setContentTitle(title)
