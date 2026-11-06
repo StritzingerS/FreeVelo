@@ -22,12 +22,14 @@ namespace FreeVelo.Core.World.Gen
     /// <summary>
     /// The high-mountain look, by height between the valleys and the summit, slope and distance to the roads: mixed
     /// forest in the valleys, spruce and pine higher up, thinning to the treeline about 550 m below the summit, alpine
-    /// meadows and scree above, rock on steep slopes and snow on the highest ground.
+    /// meadows and scree above, rock on steep slopes and snow on the peaks around the pass (summer: only patches at
+    /// the pass itself).
     /// </summary>
     public static class MountainLook
     {
         public const double TreelineBelowSummit = 550;
-        public const double SnowBelowSummit = 140;
+        /// <summary>Snow lies on the peaks this much above the pass (plus a few patches just below it).</summary>
+        public const double SnowAboveSummit = 40;
         public const double ChunkSize = 128;
         private const double ItemCell = 11;
 
@@ -44,7 +46,10 @@ namespace FreeVelo.Core.World.Gen
         public static GroundKind Ground(MountainTerrain m, double x, double z, double h, double slope, int seed, bool distant)
         {
             double wobble = 35 * Noise.Fractal(x / 120, z / 120, seed + 41, 2);
-            if (h > m.Summit - SnowBelowSummit + wobble && slope < 0.85) return GroundKind.Snow;
+            // Snow on the peaks above the pass, and a few patches just below it (summer)
+            bool peak = h > m.Summit + SnowAboveSummit + wobble;
+            bool patch = h > m.Summit - 120 && Noise.Fractal(x / 70, z / 70, seed + 47, 2) > 0.45;
+            if ((peak || patch) && slope < 0.85) return GroundKind.Snow;
             if (slope > 0.95 + (0.15 * Noise.Value(x / 60, z / 60, seed + 43))) return GroundKind.Rock;
             double treeline = Treeline(m) + wobble;
             if (h > treeline + 220 && slope > 0.55) return GroundKind.Rock;

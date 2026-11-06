@@ -102,7 +102,7 @@ namespace FreeVelo.App
             }
 
             _camera.nearClipPlane = 0.4f;
-            _camera.farClipPlane = 6000f;
+            _camera.farClipPlane = 16000f; // the mountain is seen from far away
             _camera.fieldOfView = 60f;
 
             SetUpAtmosphere();
@@ -158,8 +158,8 @@ namespace FreeVelo.App
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = new Color(0.73f, 0.8f, 0.87f);
-            RenderSettings.fogStartDistance = 180f;
-            RenderSettings.fogEndDistance = 3600f;
+            RenderSettings.fogStartDistance = 250f;
+            RenderSettings.fogEndDistance = 9000f; // hazy, but the mountain stays visible from the home world
         }
 
         private void Update()

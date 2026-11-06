@@ -15,7 +15,7 @@ namespace FreeVelo.World
     /// and the scenery. Far scenery is merged into static low-detail chunks; near the camera every tree, house and bush
     /// is drawn in full detail with GPU instancing.
     /// </summary>
-    public sealed class WorldBuilder : MonoBehaviour
+    public sealed partial class WorldBuilder : MonoBehaviour
     {
         private const float ShoulderWidth = 0.9f;
         private const int TerrainChunkCells = 32;
@@ -54,6 +54,7 @@ namespace FreeVelo.World
             BuildFields(layout);
             BuildScenery(layout);
             BuildMountains();
+            BuildMountain();
         }
 
         /// <summary>Ground height (same grid as the terrain mesh).</summary>
@@ -466,60 +467,66 @@ namespace FreeVelo.World
 
             foreach (var chunk in byChunk.Values)
             {
-                // One mesh per chunk, one submesh per material.
-                var parts = new Dictionary<WorldMaterial, (List<Vector3> V, List<Vector3> N, List<int> T)>();
-                foreach (var item in chunk.Items)
-                {
-                    var model = SceneryModels.Get(item.Kind, item.Variant);
-                    var m = ItemMatrix(item);
-                    foreach (var pair in model.Lod1)
-                    {
-                        if (!parts.TryGetValue(pair.Key, out var p)) parts[pair.Key] = p = (new List<Vector3>(), new List<Vector3>(), new List<int>());
-                        int offset = p.V.Count;
-                        var normals = Normals(pair.Key, pair.Value);
-                        for (int i = 0; i < pair.Value.Vertices.Count; i++)
-                        {
-                            var v = pair.Value.Vertices[i];
-                            p.V.Add(m.MultiplyPoint3x4(new Vector3(v.X, v.Y, v.Z)));
-                            p.N.Add(m.MultiplyVector(new Vector3(normals[i].X, normals[i].Y, normals[i].Z)).normalized);
-                        }
-
-                        foreach (int t in pair.Value.Triangles) p.T.Add(t + offset);
-                    }
-                }
-
-                if (parts.Count == 0) continue;
-                var mesh = new Mesh { name = "Scenery", indexFormat = IndexFormat.UInt32 };
-                var vertices = new List<Vector3>();
-                var allNormals = new List<Vector3>();
-                var materials = new List<Material>();
-                var submeshes = new List<List<int>>();
-                foreach (var pair in parts)
-                {
-                    int offset = vertices.Count;
-                    vertices.AddRange(pair.Value.V);
-                    allNormals.AddRange(pair.Value.N);
-                    var tris = new List<int>(pair.Value.T.Count);
-                    foreach (int t in pair.Value.T) tris.Add(t + offset);
-                    submeshes.Add(tris);
-                    materials.Add(Mat(pair.Key));
-                }
-
-                mesh.SetVertices(vertices);
-                mesh.SetNormals(allNormals);
-                mesh.subMeshCount = submeshes.Count;
-                for (int s = 0; s < submeshes.Count; s++) mesh.SetTriangles(submeshes[s], s);
-                mesh.RecalculateBounds();
-
-                var go = new GameObject("Scenery");
-                go.transform.SetParent(_root.transform, false);
-                go.AddComponent<MeshFilter>().sharedMesh = mesh;
-                var renderer = go.AddComponent<MeshRenderer>();
-                renderer.sharedMaterials = materials.ToArray();
-                renderer.shadowCastingMode = ShadowCastingMode.On;
-                chunk.FarRenderer = renderer;
-                _chunks.Add(chunk);
+                chunk.FarRenderer = BuildSceneryChunkMesh(_root.transform, chunk.Items);
+                if (chunk.FarRenderer != null) _chunks.Add(chunk);
             }
+        }
+
+        /// <summary>Low-detail scenery of one chunk merged into one mesh (one submesh per material); null if empty.</summary>
+        private MeshRenderer BuildSceneryChunkMesh(Transform parent, List<SceneryItem> items)
+        {
+            // One mesh per chunk, one submesh per material.
+            var parts = new Dictionary<WorldMaterial, (List<Vector3> V, List<Vector3> N, List<int> T)>();
+            foreach (var item in items)
+            {
+                var model = SceneryModels.Get(item.Kind, item.Variant);
+                var m = ItemMatrix(item);
+                foreach (var pair in model.Lod1)
+                {
+                    if (!parts.TryGetValue(pair.Key, out var p)) parts[pair.Key] = p = (new List<Vector3>(), new List<Vector3>(), new List<int>());
+                    int offset = p.V.Count;
+                    var normals = Normals(pair.Key, pair.Value);
+                    for (int i = 0; i < pair.Value.Vertices.Count; i++)
+                    {
+                        var v = pair.Value.Vertices[i];
+                        p.V.Add(m.MultiplyPoint3x4(new Vector3(v.X, v.Y, v.Z)));
+                        p.N.Add(m.MultiplyVector(new Vector3(normals[i].X, normals[i].Y, normals[i].Z)).normalized);
+                    }
+
+                    foreach (int t in pair.Value.Triangles) p.T.Add(t + offset);
+                }
+            }
+
+            if (parts.Count == 0) return null;
+            var mesh = new Mesh { name = "Scenery", indexFormat = IndexFormat.UInt32 };
+            var vertices = new List<Vector3>();
+            var allNormals = new List<Vector3>();
+            var materials = new List<Material>();
+            var submeshes = new List<List<int>>();
+            foreach (var pair in parts)
+            {
+                int offset = vertices.Count;
+                vertices.AddRange(pair.Value.V);
+                allNormals.AddRange(pair.Value.N);
+                var tris = new List<int>(pair.Value.T.Count);
+                foreach (int t in pair.Value.T) tris.Add(t + offset);
+                submeshes.Add(tris);
+                materials.Add(Mat(pair.Key));
+            }
+
+            mesh.SetVertices(vertices);
+            mesh.SetNormals(allNormals);
+            mesh.subMeshCount = submeshes.Count;
+            for (int s = 0; s < submeshes.Count; s++) mesh.SetTriangles(submeshes[s], s);
+            mesh.RecalculateBounds();
+
+            var go = new GameObject("Scenery");
+            go.transform.SetParent(parent, false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            var renderer = go.AddComponent<MeshRenderer>();
+            renderer.sharedMaterials = materials.ToArray();
+            renderer.shadowCastingMode = ShadowCastingMode.On;
+            return renderer;
         }
 
         /// <summary>
@@ -532,6 +539,7 @@ namespace FreeVelo.World
             var cam = Camera.main;
             if (cam == null) return;
             var eye = cam.transform.position;
+            StreamMountain(eye);
 
             if ((eye - _lastInstanceUpdate).sqrMagnitude > 25f)
             {
@@ -541,7 +549,7 @@ namespace FreeVelo.World
                 {
                     var flat = new Vector2(chunk.Center.x - eye.x, chunk.Center.z - eye.z);
                     bool near = flat.magnitude < NearChunkRadius;
-                    chunk.FarRenderer.enabled = !near;
+                    if (chunk.FarRenderer != null) chunk.FarRenderer.enabled = !near;
                     if (!near) continue;
                     foreach (var item in chunk.Items)
                     {
@@ -641,13 +649,30 @@ namespace FreeVelo.World
             float baseY = (float)_terrain.Height(center.x, center.y) - 25f;
             var mesh = new Strips();
             mesh.Begin();
+
+            // No ring where the real mountain stands (its own terrain is there)
+            var mountain = _terrain.Mountain;
+            bool Hidden(int i)
+            {
+                if (mountain == null) return false;
+                float a = i * Mathf.PI * 2f / segments;
+                for (float r = inner; r <= outer; r += 150f)
+                {
+                    float x = center.x + (Mathf.Cos(a) * r), z = center.y + (Mathf.Sin(a) * r);
+                    if (mountain.Contains(x, z) && mountain.RoadDistance(x, z) < 2400) return true;
+                }
+
+                return false;
+            }
+
             for (int i = 0; i <= segments; i++)
             {
                 float a = i * Mathf.PI * 2f / segments;
                 var dir = new Vector3(Mathf.Cos(a), 0, Mathf.Sin(a));
                 float ridge = 90f + (Mathf.PerlinNoise(i * 0.18f, 3.3f) * 260f) + (Mathf.PerlinNoise(i * 0.7f, 9.1f) * 60f);
                 var c = new Vector3(center.x, baseY, center.y);
-                mesh.Ring(c + (dir * inner), c + (dir * (inner + 450f)) + (Vector3.up * ridge), c + (dir * outer) + (Vector3.up * (ridge * 0.4f)), i < segments);
+                bool connect = i < segments && !Hidden(i) && !Hidden(i + 1);
+                mesh.Ring(c + (dir * inner), c + (dir * (inner + 450f)) + (Vector3.up * ridge), c + (dir * outer) + (Vector3.up * (ridge * 0.4f)), connect);
             }
 
             CreateMesh("Mountains", mesh.ToMesh("Mountains"), Mat(new Color(0.42f, 0.5f, 0.45f), null, 0f), false);

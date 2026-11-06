@@ -138,4 +138,46 @@ public class MountainTests
         var top = summit.Point(summit.Data.X.Length - 1);
         Assert.True(terrain.Mountain!.Coarse(top.X + 300, top.Z + 300) > terrain.Mountain.LowRoad + 800);
     }
+
+    [Fact]
+    public void ForestBelowTheTreelineMeadowsAndRockAboveNothingOnTheRoads()
+    {
+        var terrain = Ground.Value;
+        var m = terrain.Mountain!;
+        var climb = Map.Mountain!.Stelvio;
+        int trees = 0, high = 0;
+        foreach (int index in new[] { 0, 1500, 3000, 4000, climb.Data.X.Length - 1 })
+        {
+            var (px, pz) = climb.Point(index);
+            int cx = (int)Math.Floor(px / MountainLook.ChunkSize), cz = (int)Math.Floor(pz / MountainLook.ChunkSize);
+            foreach (var item in MountainLook.Items(terrain, cx, cz, 8))
+            {
+                Assert.True(terrain.DistanceToRoad(item.X, item.Z, 9, out _, out _, out _) >= 9, "nothing on the road");
+                if (item.Kind is SceneryKind.Spruce or SceneryKind.Pine or SceneryKind.Oak or SceneryKind.Birch)
+                {
+                    trees++;
+                    Assert.True(item.Y < MountainLook.Treeline(m) + 1, $"tree at {item.Y:0} m above the treeline {MountainLook.Treeline(m):0}");
+                }
+                else if (item.Y > MountainLook.Treeline(m)) high++;
+            }
+        }
+
+        Assert.True(trees > 100, "forest in the valleys");
+        Assert.True(high > 10, "rocks above the treeline");
+
+        // At the pass: mostly meadow and rock in summer, only some snow
+        var top = climb.Point(climb.Data.X.Length - 1);
+        int snow = 0, total = 0;
+        for (double x = top.X - 250; x <= top.X + 250; x += 25)
+        {
+            for (double z = top.Z - 250; z <= top.Z + 250; z += 25)
+            {
+                var kind = MountainLook.Ground(m, x, z, terrain.Height(x, z), terrain.Slope(x, z), 8, false);
+                if (kind == GroundKind.Snow) snow++;
+                total++;
+            }
+        }
+
+        Assert.InRange(snow / (double)total, 0, 0.35);
+    }
 }
