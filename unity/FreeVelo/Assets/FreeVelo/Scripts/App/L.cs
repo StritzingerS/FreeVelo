@@ -138,6 +138,8 @@ namespace FreeVelo.App
             ["continue"] = ("Continue", "Weiter"),
             ["server"] = ("Server", "Server"),
             ["server_hint"] = ("Address of your FreeVelo server, e.g. https://freevelo.duckdns.org or http://192.168.1.20:8080", "Adresse deines FreeVelo-Servers, z. B. https://freevelo.duckdns.org oder http://192.168.1.20:8080"),
+            ["server_change_hint"] = ("Own server? Change it under Settings.", "Eigener Server? Unter Einstellungen änderbar."),
+            ["server_own_hint"] = ("Empty = FreeVelo's public server", "Leer = öffentlicher FreeVelo-Server"),
             ["no_server"] = ("Enter the server address first.", "Gib zuerst die Server-Adresse ein."),
             ["join_with_code"] = ("Join with code", "Mit Code beitreten"),
             ["code_hint"] = ("The 4 letters from your friend", "Die 4 Buchstaben von deinem Freund"),

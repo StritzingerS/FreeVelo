@@ -25,8 +25,10 @@ Time: about 10 minutes. You need a GitHub account (no credit card).
 
 ## In the app
 
-**Group** page at the first start, or **Settings → Group rides → Server:** `https://freevelo-ab12.onrender.com`
-→ **OK**. Send your friends the address once; after that, only the 4-letter ride codes.
+The app uses **https://freevelo.onrender.com** (FreeVelo's public server on Render) unless a rider enters another
+address under **Settings → Group rides → Server** (leaving the field empty goes back to the default). If you host
+your own Render service, enter its address there, e.g. `https://freevelo-ab12.onrender.com`. Riders who switch
+servers are registered on the new one automatically with their name.
 
 ## What the free plan means for group rides
 

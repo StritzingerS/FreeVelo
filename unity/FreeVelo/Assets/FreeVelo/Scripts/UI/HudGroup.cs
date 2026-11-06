@@ -54,30 +54,30 @@ namespace FreeVelo.UI
             else DrawGroupStart(body);
         }
 
-        /// <summary>First start: where the server is and what the others call you.</summary>
+        /// <summary>First start: what the others call you (the server is preset; an own one is set in Settings).</summary>
         private void DrawGroupSetup(Rect c)
         {
-            _serverInput ??= AppSettings.ServerUrl;
             _nameInput ??= string.Empty;
-            var card = new Rect(c.x, c.y, Mathf.Min(c.width, 640), 380);
+            var card = new Rect(c.x, c.y, Mathf.Min(c.width, 640), 290);
             Ui.Card(card);
             SectionTitle(card, L.Get("your_name"), Icon.Group);
 
             float x = card.x + 24, w = card.width - 48;
             _nameInput = Field(new Rect(x, card.y + 70, w, 56), _nameInput, RiderRules.MaxDisplayNameLength, "Sami");
             GUI.Label(new Rect(x, card.y + 130, w, 44), L.Get("name_hint"), Theme.With(Theme.Caption, size: 14));
+            GUI.Label(new Rect(x, card.yMax - 70, w - 240, 50), $"{L.Get("server")}: {ServerHost()}\n<color=#76828F>{L.Get("server_change_hint")}</color>", Theme.With(Theme.Caption, size: 13, anchor: TextAnchor.MiddleLeft));
 
-            GUI.Label(new Rect(x, card.y + 184, w, 22), L.Get("server"), Theme.Caption);
-            _serverInput = Field(new Rect(x, card.y + 208, w, 52), _serverInput, 120, "https://…");
-            GUI.Label(new Rect(x, card.y + 264, w, 40), L.Get("server_hint"), Theme.With(Theme.Caption, size: 13));
-
-            bool ready = RiderRules.MinDisplayNameLength <= _nameInput.Trim().Length && _serverInput.Trim().Length > 0 && !_group.Busy;
+            bool ready = RiderRules.MinDisplayNameLength <= _nameInput.Trim().Length && !_group.Busy;
             if (Ui.Button(new Rect(card.xMax - 224, card.yMax - 72, 200, 52), L.Get("continue"), ButtonKind.Primary, Icon.ChevronRight, ready))
             {
-                AppSettings.ServerUrl = NormalizeServer(_serverInput);
-                _serverInput = AppSettings.ServerUrl;
                 _group.CreateIdentity(_nameInput);
             }
+        }
+
+        private static string ServerHost()
+        {
+            string url = AppSettings.ServerUrl;
+            return System.Uri.TryCreate(url, System.UriKind.Absolute, out var uri) ? uri.Host + (uri.IsDefaultPort ? string.Empty : ":" + uri.Port) : url;
         }
 
         /// <summary>Not in a ride: join with a code, create one, or pick an open ride.</summary>
@@ -209,15 +209,19 @@ namespace FreeVelo.UI
             float colW = (card.width - 72) / 2f;
             float x = card.x + 24;
 
-            _serverInput ??= AppSettings.ServerUrl;
+            // Empty field = the default server (shown as placeholder); an own address replaces it.
+            _serverInput ??= AppSettings.HasOwnServer ? AppSettings.ServerUrl : string.Empty;
             GUI.Label(new Rect(x, card.y + 66, colW, 22), L.Get("server"), Theme.Caption);
-            _serverInput = Field(new Rect(x, card.y + 92, colW - 112, 52), _serverInput, 120, "https://…");
-            if (Ui.Button(new Rect(x + colW - 100, card.y + 92, 100, 52), "OK", ButtonKind.Secondary, null, NormalizeServer(_serverInput) != AppSettings.ServerUrl))
+            _serverInput = Field(new Rect(x, card.y + 92, colW - 112, 52), _serverInput, 120, AppSettings.DefaultServerUrl);
+            string wanted = _serverInput.Trim().Length == 0 ? AppSettings.DefaultServerUrl : NormalizeServer(_serverInput);
+            if (Ui.Button(new Rect(x + colW - 100, card.y + 92, 100, 52), "OK", ButtonKind.Secondary, null, wanted != AppSettings.ServerUrl))
             {
-                AppSettings.ServerUrl = NormalizeServer(_serverInput);
-                _serverInput = AppSettings.ServerUrl;
+                AppSettings.ServerUrl = wanted;
+                _serverInput = AppSettings.HasOwnServer ? AppSettings.ServerUrl : string.Empty;
                 Ui.Toast("✓ " + L.Get("saved"));
             }
+
+            GUI.Label(new Rect(x, card.y + 146, colW, 22), L.Get("server_own_hint"), Theme.With(Theme.Caption, size: 13));
 
             var rider = AppSettings.Rider;
             if (rider == null) return;

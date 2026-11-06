@@ -18,8 +18,8 @@ Good for a first group ride at home: the phones and the PC are in the same Wi-Fi
 3. Find the PC's address in the Wi-Fi: Windows `ipconfig` → *IPv4 address*, e.g. `192.168.1.20`.
 4. Windows asks whether to allow the program in the firewall the first time: allow it for **private networks**.
    (If not asked: Windows Security → Firewall → *Allow an app* → `dotnet`.)
-5. In the app: **Group** → enter your name and the server `http://192.168.1.20:8080` → **Continue**.
-   The address can be changed later under **Settings → Group rides**.
+5. In the app: **Settings → Group rides → Server** `http://192.168.1.20:8080` → **OK** (by default the app uses
+   the public server https://freevelo.onrender.com; an empty field goes back to it).
 
 Check from the phone's browser: `http://192.168.1.20:8080/health` shows `{"status":"ok"}`.
 

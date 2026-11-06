@@ -68,16 +68,33 @@ namespace FreeVelo.App
 
         // ------------------------------------------------------------------ group rides
 
-        /// <summary>Address of the FreeVelo server, e.g. https://freevelo.duckdns.org or http://192.168.1.20:8080.</summary>
+        /// <summary>The public FreeVelo server (Render); used unless the rider enters their own.</summary>
+        public const string DefaultServerUrl = "https://freevelo.onrender.com";
+
+        /// <summary>
+        /// Address of the FreeVelo server: <see cref="DefaultServerUrl"/>, or an own one such as
+        /// https://freevelo.duckdns.org or http://192.168.1.20:8080. Setting it empty (or to the default) goes back
+        /// to the default.
+        /// </summary>
         public static string ServerUrl
         {
-            get => PlayerPrefs.GetString("serverUrl", string.Empty);
+            get
+            {
+                string own = PlayerPrefs.GetString("serverUrl", string.Empty);
+                return own.Length > 0 ? own : DefaultServerUrl;
+            }
+
             set
             {
-                PlayerPrefs.SetString("serverUrl", (value ?? string.Empty).Trim().TrimEnd('/'));
+                string url = (value ?? string.Empty).Trim().TrimEnd('/');
+                if (url == DefaultServerUrl) url = string.Empty;
+                PlayerPrefs.SetString("serverUrl", url);
                 PlayerPrefs.Save();
             }
         }
+
+        /// <summary>True when the rider uses an own server instead of the default.</summary>
+        public static bool HasOwnServer => PlayerPrefs.GetString("serverUrl", string.Empty).Length > 0;
 
         /// <summary>
         /// The rider's identity on the server (id + secret from the first start; no email, no password).

@@ -135,8 +135,9 @@ token from GitHub → Settings → Developer settings → Fine-grained tokens, r
 
 ## 9. In the app
 
-**Settings → Group rides → Server:** `https://freevelo-sami.duckdns.org` → **OK** (or enter it at the first
-start of the Group page). Send your friends the address once; after that, only the 4-letter ride codes.
+**Settings → Group rides → Server:** `https://freevelo-sami.duckdns.org` → **OK** (by default the app uses the
+public server https://freevelo.onrender.com). Send your friends the address once; after that, only the 4-letter
+ride codes.
 
 ---
 
