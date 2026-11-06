@@ -146,7 +146,10 @@ public sealed class StravaService
         using var response = await http.PostAsync("https://www.strava.com/oauth/token", new FormUrlEncodedContent(form), ct);
         if ((int)response.StatusCode is >= 400 and < 500)
         {
-            _log.LogInformation("Strava refused the token request: {Status}", (int)response.StatusCode);
+            // Strava says which field was wrong, e.g. Application/client_secret (server settings) or
+            // RefreshToken/refresh_token (revoked by the rider). Contains no tokens.
+            string reason = await response.Content.ReadAsStringAsync(ct);
+            _log.LogWarning("Strava refused the token request: {Status} {Reason}", (int)response.StatusCode, reason.Length > 300 ? reason[..300] : reason);
             return null;
         }
 
