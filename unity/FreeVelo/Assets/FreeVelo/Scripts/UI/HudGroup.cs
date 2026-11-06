@@ -145,12 +145,28 @@ namespace FreeVelo.UI
                 return;
             }
 
-            foreach (var lobby in lobbies.Take(4))
+            // Friends' private rides first, then public ones.
+            foreach (var lobby in lobbies.OrderByDescending(l => l.isPrivate).Take(4))
             {
                 var row = new Rect(c.x, y, listW, 64);
-                Ui.Card(row);
-                Ui.DrawIcon(new Rect(row.x + 20, row.center.y - 12, 24, 24), lobby.mode == LobbyMode.KeepTogether ? Icon.Group : Icon.Bike, Theme.Accent);
-                GUI.Label(new Rect(row.x + 58, row.y + 8, row.width - 220, 26), lobby.name, Clip(Theme.With(Theme.H3, size: 17)));
+                bool friendsRide = lobby.isPrivate;
+                if (friendsRide)
+                {
+                    // A friend's private ride: green tint, outline and a "Freunde" badge.
+                    Ui.Card(row, Color.Lerp(Theme.Surface, Theme.Success, 0.14f));
+                    Ui.Outline(row, Theme.Alpha(Theme.Success, 0.7f), 2, Theme.Radius);
+                    Ui.Rect(new Rect(row.x, row.y + 10, 5, row.height - 20), Theme.Success, 2.5f);
+                }
+                else
+                {
+                    Ui.Card(row);
+                }
+
+                Ui.DrawIcon(new Rect(row.x + 20, row.center.y - 12, 24, 24), friendsRide ? Icon.Heart : lobby.mode == LobbyMode.KeepTogether ? Icon.Group : Icon.Bike, friendsRide ? Theme.Success : Theme.Accent);
+                var nameStyle = Clip(Theme.With(Theme.H3, size: 17));
+                float nameW = Mathf.Min(row.width - 330, nameStyle.CalcSize(new GUIContent(lobby.name)).x);
+                GUI.Label(new Rect(row.x + 58, row.y + 8, row.width - 220, 26), lobby.name, nameStyle);
+                if (friendsRide) Ui.Chip(new Rect(row.x + 66 + nameW, row.y + 10, 0, 24), L.Get("friends_ride"), Theme.Success, null, filled: true);
                 string meta = lobby.friends != null && lobby.friends.Length > 0
                     ? $"<color=#35C97D>{L.Get("friends")}: {string.Join(", ", lobby.friends)}</color> · {string.Format(L.Get("riders_count"), lobby.riderCount, lobby.maxRiders)}"
                     : $"{lobby.hostName} · {L.Get(lobby.mode == LobbyMode.KeepTogether ? "keep_together" : "free_mode")} · {string.Format(L.Get("riders_count"), lobby.riderCount, lobby.maxRiders)}";

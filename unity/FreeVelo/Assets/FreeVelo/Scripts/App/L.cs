@@ -195,6 +195,7 @@ namespace FreeVelo.App
             ["err_lobby"] = ("Check the ride name (2 to 40 characters).", "Prüfe den Namen der Fahrt (2 bis 40 Zeichen)."),
             ["err_too_many"] = ("Too many attempts – wait a minute.", "Zu viele Versuche – warte eine Minute."),
             ["friends"] = ("Friends", "Freunde"),
+            ["friends_ride"] = ("Friends · private", "Freunde · privat"),
             ["no_friends"] = ("No friends yet. Add riders with + in a group ride's rider list.", "Noch keine Freunde. Füge Fahrer mit + in der Fahrerliste einer Gruppenfahrt hinzu."),
             ["friend_request"] = ("{0} wants to be your friend", "{0} möchte mit dir befreundet sein"),
             ["friend_asked"] = ("Friend request sent to {0}", "Freundschaftsanfrage an {0} gesendet"),
