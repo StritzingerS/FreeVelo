@@ -147,7 +147,7 @@ namespace FreeVelo.UI
             // Logo
             var logo = new Rect((RailW - 56) / 2f, 24, 56, 56);
             Ui.Rect(logo, Theme.Accent, 16);
-            GUI.Label(logo, "FV", Theme.With(Theme.H2, Color.white, anchor: TextAnchor.MiddleCenter));
+            Ui.DrawIcon(new Rect(logo.x + 9, logo.y + 9, logo.width - 18, logo.height - 18), Icon.Bike, Color.white);
 
             var items = new (Page Page, Icon Icon, string Label)[]
             {
