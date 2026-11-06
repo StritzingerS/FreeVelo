@@ -1,5 +1,8 @@
 # Phase 2 – Server & riding together
 
+**Status: complete** (everything built). The real-device checks below – group ride with friends, more Strava
+athletes, long validation ride – move to [phase 3](PHASE3.md) (section A).
+
 Goal: three friends ride together in the same world, stay together (Keep Together), and a rider who stops
 pedaling is towed along. Concept: [CONCEPT.md](CONCEPT.md) sections 9 (multiplayer) and 11 (accounts).
 
@@ -41,7 +44,7 @@ container (ASP.NET Core + SQLite), so it runs on Oracle Free or any small VPS / 
 - [x] Friends: "+" in the waiting room sends a request, the other accepts; both phones store each other's secret
       friend code (nothing stored on the server). Friends' private rides show up in the ride list and can be joined
       without the 4-letter code; a new friend code locks everyone out
-- [ ] First real test with two phones (see `docs/SERVER.md` for running the server on a PC)
+- [→] First real test with three riders – moved to phase 3
 
 ### E. Deployment
 - [x] Oracle Free VM setup guide (`docs/ORACLE.md`): Docker Compose with Caddy (HTTPS via Let's Encrypt),
@@ -58,11 +61,10 @@ container (ASP.NET Core + SQLite), so it runs on Oracle Free or any small VPS / 
       duplicates count as uploaded; status and "View on Strava" in the recent rides and the ride summary
 - [x] Strava API app registered, client id/secret on Render (`docs/RENDER.md` → Strava); first real upload
       (ramp test, 2026-11-06)
-- [ ] Ask Strava for more than one athlete (needed before friends can connect)
+- [→] Ask Strava for more than one athlete – moved to phase 3
 
 ### G. Carried over from phase 1
-- [ ] Long validation ride: full 4×4 on the Neo 2, partly with the phone locked; FIT file checked in
-      Garmin Connect / Strava
+- [→] Long validation ride on the Neo 2 – moved to phase 3
 
 ### Done when
-- 3 friends ride together, stay together, and stop-and-tow works.
+- 3 friends ride together, stay together, and stop-and-tow works – built; the real test is in phase 3.
