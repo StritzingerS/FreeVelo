@@ -7,18 +7,20 @@ const assets = path.resolve(__dirname, '../../unity/FreeVelo/Assets/FreeVelo');
 const font = 'file://' + path.join(assets, 'Resources/Fonts/Inter-SemiBold.ttf');
 const out = n => path.join(assets, 'Branding', n);
 const { bike } = require(path.join(__dirname, 'bike.js'));
-const grad = `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF8A3D"/><stop offset="1" stop-color="#F04E1A"/></linearGradient></defs>`;
+const grad = `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF8640"/><stop offset="1" stop-color="#EE4A17"/></linearGradient>
+<radialGradient id="h" cx="0.25" cy="0.15" r="0.9"><stop offset="0" stop-color="#fff" stop-opacity="0.13"/><stop offset="0.6" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>`;
+const place = (scale, cx = 50, cy = 50) => `translate(${cx} ${cy}) scale(${scale}) translate(-50 -50) translate(0 -4)`;
 const svgs = {
   // Full icon (iOS / legacy Android / default): full-bleed gradient, bike centred.
-  'icon.png': [1024, 1024, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">${grad}<rect width="100" height="100" fill="url(#g)"/><g transform="translate(50 50) scale(0.78) translate(-50 -50) translate(5 -4)">${bike()}</g></svg>`],
+  'icon.png': [1024, 1024, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="1024" height="1024">${grad}<rect width="100" height="100" fill="url(#g)"/><rect width="100" height="100" fill="url(#h)"/><g transform="${place(0.86)}">${bike()}</g></svg>`],
   // Android adaptive layers (432 px, only the inner ~66 % is always visible).
-  'icon_adaptive_bg.png': [432, 432, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="432" height="432">${grad}<rect width="100" height="100" fill="url(#g)"/></svg>`],
-  'icon_adaptive_fg.png': [432, 432, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="432" height="432"><g transform="translate(50 50) scale(0.56) translate(-50 -50) translate(5 -4)">${bike()}</g></svg>`],
+  'icon_adaptive_bg.png': [432, 432, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="432" height="432">${grad}<rect width="100" height="100" fill="url(#g)"/><rect width="100" height="100" fill="url(#h)"/></svg>`],
+  'icon_adaptive_fg.png': [432, 432, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="432" height="432"><g transform="${place(0.62)}">${bike()}</g></svg>`],
   // Startup screen logo: badge + wordmark on transparent background.
   'splash_logo.png': [1200, 400, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 100" width="1200" height="400">${grad}
      <style>@font-face{font-family:Inter;src:url(${font});} text{font-family:Inter;font-weight:600}</style>
-     <rect x="6" y="10" width="80" height="80" rx="20" fill="url(#g)"/>
-     <g transform="translate(46 50) scale(0.66) translate(-50 -50) translate(5 -4)">${bike()}</g>
+     <rect x="6" y="10" width="80" height="80" rx="20" fill="url(#g)"/><rect x="6" y="10" width="80" height="80" rx="20" fill="url(#h)"/>
+     <g transform="${place(0.7, 46, 50)}">${bike()}</g>
      <text x="104" y="64" font-size="42" fill="#FFFFFF" letter-spacing="0.5" transform="skewX(-10)" transform-origin="104 64">FreeVelo</text></svg>`],
 };
 (async () => {
