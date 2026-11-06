@@ -41,8 +41,9 @@ container (ASP.NET Core + SQLite), so it runs on Oracle Free or any small VPS / 
 - [ ] First real test with two phones (see `docs/SERVER.md` for running the server on a PC)
 
 ### E. Deployment
-- [ ] Oracle Free VM setup guide: Docker, Caddy (HTTPS via Let's Encrypt), free domain (e.g. DuckDNS)
-- [ ] Backups of the SQLite file
+- [x] Oracle Free VM setup guide (`docs/ORACLE.md`): Docker Compose with Caddy (HTTPS via Let's Encrypt),
+      DuckDNS name; `deploy/` folder, checked in CI
+- [x] Backups of the SQLite file (`deploy/backup.sh`, daily via cron)
 
 ### F. Strava
 - [ ] OAuth token exchange / refresh through the server (client secret stays on the server)

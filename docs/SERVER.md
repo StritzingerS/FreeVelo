@@ -55,5 +55,6 @@ Group rides live only in memory: a server restart ends running group rides (the 
 
 ## Public server
 
-For riding with friends outside your home: Oracle Cloud Free VM + Caddy (HTTPS) + a free domain – see the
-phase 2 backlog (`docs/PHASE2.md`, section E); the guide follows.
+For riding with friends outside your home: Oracle Cloud Free VM + Caddy (HTTPS) + a free DuckDNS name, all
+free – step by step in [ORACLE.md](ORACLE.md). The `deploy/` folder has the Docker Compose setup it uses (also
+fine for any other small Linux server or a home server).
