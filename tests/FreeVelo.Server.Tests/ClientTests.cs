@@ -150,16 +150,41 @@ public sealed class ClientTests : IDisposable
         state.Apply(Snapshot(2, 100, 10), 1.0);
         state.Apply(Snapshot(2, 102.5, 10), 1.25);
 
-        // Shown 0.35 s in the past: at 1.475 s → 1.125 s, halfway between the snapshots.
-        Assert.Equal(101.25, state.Riders(1.475).Single().DistanceM, 6);
+        // Shown RenderDelayS in the past: at 1.125 s, halfway between the snapshots.
+        Assert.Equal(101.25, state.Riders(1.125 + GroupRideState.RenderDelayS).Single().DistanceM, 6);
 
         // No more snapshots: carried on at its speed, at most 1 s.
-        Assert.Equal(102.5 + (10 * 0.5), state.Riders(1.25 + 0.35 + 0.5).Single().DistanceM, 6);
+        Assert.Equal(102.5 + (10 * 0.5), state.Riders(1.25 + GroupRideState.RenderDelayS + 0.5).Single().DistanceM, 6);
         Assert.Equal(102.5 + 10, state.Riders(10).Single().DistanceM, 6);
 
         // Before the first snapshot: the first one.
         Assert.Equal(100, state.Riders(0.5).Single().DistanceM, 6);
         Assert.False(state.TryGetMine(2, out _)); // no snapshot of slot 1 yet
+    }
+
+    [Fact]
+    public void SnapshotsAreTimedByServerTickSoNetworkJitterDoesNotStutter()
+    {
+        var state = new GroupRideState();
+        state.Apply(new WelcomeMessage { YourSlot = 1, TickMs = 250 }, 0);
+        state.Apply(new RosterMessage { Riders = { new RosterEntry { Slot = 2 } } }, 0);
+
+        // A rider at a steady 10 m/s; snapshots arrive with up to 150 ms of random delay.
+        var random = new Random(5);
+        for (uint tick = 1; tick <= 40; tick++)
+        {
+            double arrival = (tick * 0.25) + 0.05 + (random.NextDouble() * 0.15);
+            state.Apply(new SnapshotMessage { Tick = tick, Riders = { new SnapshotEntry { Slot = 2, DistanceM = tick * 2.5, SpeedMps = 10 } } }, arrival);
+        }
+
+        // Shown positions advance evenly: 10 m/s × 0.05 s per frame, whatever the arrival jitter.
+        double last = state.Riders(9.0).Single().DistanceM;
+        for (double t = 9.05; t < 10.0; t += 0.05)
+        {
+            double d = state.Riders(t).Single().DistanceM;
+            Assert.InRange(d - last, 0.45, 0.55);
+            last = d;
+        }
     }
 
     [Fact]

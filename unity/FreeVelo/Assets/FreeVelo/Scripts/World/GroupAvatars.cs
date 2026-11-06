@@ -15,9 +15,12 @@ namespace FreeVelo.World
         /// <summary>Riders keep to the right half of the 6.5 m road: lateral offset from the centre line.</summary>
         public const float BaseLateralM = 1.4f;
 
+        /// <summary>The own rider's jersey (also their dot in the rider list).</summary>
+        public static readonly Color OwnJersey = new Color(0.1f, 0.45f, 0.85f);
+
+        /// <summary>Jerseys of the others (without the own blue, so nobody looks like oneself).</summary>
         private static readonly Color[] Jerseys =
         {
-            new Color(0.1f, 0.45f, 0.85f),
             new Color(0.9f, 0.3f, 0.2f),
             new Color(0.15f, 0.65f, 0.35f),
             new Color(0.95f, 0.75f, 0.15f),
@@ -35,7 +38,7 @@ namespace FreeVelo.World
         /// <summary>Riders on screen this frame (for name tags and emoji bubbles in the HUD).</summary>
         public List<(GroupRider Rider, Vector3 HeadPosition)> Visible { get; } = new List<(GroupRider, Vector3)>();
 
-        public static Color JerseyOf(ushort slot) => Jerseys[(slot + Jerseys.Length - 1) % Jerseys.Length];
+        public static Color JerseyOf(ushort slot, bool isMe = false) => isMe ? OwnJersey : Jerseys[(slot + Jerseys.Length - 1) % Jerseys.Length];
 
         /// <summary>Sideways position for a lane (kept on the road).</summary>
         public static float Lateral(float laneM) => Mathf.Clamp(BaseLateralM + laneM, 0.4f, 3.0f);

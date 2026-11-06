@@ -37,8 +37,9 @@ public sealed class LobbySession
     private uint _tick;
     private bool _rosterChanged;
 
-    public LobbySession(string lobbyId, LobbyMode mode, string routeId, TimeProvider time)
+    public LobbySession(string lobbyId, LobbyMode mode, string routeId, TimeProvider time, int tickMs = 250)
     {
+        TickMs = tickMs;
         LobbyId = lobbyId;
         Mode = mode;
         _time = time;
@@ -47,6 +48,8 @@ public sealed class LobbySession
     }
 
     public object Sync { get; } = new();
+
+    public int TickMs { get; }
 
     public string LobbyId { get; }
 
@@ -65,7 +68,7 @@ public sealed class LobbySession
         member.Connection?.Close(LiveCloseCodes.Replaced, "replaced");
         member.Connection = connection;
         member.DisconnectedAt = null;
-        connection.Send(LiveCodec.Encode(new WelcomeMessage { YourSlot = member.Slot, Mode = Mode, StartDistanceM = StartDistance(riderId) }));
+        connection.Send(LiveCodec.Encode(new WelcomeMessage { YourSlot = member.Slot, Mode = Mode, StartDistanceM = StartDistance(riderId), TickMs = (ushort)TickMs }));
         _rosterChanged = true;
     }
 

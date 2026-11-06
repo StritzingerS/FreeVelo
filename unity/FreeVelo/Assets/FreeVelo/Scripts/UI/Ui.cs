@@ -417,9 +417,77 @@ namespace FreeVelo.UI
         /// <summary>Rounded text field.</summary>
         public static string TextField(Rect r, string text, int maxLength)
         {
+            if (TouchScreenKeyboard.isSupported) return TouchField(r, text ?? string.Empty, maxLength);
             Rect(r, Theme.Surface2, Theme.RadiusSmall);
             if (GUIUtility.keyboardControl != 0) Outline(r, Theme.Alpha(Theme.Accent, 0.6f), 2, Theme.RadiusSmall);
             return GUI.TextField(r, text ?? string.Empty, maxLength, Theme.Field);
+        }
+
+        // ------------------------------------------------------------------ text input on phones
+
+        private static TouchScreenKeyboard _keyboard;
+        private static int _editId;
+        private static string _editText;
+
+        /// <summary>
+        /// Phones: our own keyboard handling instead of IMGUI's, which only applies the typed text when the keyboard
+        /// is closed with "done" (tapping outside or Back loses it). The text updates while typing, is kept however the
+        /// keyboard closes, and <see cref="DrawKeyboardBar"/> shows it above the keyboard.
+        /// </summary>
+        private static string TouchField(Rect r, string text, int maxLength)
+        {
+            int id = GUIUtility.GetControlID(0x54465744, FocusType.Passive, r);
+            bool editing = _editId == id && _keyboard != null;
+            if (editing)
+            {
+                string typed = _keyboard.text ?? string.Empty;
+                if (maxLength > 0 && typed.Length > maxLength) typed = typed.Substring(0, maxLength);
+                _editText = typed;
+                if (text != typed) GUI.changed = true;
+                text = typed;
+                if (_keyboard.status != TouchScreenKeyboard.Status.Visible)
+                {
+                    _keyboard = null;
+                    _editId = 0;
+                    editing = false;
+                }
+            }
+
+            Rect(r, Theme.Surface2, Theme.RadiusSmall);
+            if (editing) Outline(r, Theme.Alpha(Theme.Accent, 0.8f), 2, Theme.RadiusSmall);
+            GUI.Label(new Rect(r.x + 14, r.y, r.width - 28, r.height), text, SingleLine(Theme.Field));
+            if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+            {
+                TouchScreenKeyboard.hideInput = true;
+                _keyboard = TouchScreenKeyboard.Open(text, TouchScreenKeyboardType.Default, false, false, false, false, string.Empty, maxLength);
+                _editId = id;
+                _editText = text;
+            }
+
+            return text;
+        }
+
+        private static GUIStyle _singleLine;
+
+        private static GUIStyle SingleLine(GUIStyle style) =>
+            _singleLine ??= new GUIStyle(style) { wordWrap = false, clipping = TextClipping.Clip };
+
+        /// <summary>While the phone keyboard is open: the text being typed in a bar at the top (the field itself is often under the keyboard).</summary>
+        public static void DrawKeyboardBar(float screenW)
+        {
+            if (_keyboard == null || _editId == 0 || _keyboard.status != TouchScreenKeyboard.Status.Visible) return;
+            var bar = new Rect(0, 0, screenW, 88);
+            Rect(new Rect(-200, -200, screenW + 400, 288), Theme.Surface, 0);
+            Rect(new Rect(0, bar.yMax, screenW, 1), Theme.Stroke, 0);
+            var field = new Rect(24, 14, screenW - 48 - 140, 60);
+            Rect(field, Theme.Surface2, Theme.RadiusSmall);
+            Outline(field, Theme.Alpha(Theme.Accent, 0.8f), 2, Theme.RadiusSmall);
+            bool cursor = Mathf.Repeat(Time.unscaledTime, 1f) < 0.55f;
+            GUI.Label(new Rect(field.x + 16, field.y, field.width - 32, field.height), (_editText ?? string.Empty) + (cursor ? "|" : " "), SingleLine(Theme.Field));
+            if (Button(new Rect(screenW - 24 - 124, 14, 124, 60), "OK", ButtonKind.Primary))
+            {
+                _keyboard.active = false;
+            }
         }
 
         // ------------------------------------------------------------------ scrolling (drag with the finger)

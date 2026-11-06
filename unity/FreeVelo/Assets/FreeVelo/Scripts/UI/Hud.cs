@@ -106,6 +106,7 @@ namespace FreeVelo.UI
 
             DrawWorldLoading();
             Ui.DrawToast(_w, _h);
+            Ui.DrawKeyboardBar(_w);
         }
 
         // ------------------------------------------------------------------ navigation

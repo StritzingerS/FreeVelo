@@ -311,7 +311,7 @@ namespace FreeVelo.Ride
             double crr = RoadSurfaces.RollingResistance(position.Surface);
             _physics.Step(IsPaused ? 0 : power, position.GradePercent, crr, dt);
             DistanceM += _physics.SpeedMps * dt;
-            if (IsGroupRide) ApplyGroup(cadence);
+            if (IsGroupRide) ApplyGroup(cadence, dt);
             else if (Path != null && Path.Update(DistanceM)) Route = Path.Route; // next junction reached: chosen road added
 
             if (running)
@@ -376,14 +376,26 @@ namespace FreeVelo.Ride
         /// simulation says (the trainer still gets the grade of that spot); Free mode starts next to the group once.
         /// Jumps into the group do not count as ridden distance. Then the own state goes to the server.
         /// </summary>
-        private void ApplyGroup(double cadence)
+        private void ApplyGroup(double cadence, float dt)
         {
             if (Group.Mode == LobbyMode.KeepTogether)
             {
                 if (Group.TryGetOwnPosition(out double groupDistance, out float groupSpeed, out bool welcomed))
                 {
-                    if (welcomed) _rideStartDistanceM += groupDistance - DistanceM;
-                    DistanceM = groupDistance;
+                    double error = groupDistance - DistanceM;
+                    if (welcomed || Math.Abs(error) > 30)
+                    {
+                        // (Re)connected or far off: jump into the group (not counted as ridden distance).
+                        if (welcomed) _rideStartDistanceM += error;
+                        DistanceM = groupDistance;
+                    }
+                    else
+                    {
+                        // The rider already moved on with the group speed this step; close the remaining gap to the
+                        // server's position gently (~0.5 s), so small corrections never show as jerks.
+                        DistanceM += error * Math.Min(1.0, dt * 2.0);
+                    }
+
                     _physics.SpeedMps = groupSpeed;
                 }
             }

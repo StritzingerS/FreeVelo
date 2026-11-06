@@ -280,7 +280,7 @@ namespace FreeVelo.UI
             {
                 var row = new Rect(panel.x + 12, y, panel.width - 24, 34);
                 if (r.IsMe) Ui.Rect(row, Theme.Alpha(Theme.Accent, 0.15f), 8);
-                Ui.Dot(new Vector2(row.x + 14, row.center.y), 6, GroupAvatars.JerseyOf(r.Slot));
+                Ui.Dot(new Vector2(row.x + 14, row.center.y), 6, GroupAvatars.JerseyOf(r.Slot, r.IsMe));
                 bool towed = (r.Flags & RiderFlags.Towed) != 0;
                 bool away = (r.Flags & RiderFlags.Connected) == 0;
                 var nameColor = away ? Theme.Faint : Theme.Text;

@@ -52,7 +52,7 @@ public sealed class LiveHub
             return;
         }
 
-        var session = _sessions.GetOrAdd(lobby.Id, id => new LobbySession(id, lobby.Mode, lobby.RouteId, _time));
+        var session = _sessions.GetOrAdd(lobby.Id, id => new LobbySession(id, lobby.Mode, lobby.RouteId, _time, _options.TickMs));
         string name = _riders.Find(riderId)?.DisplayName ?? "";
         lock (session.Sync) session.Attach(riderId, name, connection);
         _lobbies.Touch(riderId);

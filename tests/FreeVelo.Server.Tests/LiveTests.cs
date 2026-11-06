@@ -284,8 +284,8 @@ public class LiveCodecTests
 
         Assert.Equal(Emoji.Wave, ((EmojiMessage)RoundTrip(new EmojiMessage { Emoji = Emoji.Wave })).Emoji);
 
-        var welcome = (WelcomeMessage)RoundTrip(new WelcomeMessage { YourSlot = 3, Mode = LobbyMode.Free, StartDistanceM = 500 });
-        Assert.Equal((3, LobbyMode.Free, 500.0), (welcome.YourSlot, welcome.Mode, welcome.StartDistanceM));
+        var welcome = (WelcomeMessage)RoundTrip(new WelcomeMessage { YourSlot = 3, Mode = LobbyMode.Free, StartDistanceM = 500, TickMs = 250 });
+        Assert.Equal((3, LobbyMode.Free, 500.0, (ushort)250), (welcome.YourSlot, welcome.Mode, welcome.StartDistanceM, welcome.TickMs));
 
         var roster = (RosterMessage)RoundTrip(new RosterMessage { Riders = { new RosterEntry { Slot = 1, RiderId = "abc", DisplayName = "Jürgen 🚴", HomeLaneM = 0.5f } } });
         Assert.Equal("Jürgen 🚴", roster.Riders[0].DisplayName);

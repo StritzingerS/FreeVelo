@@ -91,6 +91,9 @@ namespace FreeVelo.Shared.Live
 
         /// <summary>Where to start (the group's current position, for joining mid-ride).</summary>
         public double StartDistanceM;
+
+        /// <summary>Time between snapshots (ms): the app times snapshots by their tick, not by when they arrive.</summary>
+        public ushort TickMs;
     }
 
     public sealed class RosterEntry
@@ -186,6 +189,7 @@ namespace FreeVelo.Shared.Live
                         w.Write(m.YourSlot);
                         w.Write((byte)m.Mode);
                         w.Write(m.StartDistanceM);
+                        w.Write(m.TickMs);
                         break;
                     case RosterMessage m:
                         w.Write((byte)m.Riders.Count);
@@ -255,7 +259,7 @@ namespace FreeVelo.Shared.Live
                         message = new EmojiMessage { Emoji = (Emoji)r.ReadByte() };
                         break;
                     case LiveMessageType.Welcome:
-                        message = new WelcomeMessage { YourSlot = r.ReadUInt16(), Mode = (LobbyMode)r.ReadByte(), StartDistanceM = Finite(r.ReadDouble()) };
+                        message = new WelcomeMessage { YourSlot = r.ReadUInt16(), Mode = (LobbyMode)r.ReadByte(), StartDistanceM = Finite(r.ReadDouble()), TickMs = r.ReadUInt16() };
                         break;
                     case LiveMessageType.Roster:
                         var roster = new RosterMessage();

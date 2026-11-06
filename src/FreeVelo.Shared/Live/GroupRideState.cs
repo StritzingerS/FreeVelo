@@ -36,7 +36,8 @@ namespace FreeVelo.Shared.Live
     /// </summary>
     public sealed class GroupRideState
     {
-        public const double RenderDelayS = 0.35;
+        /// <summary>Riders are shown this far in the past, so there are snapshots on both sides to interpolate.</summary>
+        public const double RenderDelayS = 0.4;
         public const double MaxExtrapolationS = 1.0;
         private const int KeptSnapshots = 8;
 
@@ -45,6 +46,11 @@ namespace FreeVelo.Shared.Live
         private readonly Dictionary<ushort, List<(double T, SnapshotEntry E)>> _history = new Dictionary<ushort, List<(double, SnapshotEntry)>>();
         private readonly List<ReceivedEmoji> _emojis = new List<ReceivedEmoji>();
         private int _rosterVersion;
+
+        // Snapshot timing by server tick: tick time + offset ≈ arrival time without network jitter.
+        private double _tickS;
+        private double _offset;
+        private bool _hasOffset;
 
         /// <summary>Own slot (0 until welcomed).</summary>
         public ushort MySlot { get; private set; }
@@ -88,6 +94,8 @@ namespace FreeVelo.Shared.Live
                         StartDistanceM = welcome.StartDistanceM;
                         WelcomeCount++;
                         _history.Clear();
+                        _tickS = welcome.TickMs / 1000.0;
+                        _hasOffset = false;
                         break;
                     case RosterMessage roster:
                         _roster.Clear();
@@ -96,10 +104,25 @@ namespace FreeVelo.Shared.Live
                         _rosterVersion++;
                         break;
                     case SnapshotMessage snapshot:
+                        // With the server's tick length, snapshots are placed on the server's even clock: the
+                        // offset follows the earliest arrivals (fast down, slowly up for clock drift), so late
+                        // packets do not make riders stutter. Without it (old server, tests): arrival time.
+                        double t = nowS;
+                        if (_tickS > 0)
+                        {
+                            double tick = snapshot.Tick * _tickS;
+                            double offset = nowS - tick;
+                            if (!_hasOffset || offset < _offset) _offset = offset;
+                            else _offset += (offset - _offset) * 0.01;
+                            _hasOffset = true;
+                            t = tick;
+                        }
+
                         foreach (var entry in snapshot.Riders)
                         {
                             if (!_history.TryGetValue(entry.Slot, out var list)) _history[entry.Slot] = list = new List<(double, SnapshotEntry)>();
-                            list.Add((nowS, entry));
+                            if (list.Count > 0 && t <= list[list.Count - 1].T) continue; // duplicate or out of order
+                            list.Add((t, entry));
                             if (list.Count > KeptSnapshots) list.RemoveAt(0);
                         }
 
@@ -121,7 +144,7 @@ namespace FreeVelo.Shared.Live
                 foreach (var entry in _roster.Values.OrderBy(e => e.Slot))
                 {
                     if (!_history.TryGetValue(entry.Slot, out var list) || list.Count == 0) continue;
-                    var e = Sample(list, nowS - RenderDelayS);
+                    var e = Sample(list, ToSnapshotTime(nowS) - RenderDelayS);
                     result.Add(new GroupRider
                     {
                         Slot = entry.Slot,
@@ -157,6 +180,9 @@ namespace FreeVelo.Shared.Live
 
             return false;
         }
+
+        /// <summary>The app's clock converted to the time base of the stored snapshots.</summary>
+        private double ToSnapshotTime(double nowS) => _tickS > 0 && _hasOffset ? nowS - _offset : nowS;
 
         public string NameOf(ushort slot)
         {
