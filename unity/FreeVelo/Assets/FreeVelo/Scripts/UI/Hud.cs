@@ -965,7 +965,7 @@ namespace FreeVelo.UI
                 GUI.Label(new Rect(x, y, 300, 18), L.Get("power_curve").ToUpperInvariant(), Theme.Overline);
                 var curve = s.PowerCurve.ToList();
                 double max = curve.Max(kv => kv.Value);
-                float bw = Mathf.Min(96, (w - (10 * (curve.Count - 1))) / curve.Count);
+                float bw = (w - (10 * (curve.Count - 1))) / curve.Count; // bars share the full width
                 for (int i = 0; i < curve.Count; i++)
                 {
                     float h = 14 + (float)(curve[i].Value / max) * 50;
