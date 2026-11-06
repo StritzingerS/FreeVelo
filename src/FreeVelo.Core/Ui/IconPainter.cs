@@ -43,6 +43,9 @@ namespace FreeVelo.Core.Ui
         Fire,
         Drop,
         Hand,
+        TurnLeft,
+        TurnRight,
+        Straight,
     }
 
     /// <summary>
@@ -422,6 +425,23 @@ namespace FreeVelo.Core.Ui
                     s.Add(new Disc(V(12, 15), 5.6f));
                     s.Add(new Polygon(V(12, 2.5f), V(16.9f, 12.3f), V(7.1f, 12.3f)));
                     break;
+                case Icon.Straight:
+                    s.Add(Line(V(12, 21), V(12, 5)));
+                    s.Add(new Polygon(V(12, 2.5f), V(17.5f, 9), V(6.5f, 9)));
+                    break;
+                case Icon.TurnLeft:
+                case Icon.TurnRight:
+                {
+                    // Up from the bottom, then a bend towards the side, arrowhead pointing sideways.
+                    float d = icon == Icon.TurnRight ? 1 : -1;
+                    var bend = new List<Vector2> { V(12 - (d * 3), 21), V(12 - (d * 3), 13) };
+                    bend.AddRange(Arc(V(12 + (d * 2), 13), 5, d > 0 ? 180 : 0, d > 0 ? 270 : -90, 10));
+                    bend.Add(V(12 + (d * 5.5f), 8));
+                    s.Add(new Polyline(Stroke * 1.15f, bend.ToArray()));
+                    s.Add(new Polygon(V(12 + (d * 9.5f), 8), V(12 + (d * 4.5f), 2.5f), V(12 + (d * 4.5f), 13.5f)));
+                    break;
+                }
+
                 case Icon.Hand:
                     // Waving hand: palm and four fingers, thumb to the side.
                     s.Add(new Disc(V(12.5f, 15.5f), 5.2f));

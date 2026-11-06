@@ -9,6 +9,7 @@ using FreeVelo.Core.Recording;
 using FreeVelo.Core.Training;
 using FreeVelo.Core.Workouts;
 using FreeVelo.Core.World;
+using FreeVelo.Core.World.Gen;
 using FreeVelo.Net;
 using FreeVelo.Shared.Api;
 using UnityEngine;
@@ -107,6 +108,25 @@ namespace FreeVelo.Ride
         /// <summary>The current ride is a group ride (live with the others).</summary>
         public bool IsGroupRide { get; private set; }
 
+        /// <summary>The generated world (road network).</summary>
+        public WorldMap Map { get; set; }
+
+        /// <summary>Solo rides: the way through the road network (the rider picks left / right at junctions).</summary>
+        public NetworkPath Path { get; set; }
+
+        /// <summary>The next junction ahead (solo rides; null in group rides, which follow the main loop).</summary>
+        public UpcomingJunction NextJunction()
+        {
+            if (IsGroupRide || Path == null) return null;
+            lock (BleService.Sync) return Path.Next();
+        }
+
+        /// <summary>Picks the way on at the next junction (index into its options).</summary>
+        public void ChooseTurn(int option)
+        {
+            lock (BleService.Sync) Path?.Choose(option);
+        }
+
         public void Initialize(BleService ble, Route route)
         {
             _ble = ble;
@@ -125,6 +145,9 @@ namespace FreeVelo.Ride
         {
             _ble.ApplySettings();
             IsGroupRide = Group != null && Group.Lobby != null;
+            // Group rides follow the main loop (the server's Keep Together simulation uses the same route).
+            if (IsGroupRide && Map != null) Route = Map.MainLoop;
+            else if (Path != null) Route = Path.Route;
             string title = workout != null ? workout.Name.Get(AppSettings.Language) : IsGroupRide ? Group.Lobby.name : L.Get("free_ride");
             _recording = new RideRecording(DateTime.UtcNow, title);
             _lastSegmentIndex = -1;
@@ -162,7 +185,20 @@ namespace FreeVelo.Ride
             if (State != RideState.Riding) return;
             State = RideState.Finished;
             RideKeepAlive.Stop();
-            if (IsGroupRide) Group.StopLive(); // still in the group ride (waiting room) until the rider leaves it
+            if (IsGroupRide)
+            {
+                Group.StopLive(); // still in the group ride (waiting room) until the rider leaves it
+                if (Map != null)
+                {
+                    // Back on the road network from the place on the main loop.
+                    lock (BleService.Sync)
+                    {
+                        Path = NetworkPath.OnMainLoop(Map, DistanceM, DistanceM);
+                        Route = Path.Route;
+                    }
+                }
+            }
+
             IsGroupRide = false;
             _physics.SpeedMps = 0; // the rider stops: no more wheel/world movement after the ride
             _ble.Hub.SetSimulation(0); // release ERG resistance
@@ -276,6 +312,7 @@ namespace FreeVelo.Ride
             _physics.Step(IsPaused ? 0 : power, position.GradePercent, crr, dt);
             DistanceM += _physics.SpeedMps * dt;
             if (IsGroupRide) ApplyGroup(cadence);
+            else if (Path != null && Path.Update(DistanceM)) Route = Path.Route; // next junction reached: chosen road added
 
             if (running)
             {

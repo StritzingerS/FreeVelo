@@ -53,6 +53,35 @@ namespace FreeVelo.World
             });
         }
 
+        /// <summary>Gravel road across its width (u = 0 … 1): light, compacted tracks, loose stones in the middle.</summary>
+        public static Texture2D GravelRoad(int size = 256)
+        {
+            var random = new System.Random(41);
+            return Create(size, "GravelRoad", (x, y, u, v) =>
+            {
+                float stones = Fbm(u, v, 30f, 2, 6);
+                float grain = ((float)random.NextDouble() - 0.5f) * 0.12f;
+                float tracks = 0.05f * (Track(u, 0.27f) + Track(u, 0.73f));
+                float middle = -0.05f * Track(u, 0.5f);
+                float g = 0.55f + ((stones - 0.5f) * 0.2f) + grain + tracks + middle;
+                return new Color(g * 1.05f, g * 0.98f, g * 0.84f);
+            });
+        }
+
+        /// <summary>Crop rows for fields (v runs across the rows): light/dark stripes with some noise.</summary>
+        public static Texture2D Rows(Color color, int size = 128)
+        {
+            var random = new System.Random(53 + (int)(color.r * 100));
+            return Create(size, "Rows", (x, y, u, v) =>
+            {
+                float row = Mathf.Abs(Mathf.Sin(v * Mathf.PI * 8f));
+                float patch = (Fbm(u, v, 4f, 2, 7) - 0.5f) * 0.2f;
+                float grain = ((float)random.NextDouble() - 0.5f) * 0.06f;
+                float f = 0.82f + (row * 0.22f) + patch + grain;
+                return new Color(color.r * f, color.g * f, color.b * f);
+            });
+        }
+
         private static float Track(float u, float center)
         {
             float d = (u - center) / 0.035f;

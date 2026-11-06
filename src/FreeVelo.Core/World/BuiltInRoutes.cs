@@ -14,7 +14,8 @@ namespace FreeVelo.Core.World
 
         private static readonly Dictionary<string, Func<Route>> Factories = new Dictionary<string, Func<Route>>
         {
-            [DefaultId] = () => ProceduralRoutes.Generate(seed: 1, lengthM: 10_000, hilliness: 0.6),
+            // The main loop of the generated world (road network with junctions, river, lakes).
+            [DefaultId] = () => Gen.WorldMap.Default.MainLoop,
         };
 
         private static readonly Dictionary<string, Route> Cache = new Dictionary<string, Route>();

@@ -5,6 +5,18 @@ using FreeVelo.ModelPreview;
 
 // Renders the procedural rider/bike (exactly the geometry Unity uses) from several cameras into one PNG.
 // Usage: dotnet run -c Release -- out.png [crankDegrees] [views: game,side,rear34,front34,face,drive,cockpit,top]
+if (args.Length > 1 && args[0] == "--scenery")
+{
+    WorldPreview.Gallery(args[1], args.Length > 2 ? int.Parse(args[2]) : 0, args.Length > 3 ? args[3] : null);
+    return;
+}
+
+if (args.Length > 1 && args[0] == "--map")
+{
+    WorldPreview.Map(args[1], args.Length > 2 ? int.Parse(args[2]) : FreeVelo.Core.World.Gen.WorldMap.DefaultSeed);
+    return;
+}
+
 if (args.Length > 1 && args[0] == "--icons")
 {
     // Icon sheet for checking the procedural UI icons: dark background, white icons at 96 px and 32 px.

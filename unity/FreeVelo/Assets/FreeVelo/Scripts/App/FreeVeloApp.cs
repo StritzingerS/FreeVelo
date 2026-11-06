@@ -2,6 +2,7 @@ using System.Linq;
 using FreeVelo.Ble;
 using FreeVelo.Net;
 using FreeVelo.Core.World;
+using FreeVelo.Core.World.Gen;
 using FreeVelo.Ride;
 using FreeVelo.UI;
 using FreeVelo.World;
@@ -17,6 +18,8 @@ namespace FreeVelo.App
         private BleService _ble;
         private RideController _ride;
         private GroupRideService _group;
+        private WorldBuilder _world;
+        private System.Threading.Tasks.Task<(FreeVelo.Core.World.Gen.Terrain Terrain, SceneryLayout Layout)> _worldTask;
         private RiderAvatar _avatar;
         private Camera _camera;
         private float _lean;
@@ -61,17 +64,27 @@ namespace FreeVelo.App
 
             _ble = gameObject.AddComponent<BleService>();
             var world = gameObject.AddComponent<WorldBuilder>();
+            _world = world;
             _ride = gameObject.AddComponent<RideController>();
             var hud = gameObject.AddComponent<Hud>();
             _group = gameObject.AddComponent<GroupRideService>();
             var groupAvatars = gameObject.AddComponent<GroupAvatars>();
 
-            var route = BuiltInRoutes.Get(BuiltInRoutes.DefaultId); // same route the server uses for group rides
-            world.Build(route);
-            _ride.Initialize(_ble, route);
+            // The generated world: the road network is ready at once (also used by the server); terrain and
+            // scenery take a few seconds and are generated in the background, then built into the scene.
+            var map = WorldMap.Default;
+            var path = NetworkPath.OnMainLoop(map, 0, 0);
+            _worldTask = System.Threading.Tasks.Task.Run(() =>
+            {
+                var terrain = FreeVelo.Core.World.Gen.Terrain.Build(map);
+                return (terrain, SceneryLayout.Generate(terrain));
+            });
+            _ride.Initialize(_ble, path.Route);
+            _ride.Map = map;
+            _ride.Path = path;
             hud.Initialize(_ble, _ride);
             _ride.Group = _group;
-            groupAvatars.Initialize(world, _group, route);
+            groupAvatars.Initialize(world, _group, map.MainLoop);
             hud.InitializeGroup(_group, groupAvatars);
             _group.RestoreLobby(); // back into the group ride after an app restart
             _avatar = RiderAvatar.Create(world, new Color(0.1f, 0.45f, 0.85f));
@@ -124,6 +137,20 @@ namespace FreeVelo.App
             RenderSettings.fogColor = new Color(0.73f, 0.8f, 0.87f);
             RenderSettings.fogStartDistance = 180f;
             RenderSettings.fogEndDistance = 3600f;
+        }
+
+        private void Update()
+        {
+            if (_worldTask == null || !_worldTask.IsCompleted) return;
+            var task = _worldTask;
+            _worldTask = null;
+            if (task.IsFaulted)
+            {
+                Debug.LogException(task.Exception);
+                return;
+            }
+
+            _world.Build(_ride.Map, task.Result.Terrain, task.Result.Layout);
         }
 
         private void LateUpdate()
