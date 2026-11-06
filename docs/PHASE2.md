@@ -56,7 +56,8 @@ container (ASP.NET Core + SQLite), so it runs on Oracle Free or any small VPS / 
       tokens once; tokens are kept on the phone
 - [x] Upload the FIT file from the device after a ride (automatic / manual), queue while offline with back-off,
       duplicates count as uploaded; status and "View on Strava" in the recent rides and the ride summary
-- [ ] Strava API app registered, client id/secret on Render (`docs/RENDER.md` → Strava); first real upload
+- [x] Strava API app registered, client id/secret on Render (`docs/RENDER.md` → Strava); first real upload
+      (ramp test, 2026-11-06)
 - [ ] Ask Strava for more than one athlete (needed before friends can connect)
 
 ### G. Carried over from phase 1
