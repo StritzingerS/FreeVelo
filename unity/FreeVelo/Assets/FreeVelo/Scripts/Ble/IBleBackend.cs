@@ -1,0 +1,56 @@
+using System;
+using System.Collections.Generic;
+using FreeVelo.Devices.Session;
+
+namespace FreeVelo.Ble
+{
+    /// <summary>Callbacks from a BLE backend. May be called from any thread.</summary>
+    public interface IBleCallbacks
+    {
+        void OnScanResult(string address, string name, int rssi, string servicesCsv);
+
+        /// <summary>DISCONNECTED, CONNECTING, CONNECTED, READY or RECONNECTING.</summary>
+        void OnConnectionState(string address, string state);
+
+        void OnReady(string address, string servicesCsv);
+
+        void OnData(string address, string characteristic, string hex);
+
+        void OnError(string address, string message);
+    }
+
+    /// <summary>Platform BLE implementation: Android plugin on the phone, simulator in the editor.</summary>
+    public interface IBleBackend : IDisposable
+    {
+        string Name { get; }
+
+        /// <summary>Path of the byte log of this session, if any.</summary>
+        string LogFilePath { get; }
+
+        void Initialize(IBleCallbacks callbacks);
+
+        void StartScan();
+
+        void StopScan();
+
+        void Connect(string address);
+
+        void Disconnect(string address);
+
+        void Write(string address, Guid characteristic, byte[] data);
+
+        /// <summary>Sends these writes at their offsets on its own (while the app is in the background).</summary>
+        void ScheduleWrites(IReadOnlyList<ScheduledWrite> writes);
+
+        /// <summary>Drops scheduled writes that have not been sent yet.</summary>
+        void CancelScheduledWrites();
+
+        /// <summary>Calls <paramref name="tick"/> (seconds since the last call) every <paramref name="intervalMs"/> while Unity is paused.</summary>
+        void StartBackgroundTicks(Action<float> tick, int intervalMs);
+
+        void StopBackgroundTicks();
+
+        /// <summary>Called every frame on the Unity thread.</summary>
+        void Update(float deltaTime);
+    }
+}

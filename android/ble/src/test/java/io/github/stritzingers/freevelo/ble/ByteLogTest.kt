@@ -54,4 +54,23 @@ class ByteLogTest {
         val custom = UUID.fromString("6e40fec1-b5a3-f393-e0a9-e50e24dcca9e")
         assertEquals(custom.toString(), GattUuids.shortName(custom))
     }
+
+    @Test
+    fun hexRoundTrip() {
+        val data = byteArrayOf(0x00, 0x7F, 0x80.toByte(), 0xFF.toByte(), 0x4E)
+        assertEquals("007f80ff4e", ByteLog.toHex(UnityBleBridge.fromHex("007F80ff4e")))
+        assertEquals(ByteLog.toHex(data), ByteLog.toHex(UnityBleBridge.fromHex(ByteLog.toHex(data))))
+    }
+}
+
+class ScheduleParsingTest {
+    @org.junit.Test
+    fun parsesEntriesAndSkipsBrokenOnes() {
+        val entries = UnityBleBridge.parseSchedule(
+            "0|AA:BB|6e40fec3-b5a3-f393-e0a9-e50e24dcca9e|A4094F05;12500|AA:BB|uuid|0102;oops;-5|AA|u|00;7|AA|u|ABC",
+        )
+        org.junit.Assert.assertEquals(2, entries.size)
+        org.junit.Assert.assertEquals(12500L, entries[1].offsetMs)
+        org.junit.Assert.assertEquals("0102", entries[1].hex)
+    }
 }

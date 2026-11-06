@@ -12,5 +12,31 @@
         android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- Ride foreground service (keeps Bluetooth and recording alive with the screen off) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+
+    <application>
+        <!-- Lets the share sheet read FreeVelo files (FIT rides, logs). -->
+        <provider
+            android:name="io.github.stritzingers.freevelo.files.FreeVeloFileProvider"
+            android:authorities="${applicationId}.freevelo.files"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!-- Invisible helper that opens the system file picker (workout import). -->
+        <activity
+            android:name="io.github.stritzingers.freevelo.files.FilePickerActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <service
+            android:name="io.github.stritzingers.freevelo.ride.RideService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+    </application>
 </manifest>

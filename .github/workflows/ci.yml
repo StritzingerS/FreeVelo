@@ -38,7 +38,7 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v6
       - name: Unit tests and APK
-        run: ./gradlew --no-daemon :ble:testDebugUnitTest :testapp:testDebugUnitTest :testapp:assembleDebug
+        run: ./gradlew --no-daemon :ble:testDebugUnitTest :testapp:testDebugUnitTest :testapp:assembleDebug :ble:assembleRelease
 
       - name: Prepare APK
         run: |
@@ -64,3 +64,18 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "BLE Test App – build ${GITHUB_RUN_NUMBER}" \
             --notes "Debug build ${GITHUB_RUN_NUMBER} of the FreeVelo BLE test app from \`${GITHUB_REF_NAME}\` (${GITHUB_SHA::7}). Not for general use. Install guide: docs/TESTING.md"
+
+      # Bluetooth library for Unity (downloaded by the Unity editor script FreeVeloAndroidPlugins):
+      # https://github.com/StritzingerS/FreeVelo/releases/download/ble-android-latest/freevelo-ble.aar
+      - name: Publish Unity BLE plugin "ble-android-latest"
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp ble/build/outputs/aar/ble-release.aar out/freevelo-ble.aar
+          gh release delete ble-android-latest --yes --cleanup-tag || true
+          gh release create ble-android-latest out/freevelo-ble.aar \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Android BLE plugin for Unity – build ${GITHUB_RUN_NUMBER}" \
+            --notes "freevelo-ble.aar from \`${GITHUB_REF_NAME}\` (${GITHUB_SHA::7}). Downloaded automatically by the Unity project (menu FreeVelo → Update Android plugins)."

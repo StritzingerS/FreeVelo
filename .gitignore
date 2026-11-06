@@ -46,3 +46,19 @@ appsettings.*.local.json
 
 # Shared debug key for test builds (see android/testapp/build.gradle.kts)
 !android/testapp/debug.keystore
+
+# Unity (generated)
+unity/**/*.csproj
+unity/**/*.sln
+unity/**/*.slnx
+unity/**/.utmp/
+unity/**/.vsconfig
+unity/**/[Aa]ssets/[Pp]lugins/[Ff]ree[Vv]elo/*.pdb
+
+# Android plugins downloaded by the Unity editor script (menu FreeVelo → Update Android plugins)
+unity/**/[Aa]ssets/[Pp]lugins/[Aa]ndroid/freevelo-ble.aar*
+unity/**/[Aa]ssets/[Pp]lugins/[Aa]ndroid/kotlin-stdlib-*.jar*
+
+# Local-only Unity content (Asset Store models etc. – must not be pushed to the public repository)
+unity/**/[Aa]ssets/FreeVeloLocal/
+unity/**/[Aa]ssets/FreeVeloLocal.meta
