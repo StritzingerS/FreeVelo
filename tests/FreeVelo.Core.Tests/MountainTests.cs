@@ -180,4 +180,44 @@ public class MountainTests
 
         Assert.InRange(snow / (double)total, 0, 0.35);
     }
+
+    /// <summary>
+    /// Share of mountain road points (across the road) where a terrain mesh with <paramref name="cell"/> m cells rises
+    /// more than 0.5 m above the road, with the corners kept below the roads (RoadCap).
+    /// </summary>
+    private static double CoveredShare(Terrain terrain, double cell, bool distant)
+    {
+        var map = terrain.Map;
+        var m = terrain.Mountain!;
+        double Corner(double x, double z) => Math.Min(distant ? m.Coarse(x, z) - 1.5 : terrain.Height(x, z), terrain.RoadCap(x, z, cell));
+        int covered = 0, total = 0;
+        foreach (var e in map.Edges.Where(e => e.Kind != RoadKind.Home))
+        {
+            for (int i = 2; i < e.X.Length - 2; i += 6)
+            {
+                double hx = e.X[i + 1] - e.X[i - 1], hz = e.Z[i + 1] - e.Z[i - 1], l = Math.Sqrt((hx * hx) + (hz * hz));
+                foreach (double o in new[] { (-e.Width / 2) + 0.3, 0, (e.Width / 2) - 0.3 })
+                {
+                    double x = e.X[i] + (hz / l * o), z = e.Z[i] - (hx / l * o);
+                    if (terrain.InGrid(x, z)) continue;
+                    double gx = Math.Floor(x / cell) * cell, gz = Math.Floor(z / cell) * cell, fx = (x - gx) / cell, fz = (z - gz) / cell;
+                    double h = (((Corner(gx, gz) * (1 - fx)) + (Corner(gx + cell, gz) * fx)) * (1 - fz)) + (((Corner(gx, gz + cell) * (1 - fx)) + (Corner(gx + cell, gz + cell) * fx)) * fz);
+                    total++;
+                    if (h - e.E[i] > 0.5) covered++;
+                }
+            }
+        }
+
+        return (double)covered / total;
+    }
+
+    [Fact]
+    public void TerrainMeshesStayBelowTheRoads()
+    {
+        // Without the cap the distant 32 m tiles covered ~21 % of the road points, the 16 m version ~5 %.
+        var terrain = Ground.Value;
+        Assert.True(CoveredShare(terrain, 4, false) < 0.002, "4 m near detail");
+        Assert.True(CoveredShare(terrain, 8, false) < 0.006, "8 m lower detail");
+        Assert.True(CoveredShare(terrain, 32, true) < 0.01, "32 m distant tiles");
+    }
 }

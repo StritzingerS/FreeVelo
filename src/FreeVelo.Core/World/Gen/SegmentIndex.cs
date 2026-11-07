@@ -69,6 +69,32 @@ namespace FreeVelo.Core.World.Gen
             return Math.Sqrt(best);
         }
 
+        /// <summary>Lowest of <paramref name="values"/> (per point) on the segments within <paramref name="maxDistance"/>, else +∞.</summary>
+        public double LowestWithin(double x, double z, double maxDistance, double[] values)
+        {
+            double lowest = double.PositiveInfinity, max2 = maxDistance * maxDistance;
+            int r = (int)Math.Ceiling(maxDistance / _cell);
+            int cx0 = Cell(x), cz0 = Cell(z);
+            for (int cx = cx0 - r; cx <= cx0 + r; cx++)
+            {
+                for (int cz = cz0 - r; cz <= cz0 + r; cz++)
+                {
+                    if (!_cells.TryGetValue(Key(cx, cz), out var list)) continue;
+                    foreach (int i in list)
+                    {
+                        double ax = _x[i], az = _z[i], bx = _x[i + 1], bz = _z[i + 1];
+                        double abx = bx - ax, abz = bz - az;
+                        double len2 = (abx * abx) + (abz * abz);
+                        double f = len2 > 0 ? Math.Max(0, Math.Min(1, (((x - ax) * abx) + ((z - az) * abz)) / len2)) : 0;
+                        double dx = ax + (abx * f) - x, dz = az + (abz * f) - z;
+                        if ((dx * dx) + (dz * dz) < max2) lowest = Math.Min(lowest, Math.Min(values[i], values[i + 1]));
+                    }
+                }
+            }
+
+            return lowest;
+        }
+
         private int Cell(double v) => (int)Math.Floor(v / _cell);
 
         private static long Key(int x, int z) => ((long)x << 32) ^ (uint)z;

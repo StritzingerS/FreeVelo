@@ -41,7 +41,8 @@ namespace FreeVelo.World
         /// <summary>Heights and items of one detailed tile, computed off the main thread.</summary>
         private sealed class NearTileData
         {
-            public readonly List<(int Cx, int Cz, float[] Heights, int N, List<SceneryItem> Items, GroundKind[] Cover)> Chunks = new List<(int, int, float[], int, List<SceneryItem>, GroundKind[])>();
+            /// <summary>Per piece: heights for the 4 m mesh and for its 8 m version (both kept below the roads).</summary>
+            public readonly List<(int Cx, int Cz, float[] Heights, float[] Coarse, int N, List<SceneryItem> Items, GroundKind[] Cover)> Chunks = new List<(int, int, float[], float[], int, List<SceneryItem>, GroundKind[])>();
         }
 
         private readonly Dictionary<(int, int), MountainTile> _tiles = new Dictionary<(int, int), MountainTile>();
@@ -144,7 +145,8 @@ namespace FreeVelo.World
                         for (int i = 0; i <= per; i++)
                         {
                             float x = x0 + (i * step), z = z0 + (j * step);
-                            float h = (float)m.Coarse(x, z);
+                            // Natural ground, kept below the roads next to it (big triangles would cut through them).
+                            float h = (float)System.Math.Min(m.Coarse(x, z), _terrain.RoadCap(x, z, step) + 1.5); // (−1.5 below)
                             float hx = (float)(m.Coarse(x + 8, z) - m.Coarse(x - 8, z)), hz = (float)(m.Coarse(x, z + 8) - m.Coarse(x, z - 8));
                             vertices.Add(new Vector3(x, h - 1.5f, z));
                             normals.Add(new Vector3(-hx, 16f, -hz).normalized);
@@ -281,6 +283,20 @@ namespace FreeVelo.World
                         for (int i = 0; i < n; i++) heights[(j * n) + i] = (float)terrain.Height(x0 + ((i - 1) * cell), z0 + ((j - 1) * cell));
                     }
 
+                    // Keep the triangles below the roads: a corner next to a road may not be higher than the road
+                    // (the 8 m version has bigger triangles, so it reaches further).
+                    var coarse = (float[])heights.Clone();
+                    for (int j = 0; j < n; j++)
+                    {
+                        for (int i = 0; i < n; i++)
+                        {
+                            double x = x0 + ((i - 1) * cell), z = z0 + ((j - 1) * cell);
+                            int k = (j * n) + i;
+                            heights[k] = (float)System.Math.Min(heights[k], terrain.RoadCap(x, z, cell));
+                            coarse[k] = (float)System.Math.Min(coarse[k], terrain.RoadCap(x, z, 2 * cell));
+                        }
+                    }
+
                     var cover = new GroundKind[cells * cells];
                     for (int j = 0; j < cells; j++)
                     {
@@ -295,7 +311,7 @@ namespace FreeVelo.World
 
                     int chunkX = Mathf.RoundToInt(x0 / MountainChunk), chunkZ = Mathf.RoundToInt(z0 / MountainChunk);
                     var items = MountainLook.Items(terrain, Mathf.FloorToInt(x0 / (float)MountainLook.ChunkSize), Mathf.FloorToInt(z0 / (float)MountainLook.ChunkSize), seed);
-                    data.Chunks.Add((Mathf.RoundToInt((x0 - area.xMin) / MountainChunk), Mathf.RoundToInt((z0 - area.yMin) / MountainChunk), heights, n, items, cover));
+                    data.Chunks.Add((Mathf.RoundToInt((x0 - area.xMin) / MountainChunk), Mathf.RoundToInt((z0 - area.yMin) / MountainChunk), heights, coarse, n, items, cover));
                 }
             }
 
@@ -307,13 +323,13 @@ namespace FreeVelo.World
             if (tile.Near != null) return;
             var root = new GameObject($"Mountain detail {tile.Tx},{tile.Tz}");
             root.transform.SetParent(_root.transform, false);
-            foreach (var (cx, cz, heights, n, items, cover) in data.Chunks)
+            foreach (var (cx, cz, heights, coarse, n, items, cover) in data.Chunks)
             {
                 float x0 = tile.Area.xMin + (cx * MountainChunk), z0 = tile.Area.yMin + (cz * MountainChunk);
                 var go = new GameObject($"Ground {cx},{cz}");
                 go.transform.SetParent(root.transform, false);
                 var near = AddRenderer(go.transform, "LOD0", NearChunkMesh(x0, z0, heights, n, cover, 1), _coverMaterials, false);
-                var far = AddRenderer(go.transform, "LOD1", NearChunkMesh(x0, z0, heights, n, cover, 4), _coverMaterials, false);
+                var far = AddRenderer(go.transform, "LOD1", NearChunkMesh(x0, z0, coarse, n, cover, 2), _coverMaterials, false);
                 var group = go.AddComponent<LODGroup>();
                 group.SetLODs(new[] { new LOD(0.18f, new Renderer[] { near }), new LOD(0.0005f, new Renderer[] { far }) });
                 group.RecalculateBounds();
@@ -349,7 +365,7 @@ namespace FreeVelo.World
             _lastInstanceUpdate = new Vector3(float.MaxValue, 0, 0);
         }
 
-        /// <summary>One 128 m piece at 4 m (step 1) or 16 m (step 4), submeshes by ground cover, with a skirt.</summary>
+        /// <summary>One 128 m piece at 4 m (step 1) or 8 m (step 2), submeshes by ground cover, with a skirt.</summary>
         private static Mesh NearChunkMesh(float x0, float z0, float[] heights, int n, GroundKind[] cover, int step)
         {
             const int cells = 32;

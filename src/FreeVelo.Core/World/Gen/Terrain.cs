@@ -128,6 +128,32 @@ namespace FreeVelo.Core.World.Gen
             return best;
         }
 
+        /// <summary>
+        /// Highest a terrain mesh corner may be so that no triangle of a mesh with <paramref name="cellM"/> cells rises
+        /// above a road next to it: the lowest road within reach, minus a margin (+∞ when no road is that close). A
+        /// corner on a road's own bed is left alone, so roads above each other in hairpins keep their ground.
+        /// Coarse meshes (distant views, lower detail) need this: on steep slopes their big triangles otherwise cut
+        /// through the road where it is cut into the hillside.
+        /// </summary>
+        public double RoadCap(double x, double z, double cellM)
+        {
+            // Quick exit far from the mountain roads (16 m distance map; home roads only run inside the home grid).
+            double reachCells = cellM * 1.42;
+            var m = Mountain;
+            if (m != null && !InGrid(x, z) && m.Contains(x, z) && m.RoadDistance(x, z) > reachCells + 30) return double.PositiveInfinity;
+
+            double own = DistanceToRoad(x, z, 8, out var road, out _, out _);
+            if (road != null && own <= (road.Width / 2) + 1.3) return double.PositiveInfinity;
+            double cap = double.PositiveInfinity;
+            for (int i = 0; i < _roads.Count; i++)
+            {
+                var e = _map.Edges[i];
+                cap = Math.Min(cap, _roads[i].LowestWithin(x, z, (e.Width / 2) + reachCells, e.E) - 0.6);
+            }
+
+            return cap;
+        }
+
         /// <summary>Distance to the river centre (up to <paramref name="max"/>) and its water level there.</summary>
         public double DistanceToRiver(double x, double z, double max, out double level)
         {
