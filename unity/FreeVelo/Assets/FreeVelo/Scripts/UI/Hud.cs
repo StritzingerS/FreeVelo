@@ -301,12 +301,33 @@ namespace FreeVelo.UI
             return e;
         }
 
+        /// <summary>Height range a whole-round profile shows at least, so small hills don't look like mountains.</summary>
+        private const double MinRoundSpanM = 100;
+
+        /// <summary>Same for the "next 3 km" profile.</summary>
+        private const double MinAheadSpanM = 60;
+
+        /// <summary>Metres up and down between two distances (sampled every 10 m).</summary>
+        private static (double Up, double Down) Climbing(FreeVelo.Core.World.Route route, double from, double to)
+        {
+            double up = 0, down = 0, last = route.Sample(from).Y;
+            for (double d = from + 10; d <= to; d += 10)
+            {
+                double y = route.Sample(d).Y;
+                if (y > last) up += y - last;
+                else down += last - y;
+                last = y;
+            }
+
+            return (up, down);
+        }
+
         private void DrawElevation(Rect r, FreeVelo.Core.World.Route route, double position)
         {
             int n = ProfileBars(r);
             var e = ProfileHeights(route, 0, route.LengthM, n, double.MaxValue);
             double min = e.Min(), max = e.Max();
-            double span = System.Math.Max(20, max - min);
+            double span = System.Math.Max(MinRoundSpanM, max - min);
             float px = position >= 0 ? r.x + (r.width * (float)(position / route.LengthM)) : float.NegativeInfinity;
             for (int i = 0; i < n; i++)
             {

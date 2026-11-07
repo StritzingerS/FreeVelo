@@ -105,6 +105,32 @@ namespace FreeVelo.UI
         private static string RouteLabel(FreeVelo.Core.World.Route route) =>
             route.Climbs != null && route.Climbs.Count > 0 ? string.Format(L.Get("climb_loop"), route.Climbs[0].Name) : L.Get("main_loop");
 
+        private FreeVelo.Core.World.Route _climbedRoute;
+        private double[] _climbed;
+
+        /// <summary>Metres climbed from the start of a round, every 10 m (worked out once per route).</summary>
+        private double[] ClimbedAlong(FreeVelo.Core.World.Route route)
+        {
+            if (_climbedRoute == route) return _climbed;
+            int n = (int)(route.LengthM / 10) + 1;
+            var climbed = new double[n];
+            double last = route.Sample(0).Y;
+            for (int i = 1; i < n; i++)
+            {
+                double y = route.Sample(i * 10.0).Y;
+                climbed[i] = climbed[i - 1] + System.Math.Max(0, y - last);
+                last = y;
+            }
+
+            _climbedRoute = route;
+            _climbed = climbed;
+            return climbed;
+        }
+
+        /// <summary>Right-aligned summary in the strip's title row.</summary>
+        private static void StripCorner(Rect card, string text) =>
+            GUI.Label(new Rect(card.xMax - 418, card.y + 6, 400, 22), text, Theme.With(Theme.Caption, Theme.Text, anchor: TextAnchor.MiddleRight));
+
         private void DrawRideStrip()
         {
             var route = _ride.Route;
@@ -117,13 +143,23 @@ namespace FreeVelo.UI
             if (route.IsLoop)
             {
                 GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), $"{RouteLabel(route)} · {route.LengthM / 1000:0.0} km", Theme.Caption);
-                DrawElevation(graph, route, d % route.LengthM);
+                // Corner: climbing still to come in this round, of the whole round.
+                double pos = d % route.LengthM;
+                var climbed = ClimbedAlong(route);
+                double total = climbed[climbed.Length - 1];
+                double done = climbed[Mathf.Clamp((int)(pos / 10), 0, climbed.Length - 1)];
+                StripCorner(card, string.Format(L.Get("ascent_left"), $"<color=#4ADE80>↑</color> <b>{total - done:0} m</b>", $"{total:0} m"));
+                DrawElevation(graph, route, pos);
             }
             else
             {
                 GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), L.Get("ahead_3km"), Theme.Caption);
                 // Beyond the next junction: the way the rider would take by default (or has chosen there).
-                DrawElevationAhead(graph, _ride.Path != null && _ride.Route == _ride.Path.Route ? _ride.Path.Preview(d + 3000) : route, d);
+                var ahead = _ride.Path != null && _ride.Route == _ride.Path.Route ? _ride.Path.Preview(d + 3000) : route;
+                // Corner: metres up and down in the next 3 km.
+                var (up, down) = Climbing(ahead, d, System.Math.Min(d + 3000, ahead.LengthM));
+                StripCorner(card, $"<color=#4ADE80>↑</color> <b>{up:0} m</b>   <color=#60A5FA>↓</color> <b>{down:0} m</b>");
+                DrawElevationAhead(graph, ahead, d);
             }
         }
 
@@ -138,7 +174,7 @@ namespace FreeVelo.UI
             double fixedUntil = upcoming != null ? upcoming.DistanceM : end;
             var e = ProfileHeights(route, from, to, n, end);
             double min = e.Min(), max = e.Max();
-            double span = System.Math.Max(20, max - min);
+            double span = System.Math.Max(MinAheadSpanM, max - min);
             float px = r.x + (r.width * (float)((distance - from) / (to - from)));
             for (int i = 0; i < n; i++)
             {
@@ -150,11 +186,16 @@ namespace FreeVelo.UI
 
             Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
 
-            // Junction marker.
-            if (upcoming != null && upcoming.DistanceM < to)
+            // Junction marker: a dashed line with the chosen way on (left / straight / right) on top.
+            if (upcoming != null && upcoming.DistanceM < to && upcoming.Options.Count > 0)
             {
                 float jx = r.x + (r.width * (float)((upcoming.DistanceM - from) / (to - from)));
-                Ui.Rect(new Rect(jx - 1, r.y, 2, r.height), Theme.Alpha(Theme.Warning, 0.9f), 1);
+                var color = Theme.Alpha(Theme.Warning, 0.95f);
+                for (float y = r.y + 20; y < r.yMax; y += 9) Ui.Rect(new Rect(jx - 1, y, 2, Mathf.Min(5, r.yMax - y)), color, 1);
+                float turn = (float)upcoming.Options[upcoming.Chosen].TurnDegrees;
+                var icon = turn < -25 ? Icon.TurnLeft : turn > 25 ? Icon.TurnRight : Icon.Straight;
+                Ui.Dot(new Vector2(jx, r.y + 8), 10, color);
+                Ui.DrawIcon(new Rect(jx - 7, r.y + 1, 14, 14), icon, Theme.Background);
             }
         }
     }
