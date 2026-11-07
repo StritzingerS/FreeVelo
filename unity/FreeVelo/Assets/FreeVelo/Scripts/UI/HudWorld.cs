@@ -48,13 +48,17 @@ namespace FreeVelo.UI
             var logo = new Rect((_w - logoW) / 2f, (_h - logoH) / 2f - 30, logoW, logoH);
             if (_splashLogo != null) GUI.DrawTexture(logo, _splashLogo, ScaleMode.ScaleToFit);
 
-            // Indeterminate progress: a short bar sliding back and forth under the logo.
+            // Indeterminate progress: a short bar sweeping left to right under the logo (in at the left edge, out
+            // at the right, again), eased so it speeds up and slows down.
             float barW = Mathf.Min(320, _w * 0.4f);
             var track = new Rect((_w - barW) / 2f, logo.yMax + 36, barW, 6);
             Ui.Rect(track, Theme.Alpha(Theme.Surface2, alpha), 3);
-            float t = (Mathf.Sin(Time.unscaledTime * 2.4f) + 1) / 2f;
+            float t = Mathf.Repeat(Time.unscaledTime / 1.3f, 1f);
+            t = t * t * (3 - (2 * t));
             float seg = barW * 0.3f;
-            Ui.Rect(new Rect(track.x + ((barW - seg) * t), track.y, seg, track.height), Theme.Alpha(Theme.Accent, alpha), 3);
+            float x0 = Mathf.Max(track.x, track.x - seg + ((barW + seg) * t));
+            float x1 = Mathf.Min(track.xMax, track.x + ((barW + seg) * t));
+            if (x1 > x0) Ui.Rect(new Rect(x0, track.y, x1 - x0, track.height), Theme.Alpha(Theme.Accent, alpha), 3);
             GUI.Label(new Rect(0, track.yMax + 14, _w, 26), L.Get("loading_world"), Theme.With(Theme.Body, Theme.Muted, 16, TextAnchor.MiddleCenter));
 
             GUI.color = old;
