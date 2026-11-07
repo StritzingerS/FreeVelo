@@ -92,7 +92,7 @@ namespace FreeVelo.UI
             // Elevation gained on the climb so far, of its total gain.
             double gained = System.Math.Max(0, _ride.Position.Y - _ride.Route.Sample(c.StartM).Y);
             Ui.DrawIcon(new Rect(card.x + 22, card.y + 170, 18, 18), Icon.Ascent, Theme.Success);
-            GUI.Label(new Rect(card.x + 48, card.y + 168, card.width - 70, 22),
+            GUI.Label(new Rect(card.x + 48, card.y + 168, 150, 22),
                 $"<b>{System.Math.Min(gained, c.GainM):0} m</b> <color=#B3BECA>/ {c.GainM:0} m</color>", Theme.With(Theme.Body, size: 16));
 
             // Gap to the best time, assuming the best ascent went at an even pace over the distance.
@@ -101,7 +101,7 @@ namespace FreeVelo.UI
                 double gap = elapsed - (rec.BestS * frac);
                 string text = (gap > 0 ? "+" : "−") + Ui.Clock(System.Math.Abs(gap));
                 GUI.Label(new Rect(card.x + 22, card.y + 62, card.width - 44, 56), text, Theme.With(Theme.H3, gap > 0 ? Theme.Danger : Theme.Success, 20, TextAnchor.MiddleRight));
-                GUI.Label(new Rect(card.x + 22, card.y + 140, card.width - 44, 22), $"{L.Get("best_time")} {Ui.Clock(rec.BestS)}", Theme.With(Theme.Caption, anchor: TextAnchor.MiddleRight));
+                GUI.Label(new Rect(card.x + 22, card.y + 168, card.width - 44, 22), $"{L.Get("best_time")} {Ui.Clock(rec.BestS)}", Theme.With(Theme.Caption, anchor: TextAnchor.MiddleRight));
             }
         }
 

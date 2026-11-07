@@ -866,10 +866,24 @@ namespace FreeVelo.UI
             float side = (barW - powerW) / 6f;
 
             // Left: the ride so far (time, distance, elevation gained); right: live values (speed, cadence, heart rate).
+            // All six share one font size: the largest at which every value fits.
             double km = _ride.RideDistanceM / 1000;
-            Metric(new Rect(bar.x, bar.y, side, bar.height), Icon.Timer, L.Get("time"), Ui.Clock(_ride.ElapsedS), null, Theme.Text);
-            Metric(new Rect(bar.x + side, bar.y, side, bar.height), Icon.Distance, L.Get("distance"), km < 10 ? $"{km:0.00}" : $"{km:0.0}", "km", Theme.Info);
-            Metric(new Rect(bar.x + (2 * side), bar.y, side, bar.height), Icon.Ascent, L.Get("ascent"), $"{_ride.AscentM:0}", "m", Theme.Success);
+            var metrics = new (Icon Icon, string Value, string Unit, Color Color)[]
+            {
+                (Icon.Timer, Ui.Clock(_ride.ElapsedS), null, Theme.Text),
+                (Icon.Distance, km < 10 ? $"{km:0.00}" : $"{km:0.0}", "km", Theme.Info),
+                (Icon.Ascent, $"{_ride.AscentM:0}", "m", Theme.Success),
+                (Icon.Speed, $"{_ride.SpeedMps * 3.6:0.0}", "km/h", Theme.Text),
+                (Icon.Cadence, live.CadenceRpm.HasValue ? $"{live.CadenceRpm:0}" : "–", "rpm", Theme.Text),
+                (Icon.Heart, live.HeartRateBpm.HasValue ? $"{live.HeartRateBpm}" : "–", "bpm", Theme.HeartRed),
+            };
+            var metricStyle = Theme.With(Theme.Value, anchor: TextAnchor.MiddleCenter);
+            foreach (var m in metrics)
+            {
+                while (metricStyle.fontSize > 20 && metricStyle.CalcSize(new GUIContent(MetricText(m.Value, m.Unit))).x > side - 8) metricStyle.fontSize -= 2;
+            }
+
+            for (int i = 0; i < 3; i++) Metric(new Rect(bar.x + (i * side), bar.y, side, bar.height), metrics[i].Icon, metrics[i].Value, metrics[i].Unit, metrics[i].Color, metricStyle);
 
             // Power (centre), coloured by how well the target is held.
             var p = new Rect(bar.x + (3 * side), bar.y - 8, powerW, bar.height + 16);
@@ -886,9 +900,7 @@ namespace FreeVelo.UI
             string sub = workout && state.TargetW.HasValue ? $"{L.Get("target")} {state.TargetW} W" : $"{_ride.Power3s / Mathf.Max(1f, AppSettings.RiderWeightKg):0.0} W/kg";
             GUI.Label(new Rect(p.x, p.yMax - 32, p.width, 22), sub, Theme.With(Theme.Caption, anchor: TextAnchor.MiddleCenter));
 
-            Metric(new Rect(p.xMax, bar.y, side, bar.height), Icon.Speed, L.Get("speed"), $"{_ride.SpeedMps * 3.6:0.0}", "km/h", Theme.Text);
-            Metric(new Rect(p.xMax + side, bar.y, side, bar.height), Icon.Cadence, L.Get("cadence"), live.CadenceRpm.HasValue ? $"{live.CadenceRpm:0}" : "–", "rpm", Theme.Text);
-            Metric(new Rect(p.xMax + (2 * side), bar.y, side, bar.height), Icon.Heart, L.Get("heart_rate"), live.HeartRateBpm.HasValue ? $"{live.HeartRateBpm}" : "–", "bpm", Theme.HeartRed);
+            for (int i = 3; i < 6; i++) Metric(new Rect(p.xMax + ((i - 3) * side), bar.y, side, bar.height), metrics[i].Icon, metrics[i].Value, metrics[i].Unit, metrics[i].Color, metricStyle);
 
             // Chips under the bar: gradient (and braking)
             float cy = bar.yMax + 16;
@@ -947,14 +959,13 @@ namespace FreeVelo.UI
         }
 
         /// <summary>Metric in the ride bar: icon above, value with unit (no text label, so it fits in every language).</summary>
-        private static void Metric(Rect r, Icon icon, string label, string value, string unit, Color iconColor)
+        private static string MetricText(string value, string unit) => unit != null ? $"{value}<size=15><color=#B3BECA> {unit}</color></size>" : value;
+
+        /// <summary>Metric in the ride bar: icon above, value with unit (no text label, so it fits in every language).</summary>
+        private static void Metric(Rect r, Icon icon, string value, string unit, Color iconColor, GUIStyle style)
         {
             Ui.DrawIcon(new Rect(r.center.x - 10, r.y + 16, 20, 20), icon, iconColor);
-            string v = unit != null ? $"{value}<size=15><color=#B3BECA> {unit}</color></size>" : value;
-            // Seven values share the bar: long ones (1:23:45, 36.5 km/h) get a smaller font instead of overflowing.
-            var style = Theme.With(Theme.Value, anchor: TextAnchor.MiddleCenter);
-            while (style.fontSize > 20 && style.CalcSize(new GUIContent(v)).x > r.width - 8) style.fontSize -= 2;
-            GUI.Label(new Rect(r.x, r.y + 40, r.width, 56), v, style);
+            GUI.Label(new Rect(r.x, r.y + 40, r.width, 56), MetricText(value, unit), style);
         }
 
         private static void InfoChip(Rect r, Icon icon, string text, Color iconColor, GUIStyle style)

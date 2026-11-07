@@ -100,6 +100,10 @@ namespace FreeVelo.UI
         // ------------------------------------------------------------------ route strip
 
         /// <summary>Bottom strip in free rides: elevation of the next 3 km (or of the main loop in group rides).</summary>
+        /// <summary>Name of a round shown over the elevation strip: the main loop or the round over a climb.</summary>
+        private static string RouteLabel(FreeVelo.Core.World.Route route) =>
+            route.Climbs != null && route.Climbs.Count > 0 ? string.Format(L.Get("climb_loop"), route.Climbs[0].Name) : L.Get("main_loop");
+
         private void DrawRideStrip()
         {
             var route = _ride.Route;
@@ -111,7 +115,7 @@ namespace FreeVelo.UI
             double d = _ride.DistanceM;
             if (route.IsLoop)
             {
-                GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), $"{L.Get("main_loop")} · {route.LengthM / 1000:0.0} km", Theme.Caption);
+                GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), $"{RouteLabel(route)} · {route.LengthM / 1000:0.0} km", Theme.Caption);
                 DrawElevation(graph, route, d % route.LengthM);
             }
             else
