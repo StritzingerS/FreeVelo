@@ -24,7 +24,6 @@ namespace FreeVelo.App
         private Camera _camera;
         private float _lean;
         private float _orbit;
-        private float _riderScreenX = 0.5f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
@@ -221,17 +220,7 @@ namespace FreeVelo.App
             }
 
             _camera.transform.position = Vector3.Lerp(_camera.transform.position, target, 1f - Mathf.Exp(-4f * dt));
-            var look = position + (Vector3.up * 1.05f);
-            _camera.transform.LookAt(look);
-
-            // Menus: aim past the rider so it appears in the free area beside the menu, not behind it.
-            _riderScreenX = Mathf.Lerp(_riderScreenX, riding ? 0.5f : Hud.RiderScreenX, 1f - Mathf.Exp(-6f * dt));
-            if (Mathf.Abs(_riderScreenX - 0.5f) > 0.001f)
-            {
-                float halfWidth = Mathf.Tan(_camera.fieldOfView * 0.5f * Mathf.Deg2Rad) * _camera.aspect;
-                float distance = Vector3.Distance(_camera.transform.position, look);
-                _camera.transform.LookAt(look - (_camera.transform.right * ((_riderScreenX - 0.5f) * 2f * halfWidth * distance)));
-            }
+            _camera.transform.LookAt(position + (Vector3.up * 1.05f));
         }
     }
 }
