@@ -13,7 +13,7 @@ and the bike can be controlled with Zwift Click / Play buttons and virtual gears
       an upload) – needed before friends can connect Strava
 - [ ] Long validation ride: full 4×4 on the Neo 2, partly with the phone locked; FIT file checked in
       Garmin Connect / Strava (carried over from phase 1)
-- [ ] Afterwards: merge `phase2-server` into `main`, switch the Render Blueprint to `main`
+- [x] Afterwards: merge `phase2-server` into `main`, switch the Render Blueprint to `main`
 
 Known limitations from phase 2 (fix if they get in the way): the group ride only reconnects while the app is in the
 foreground; pending friend requests are lost when the free server restarts; the free server needs up to a minute
