@@ -255,6 +255,7 @@ namespace FreeVelo.App
             ["to_next_junction"] = ("to the next junction", "bis zur nächsten Kreuzung"),
             ["ahead_3km"] = ("Next 3 km", "Nächste 3 km"),
             ["network_info"] = ("{0:0} km of roads · {1} junctions", "{0:0} km Straßen · {1} Kreuzungen"),
+            ["world_failed"] = ("The world could not be built – riding works, but without landscape.", "Die Welt konnte nicht erstellt werden – Fahren geht, aber ohne Landschaft."),
             ["loading_world"] = ("Building the world …", "Welt wird erstellt …"),
 
             // Group rides

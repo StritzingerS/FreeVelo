@@ -40,6 +40,12 @@ namespace FreeVelo.World
         /// <summary>True once the world has been built (terrain and scenery are generated in the background first).</summary>
         public bool IsBuilt => _root != null;
 
+        /// <summary>Set when generating the world failed (the app goes on without it instead of loading forever).</summary>
+        public bool Failed { get; set; }
+
+        /// <summary>Loading is over: built or failed.</summary>
+        public bool IsLoaded => IsBuilt || Failed;
+
         public void Build(WorldMap map, Terrain terrain, SceneryLayout layout)
         {
             if (_root != null) Destroy(_root);

@@ -85,6 +85,13 @@ namespace FreeVelo.UI
                 WorkoutStore.LastMessage = null;
             }
 
+            // Start-up: the loading screen until the world is built (the menus come in as it fades out).
+            if (_world != null && !_world.IsLoaded)
+            {
+                DrawLoadingScreen();
+                return;
+            }
+
             switch (_ride.State)
             {
                 case RideState.Riding:
@@ -107,7 +114,7 @@ namespace FreeVelo.UI
                     break;
             }
 
-            DrawWorldLoading();
+            DrawLoadingScreen(); // fading out
             Ui.DrawToast(_w, _h);
             DrawFriendRequests();
             Ui.DrawKeyboardBar(_w);

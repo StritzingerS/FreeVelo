@@ -17,18 +17,47 @@ namespace FreeVelo.UI
 
         public void InitializeWorld(WorldBuilder world) => _world = world;
 
-        /// <summary>While terrain and scenery are generated (a few seconds after the start).</summary>
-        private void DrawWorldLoading()
+        private Texture2D _splashLogo;
+        private float _worldBuiltAt = -1;
+        private const float LoadingFadeS = 0.45f;
+
+        /// <summary>
+        /// Start-up: a loading screen like the splash screen (same background and logo) covers the app until terrain,
+        /// scenery and the mountain are built, then fades out. Returns true while it hides everything behind it.
+        /// </summary>
+        private bool DrawLoadingScreen()
         {
-            if (_world == null || _world.IsBuilt) return;
-            var style = Theme.With(Theme.Body, Theme.Text, 17, TextAnchor.MiddleCenter);
-            string text = L.Get("loading_world");
-            float w = style.CalcSize(new GUIContent(text)).x + 56;
-            var r = new Rect(_w - w - 24, _h - 72, w, 48);
-            Ui.Card(r, Theme.Alpha(Theme.Background, 0.9f), 24);
-            float pulse = 0.5f + (0.5f * Mathf.Sin(Time.unscaledTime * 4f));
-            Ui.Dot(new Vector2(r.x + 22, r.center.y), 6, Theme.Alpha(Theme.Accent, 0.4f + (0.6f * pulse)));
-            GUI.Label(new Rect(r.x + 18, r.y, r.width - 18, r.height), text, style);
+            if (_world == null) return false;
+            float alpha = 1;
+            if (_world.IsLoaded)
+            {
+                if (_worldBuiltAt < 0) _worldBuiltAt = Time.unscaledTime;
+                alpha = 1 - ((Time.unscaledTime - _worldBuiltAt) / LoadingFadeS);
+                if (alpha <= 0) return false;
+            }
+
+            // Ui.Rect takes its own colour (GUI.color does not apply): the alpha is set on each colour.
+            var old = GUI.color;
+            GUI.color = new Color(1, 1, 1, alpha);
+            Ui.Rect(_full, Theme.Alpha(Theme.Background, alpha), 0);
+
+            _splashLogo ??= Resources.Load<Texture2D>("FreeVeloSplash");
+            float logoW = Mathf.Min(_w * 0.6f, 720);
+            float logoH = _splashLogo != null ? logoW * _splashLogo.height / _splashLogo.width : 0;
+            var logo = new Rect((_w - logoW) / 2f, (_h - logoH) / 2f - 30, logoW, logoH);
+            if (_splashLogo != null) GUI.DrawTexture(logo, _splashLogo, ScaleMode.ScaleToFit);
+
+            // Indeterminate progress: a short bar sliding back and forth under the logo.
+            float barW = Mathf.Min(320, _w * 0.4f);
+            var track = new Rect((_w - barW) / 2f, logo.yMax + 36, barW, 6);
+            Ui.Rect(track, Theme.Alpha(Theme.Surface2, alpha), 3);
+            float t = (Mathf.Sin(Time.unscaledTime * 2.4f) + 1) / 2f;
+            float seg = barW * 0.3f;
+            Ui.Rect(new Rect(track.x + ((barW - seg) * t), track.y, seg, track.height), Theme.Alpha(Theme.Accent, alpha), 3);
+            GUI.Label(new Rect(0, track.yMax + 14, _w, 26), L.Get("loading_world"), Theme.With(Theme.Body, Theme.Muted, 16, TextAnchor.MiddleCenter));
+
+            GUI.color = old;
+            return !_world.IsLoaded; // during the fade the app is already usable
         }
 
         // ------------------------------------------------------------------ junctions

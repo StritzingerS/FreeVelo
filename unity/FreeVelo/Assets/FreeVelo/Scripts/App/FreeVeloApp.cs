@@ -171,6 +171,8 @@ namespace FreeVelo.App
             if (task.IsFaulted)
             {
                 Debug.LogException(task.Exception);
+                _world.Failed = true;
+                FreeVelo.UI.Ui.Toast(L.Get("world_failed"));
                 return;
             }
 
