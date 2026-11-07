@@ -219,7 +219,13 @@ namespace FreeVelo.App
                 target = position + offset + (Vector3.up * 1.5f);
             }
 
-            _camera.transform.position = Vector3.Lerp(_camera.transform.position, target, 1f - Mathf.Exp(-4f * dt));
+            // Follow smoothly; after a jump (a climb started at its foot, joining a group elsewhere) cut straight to
+            // the rider instead of gliding through the mountain. Never below the ground.
+            var cam = (_camera.transform.position - target).sqrMagnitude > 60f * 60f
+                ? target
+                : Vector3.Lerp(_camera.transform.position, target, 1f - Mathf.Exp(-4f * dt));
+            if (_world.IsBuilt) cam.y = Mathf.Max(cam.y, _world.GroundHeight(cam.x, cam.z) + 0.6f);
+            _camera.transform.position = cam;
             _camera.transform.LookAt(position + (Vector3.up * 1.05f));
         }
     }
