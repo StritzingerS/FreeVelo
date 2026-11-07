@@ -868,7 +868,7 @@ namespace FreeVelo.UI
             // Left: the ride so far (time, distance, elevation gained); right: live values (speed, cadence, heart rate).
             double km = _ride.RideDistanceM / 1000;
             Metric(new Rect(bar.x, bar.y, side, bar.height), Icon.Timer, L.Get("time"), Ui.Clock(_ride.ElapsedS), null, Theme.Text);
-            Metric(new Rect(bar.x + side, bar.y, side, bar.height), Icon.Route, L.Get("distance"), km < 10 ? $"{km:0.00}" : $"{km:0.0}", "km", Theme.Info);
+            Metric(new Rect(bar.x + side, bar.y, side, bar.height), Icon.Distance, L.Get("distance"), km < 10 ? $"{km:0.00}" : $"{km:0.0}", "km", Theme.Info);
             Metric(new Rect(bar.x + (2 * side), bar.y, side, bar.height), Icon.Ascent, L.Get("ascent"), $"{_ride.AscentM:0}", "m", Theme.Success);
 
             // Power (centre), coloured by how well the target is held.

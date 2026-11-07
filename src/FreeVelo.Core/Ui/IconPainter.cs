@@ -57,6 +57,9 @@ namespace FreeVelo.Core.Ui
 
         /// <summary>Elevation gained: a mountain with an arrow up.</summary>
         Ascent,
+
+        /// <summary>Distance: a double arrow between two end marks (a measured length).</summary>
+        Distance,
     }
 
     /// <summary>
@@ -278,6 +281,13 @@ namespace FreeVelo.Core.Ui
                     break;
                 case Icon.Minus:
                     s.Add(new Polyline(2.4f, V(5, 12), V(19, 12)));
+                    break;
+                case Icon.Distance:
+                    s.Add(Line(V(3, 7), V(3, 17)));
+                    s.Add(Line(V(21, 7), V(21, 17)));
+                    s.Add(Line(V(8, 12), V(16, 12)));
+                    s.Add(new Polygon(V(5.2f, 12), V(10, 7.8f), V(10, 16.2f)));
+                    s.Add(new Polygon(V(18.8f, 12), V(14, 7.8f), V(14, 16.2f)));
                     break;
                 case Icon.Ascent:
                     s.Add(new Polygon(V(1.5f, 21), V(9, 9.5f), V(12.5f, 14.5f), V(15.5f, 11), V(22.5f, 21)));
