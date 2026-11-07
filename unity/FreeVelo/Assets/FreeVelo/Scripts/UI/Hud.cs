@@ -245,40 +245,13 @@ namespace FreeVelo.UI
 
             if (Ui.Button(new Rect(hero.xMax - 196, hero.yMax - 76, 172, 56), L.Get("start"), ButtonKind.Primary, Icon.Play)) _ride.StartRide(null);
 
-            // Quick start workouts
+            // Quick start: the training plan's next session (or a workout that suits the form), then the workouts
+            // ridden last.
             float y = hero.yMax + 26;
             GUI.Label(new Rect(c.x, y, 400, 20), L.Get("quick_start").ToUpperInvariant(), Theme.Overline);
-            var templates = WorkoutStore.Library.Templates;
-            var quick = new[] { 1, 4, 7 }.Where(i => i < templates.Count).Select(i => templates[i]).ToList();
-            float cw = (c.width - 16 * (quick.Count - 1)) / Mathf.Max(1, quick.Count);
-            var planNext = PlanStore.Active ? PlanStore.Plan.Next(System.DateTime.Now.Date) : null;
-            var planWorkout = PlanStore.WorkoutOf(planNext);
-            if (planWorkout != null)
-            {
-                // Training plan: its next session takes the first place.
-                var r = new Rect(c.x, y + 26, cw, 150);
-                bool isToday = planNext.Date == System.DateTime.Now.Date;
-                Ui.Card(r, Color.Lerp(Theme.Surface, Theme.Accent, 0.12f));
-                Ui.Outline(r, Theme.Alpha(Theme.Accent, 0.8f), 2, Theme.Radius);
-                GUI.Label(new Rect(r.x + 16, r.y + 12, r.width - 32, 18), (L.Get("plan") + " · " + (isToday ? L.Get("today") : DayLabel(planNext.Date))).ToUpperInvariant(), Theme.With(Theme.Overline, Theme.Accent));
-                GUI.Label(new Rect(r.x + 16, r.y + 32, r.width - 32, 26), planWorkout.Name.Get(AppSettings.Language), Clip(Theme.With(Theme.H3, size: 17)));
-                GUI.Label(new Rect(r.x + 16, r.y + 58, r.width - 32, 20), Meta(planWorkout) + (planNext.adjustPercent != 0 ? $" · {planNext.adjustPercent:+0;-0} %" : ""), Theme.Caption);
-                WorkoutProfile(new Rect(r.x + 16, r.y + 84, r.width - 86, 50), planWorkout, false);
-                if (Ui.IconButton(new Rect(r.xMax - 60, r.yMax - 60, 46, 46), Icon.Play, ButtonKind.Primary)) _ride.StartRide(planWorkout, planNext.Intensity);
-                quick.RemoveAt(quick.Count - 1);
-            }
-
-            int offset = planWorkout != null ? 1 : 0;
-            for (int i = 0; i < quick.Count; i++)
-            {
-                var r = new Rect(c.x + ((i + offset) * (cw + 16)), y + 26, cw, 150);
-                var w = quick[i];
-                Ui.Card(r);
-                GUI.Label(new Rect(r.x + 16, r.y + 14, r.width - 32, 26), w.Name.Get(AppSettings.Language), Clip(Theme.With(Theme.H3, size: 17)));
-                GUI.Label(new Rect(r.x + 16, r.y + 40, r.width - 32, 20), Meta(w), Theme.Caption);
-                WorkoutProfile(new Rect(r.x + 16, r.y + 74, r.width - 86, 58), w, false);
-                if (Ui.IconButton(new Rect(r.xMax - 60, r.yMax - 60, 46, 46), Icon.Play, ButtonKind.Primary)) _ride.StartRide(w);
-            }
+            var cards = QuickStartCards();
+            float cw = (c.width - (16 * (cards.Count - 1))) / Mathf.Max(1, cards.Count);
+            for (int i = 0; i < cards.Count; i++) DrawQuickCard(new Rect(c.x + (i * (cw + 16)), y + 26, cw, 150), cards[i]);
 
             // Devices status
             var dev = new Rect(c.x, y + 194, c.width, 72);
