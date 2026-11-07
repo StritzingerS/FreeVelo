@@ -89,24 +89,26 @@ namespace FreeVelo.Core.World
             }
         }
 
+        /// <summary>
+        /// The heading is the road's direction over this distance before and after the point, so it turns smoothly
+        /// through a bend instead of jumping at every polyline corner (up to 90° in a hairpin with 5 m points).
+        /// </summary>
+        public const double HeadingWindowM = 6;
+
         /// <summary>Position at <paramref name="distanceM"/>; loops wrap around, open routes are clamped.</summary>
         public RouteSample Sample(double distanceM)
         {
-            // Open routes may start at any distance (a path through the road network): clamp to their range.
-            double d = IsLoop ? Mod(distanceM, LengthM) : Math.Max(Points[0].DistanceM, Math.Min(LengthM, distanceM));
-
-            int lo = 0, hi = Points.Count - 1;
-            while (hi - lo > 1)
-            {
-                int mid = (lo + hi) / 2;
-                if (Points[mid].DistanceM <= d) lo = mid;
-                else hi = mid;
-            }
-
-            RoutePoint a = Points[lo], b = Points[hi];
+            double d = Clamp(distanceM);
+            int lo = Segment(d);
+            RoutePoint a = Points[lo], b = Points[lo + 1];
             double span = b.DistanceM - a.DistanceM;
             double f = span > 0 ? (d - a.DistanceM) / span : 0;
-            double heading = Math.Atan2(b.X - a.X, b.Z - a.Z);
+
+            var (bx, bz) = PointAt(Clamp(distanceM - HeadingWindowM));
+            var (ax, az) = PointAt(Clamp(distanceM + HeadingWindowM));
+            double heading = (ax - bx) * (ax - bx) + ((az - bz) * (az - bz)) > 1e-6
+                ? Math.Atan2(ax - bx, az - bz)
+                : Math.Atan2(b.X - a.X, b.Z - a.Z);
             return new RouteSample(
                 Lerp(a.X, b.X, f),
                 Lerp(a.ElevationM, b.ElevationM, f),
@@ -138,6 +140,32 @@ namespace FreeVelo.Core.World
         {
             double lean = Math.Atan(speedMps * speedMps * curvature / 9.81) * 180 / Math.PI;
             return Math.Max(-35, Math.Min(35, lean));
+        }
+
+        /// <summary>Open routes may start at any distance (a path through the road network): clamp to their range.</summary>
+        private double Clamp(double distanceM) => IsLoop ? Mod(distanceM, LengthM) : Math.Max(Points[0].DistanceM, Math.Min(LengthM, distanceM));
+
+        /// <summary>Index of the point that starts the segment containing <paramref name="d"/> (already clamped).</summary>
+        private int Segment(double d)
+        {
+            int lo = 0, hi = Points.Count - 1;
+            while (hi - lo > 1)
+            {
+                int mid = (lo + hi) / 2;
+                if (Points[mid].DistanceM <= d) lo = mid;
+                else hi = mid;
+            }
+
+            return Math.Min(lo, Points.Count - 2);
+        }
+
+        private (double X, double Z) PointAt(double d)
+        {
+            int i = Segment(d);
+            RoutePoint a = Points[i], b = Points[i + 1];
+            double span = b.DistanceM - a.DistanceM;
+            double f = span > 0 ? (d - a.DistanceM) / span : 0;
+            return (Lerp(a.X, b.X, f), Lerp(a.Z, b.Z, f));
         }
 
         private static double Lerp(double a, double b, double f) => a + ((b - a) * f);

@@ -96,4 +96,23 @@ public class RouteTests
         var route = new Route("circle", points, isLoop: false);
         Assert.InRange(route.CurvatureAt(200), 0.0097, 0.0103); // heading increases: right-hand bend
     }
+
+    [Fact]
+    public void HeadingTurnsSmoothlyThroughHairpins()
+    {
+        // Stelvio: 5 m points, hairpins turn up to 90° at a single point. Riding in 0.5 m steps the heading
+        // must never jump (the bike would snap to the next segment's direction).
+        var route = BuiltInRoutes.Get(BuiltInRoutes.StelvioId);
+        double maxStep = 0;
+        double last = route.Sample(0).HeadingRad;
+        for (double d = 0.5; d < route.LengthM; d += 0.5)
+        {
+            double h = route.Sample(d).HeadingRad;
+            double dh = Math.Abs(Math.IEEERemainder(h - last, 2 * Math.PI)) * 180 / Math.PI;
+            maxStep = Math.Max(maxStep, dh);
+            last = h;
+        }
+
+        Assert.True(maxStep < 10, $"heading jumped {maxStep:0.0}°");
+    }
 }
