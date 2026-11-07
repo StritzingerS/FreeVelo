@@ -190,15 +190,19 @@ namespace FreeVelo.UI
 
             Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
 
-            // Junction marker: a dashed line with a crossroads sign on top.
+            // Junction marker: a dashed line with a side-road warning sign on top – side road left, right or both,
+            // as the junction branches off.
             if (upcoming != null && upcoming.DistanceM < to)
             {
                 float jx = r.x + (r.width * (float)((upcoming.DistanceM - from) / (to - from)));
                 var color = Theme.Alpha(Theme.Warning, 0.95f);
-                for (float y = r.y + 22; y < r.yMax; y += 9) Ui.Rect(new Rect(jx - 1, y, 2, Mathf.Min(5, r.yMax - y)), color, 1);
-                // Crossroads warning sign: orange triangle, dark cross inside (lower part, where the triangle is wide).
-                Ui.DrawIcon(new Rect(jx - 11, r.y - 2, 22, 22), Icon.SignTriangle, color);
-                Ui.DrawIcon(new Rect(jx - 5, r.y + 8, 10, 10), Icon.Junction, Theme.Background);
+                for (float y = r.y + 20; y < r.yMax; y += 9) Ui.Rect(new Rect(jx - 1, y, 2, Mathf.Min(5, r.yMax - y)), color, 1);
+                bool left = upcoming.Options.Any(o => o.TurnDegrees < -25), right = upcoming.Options.Any(o => o.TurnDegrees > 25);
+                var symbol = left && !right ? Icon.SideRoadLeft : right && !left ? Icon.SideRoadRight : Icon.SideRoadBoth;
+                var sign = new Rect(jx - 13, r.y - 6, 26, 26);
+                Ui.DrawIcon(sign, Icon.SignTriangle, new Color(0.86f, 0.15f, 0.15f));
+                Ui.DrawIcon(sign, Icon.SignTriangleInner, Color.white);
+                Ui.DrawIcon(sign, symbol, new Color(0.05f, 0.05f, 0.05f));
             }
         }
     }

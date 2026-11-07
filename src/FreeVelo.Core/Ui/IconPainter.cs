@@ -66,6 +66,18 @@ namespace FreeVelo.Core.Ui
 
         /// <summary>A filled warning-sign triangle (point up), e.g. behind <see cref="Junction"/>.</summary>
         SignTriangle,
+
+        /// <summary>The inside of <see cref="SignTriangle"/> (its border left out): drawn white over the red triangle.</summary>
+        SignTriangleInner,
+
+        /// <summary>Side-road sign symbol (fits <see cref="SignTriangleInner"/>): main road, side road to the left.</summary>
+        SideRoadLeft,
+
+        /// <summary>Side road to the right.</summary>
+        SideRoadRight,
+
+        /// <summary>Side roads to both sides (crossroads).</summary>
+        SideRoadBoth,
     }
 
     /// <summary>
@@ -296,6 +308,22 @@ namespace FreeVelo.Core.Ui
                     s.Add(new Polygon(V(12, 1.5f), V(23, 21.5f), V(1, 21.5f)));
                     s.Add(new Polyline(2.6f, V(12, 1.5f), V(23, 21.5f), V(1, 21.5f), V(12, 1.5f)));
                     break;
+                case Icon.SignTriangleInner:
+                    s.Add(new Polygon(V(12, 6.5f), V(18.9f, 19.1f), V(5.1f, 19.1f)));
+                    s.Add(new Polyline(0.8f, V(12, 6.5f), V(18.9f, 19.1f), V(5.1f, 19.1f), V(12, 6.5f)));
+                    break;
+                case Icon.SideRoadLeft:
+                case Icon.SideRoadRight:
+                case Icon.SideRoadBoth:
+                {
+                    // Main road: thick, pointed at the top, swallowtail at the bottom; thin side road(s) at mid height.
+                    float c = icon == Icon.SideRoadLeft ? 13 : icon == Icon.SideRoadRight ? 11 : 12;
+                    s.Add(new Polygon(V(c, 9.8f), V(c + 1.55f, 11.5f), V(c + 1.55f, 18.2f), V(c, 16.8f), V(c - 1.55f, 18.2f), V(c - 1.55f, 11.5f)));
+                    if (icon != Icon.SideRoadRight) s.Add(new Box(V(icon == Icon.SideRoadBoth ? 8.6f : 8.4f, 13.6f), V(c - 1.3f, 14.9f), 0.2f));
+                    if (icon != Icon.SideRoadLeft) s.Add(new Box(V(c + 1.3f, 13.6f), V(icon == Icon.SideRoadBoth ? 15.4f : 15.6f, 14.9f), 0.2f));
+                    break;
+                }
+
                 case Icon.Distance:
                     s.Add(Line(V(3, 7), V(3, 17)));
                     s.Add(Line(V(21, 7), V(21, 17)));
