@@ -866,7 +866,8 @@ namespace FreeVelo.UI
             float side = (barW - powerW) / 6f;
 
             // Left: the ride so far (time, distance, elevation gained); right: live values (speed, cadence, heart rate).
-            // All six share one font size: the largest at which every value fits.
+            // All six share one fixed font size: the largest at which the widest value of each field fits (it only
+            // depends on the screen width, so it does not change while riding).
             double km = _ride.RideDistanceM / 1000;
             var metrics = new (Icon Icon, string Value, string Unit, Color Color)[]
             {
@@ -877,11 +878,7 @@ namespace FreeVelo.UI
                 (Icon.Cadence, live.CadenceRpm.HasValue ? $"{live.CadenceRpm:0}" : "–", "rpm", Theme.Text),
                 (Icon.Heart, live.HeartRateBpm.HasValue ? $"{live.HeartRateBpm}" : "–", "bpm", Theme.HeartRed),
             };
-            var metricStyle = Theme.With(Theme.Value, anchor: TextAnchor.MiddleCenter);
-            foreach (var m in metrics)
-            {
-                while (metricStyle.fontSize > 20 && metricStyle.CalcSize(new GUIContent(MetricText(m.Value, m.Unit))).x > side - 8) metricStyle.fontSize -= 2;
-            }
+            var metricStyle = Theme.With(Theme.Value, anchor: TextAnchor.MiddleCenter, size: MetricFontSize(side));
 
             for (int i = 0; i < 3; i++) Metric(new Rect(bar.x + (i * side), bar.y, side, bar.height), metrics[i].Icon, metrics[i].Value, metrics[i].Unit, metrics[i].Color, metricStyle);
 
@@ -959,6 +956,29 @@ namespace FreeVelo.UI
         }
 
         /// <summary>Metric in the ride bar: icon above, value with unit (no text label, so it fits in every language).</summary>
+        /// <summary>Widest value of each field in the ride bar (the font is sized for these).</summary>
+        private static readonly (string Value, string Unit)[] WidestMetrics =
+        {
+            ("8:88:88", null), ("188.8", "km"), ("8888", "m"), ("88.8", "km/h"), ("188", "rpm"), ("188", "bpm"),
+        };
+
+        private float _metricFontWidth = -1;
+        private int _metricFontSize;
+
+        private int MetricFontSize(float width)
+        {
+            if (Mathf.Abs(width - _metricFontWidth) < 0.5f) return _metricFontSize;
+            var style = Theme.With(Theme.Value, anchor: TextAnchor.MiddleCenter);
+            foreach (var (value, unit) in WidestMetrics)
+            {
+                while (style.fontSize > 18 && style.CalcSize(new GUIContent(MetricText(value, unit))).x > width - 8) style.fontSize -= 1;
+            }
+
+            _metricFontWidth = width;
+            _metricFontSize = style.fontSize;
+            return _metricFontSize;
+        }
+
         private static string MetricText(string value, string unit) => unit != null ? $"{value}<size=15><color=#B3BECA> {unit}</color></size>" : value;
 
         /// <summary>Metric in the ride bar: icon above, value with unit (no text label, so it fits in every language).</summary>
