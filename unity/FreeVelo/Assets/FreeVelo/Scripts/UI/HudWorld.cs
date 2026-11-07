@@ -190,16 +190,15 @@ namespace FreeVelo.UI
 
             Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
 
-            // Junction marker: a dashed line with the chosen way on (left / straight / right) on top.
-            if (upcoming != null && upcoming.DistanceM < to && upcoming.Options.Count > 0)
+            // Junction marker: a dashed line with a crossroads sign on top.
+            if (upcoming != null && upcoming.DistanceM < to)
             {
                 float jx = r.x + (r.width * (float)((upcoming.DistanceM - from) / (to - from)));
                 var color = Theme.Alpha(Theme.Warning, 0.95f);
-                for (float y = r.y + 20; y < r.yMax; y += 9) Ui.Rect(new Rect(jx - 1, y, 2, Mathf.Min(5, r.yMax - y)), color, 1);
-                float turn = (float)upcoming.Options[upcoming.Chosen].TurnDegrees;
-                var icon = turn < -25 ? Icon.TurnLeft : turn > 25 ? Icon.TurnRight : Icon.Straight;
-                Ui.Dot(new Vector2(jx, r.y + 8), 10, color);
-                Ui.DrawIcon(new Rect(jx - 7, r.y + 1, 14, 14), icon, Theme.Background);
+                for (float y = r.y + 22; y < r.yMax; y += 9) Ui.Rect(new Rect(jx - 1, y, 2, Mathf.Min(5, r.yMax - y)), color, 1);
+                // Crossroads warning sign: orange triangle, dark cross inside (lower part, where the triangle is wide).
+                Ui.DrawIcon(new Rect(jx - 11, r.y - 2, 22, 22), Icon.SignTriangle, color);
+                Ui.DrawIcon(new Rect(jx - 5, r.y + 8, 10, 10), Icon.Junction, Theme.Background);
             }
         }
     }

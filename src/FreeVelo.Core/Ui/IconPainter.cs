@@ -60,6 +60,12 @@ namespace FreeVelo.Core.Ui
 
         /// <summary>Distance: a double arrow between two end marks (a measured length).</summary>
         Distance,
+
+        /// <summary>Junction: two roads crossing (like the crossroads warning sign).</summary>
+        Junction,
+
+        /// <summary>A filled warning-sign triangle (point up), e.g. behind <see cref="Junction"/>.</summary>
+        SignTriangle,
     }
 
     /// <summary>
@@ -281,6 +287,14 @@ namespace FreeVelo.Core.Ui
                     break;
                 case Icon.Minus:
                     s.Add(new Polyline(2.4f, V(5, 12), V(19, 12)));
+                    break;
+                case Icon.Junction:
+                    s.Add(new Polyline(4.2f, V(12, 3), V(12, 21)));
+                    s.Add(new Polyline(4.2f, V(3, 12), V(21, 12)));
+                    break;
+                case Icon.SignTriangle:
+                    s.Add(new Polygon(V(12, 1.5f), V(23, 21.5f), V(1, 21.5f)));
+                    s.Add(new Polyline(2.6f, V(12, 1.5f), V(23, 21.5f), V(1, 21.5f), V(12, 1.5f)));
                     break;
                 case Icon.Distance:
                     s.Add(Line(V(3, 7), V(3, 17)));
