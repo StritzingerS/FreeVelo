@@ -67,6 +67,9 @@ namespace FreeVelo.Core.Ui
         /// <summary>A filled warning-sign triangle (point up), e.g. behind <see cref="Junction"/>.</summary>
         SignTriangle,
 
+        /// <summary>Outline of a warning-sign triangle (one colour, with a side-road symbol inside).</summary>
+        SignTriangleOutline,
+
         /// <summary>The inside of <see cref="SignTriangle"/> (its border left out): drawn white over the red triangle.</summary>
         SignTriangleInner,
 
@@ -307,6 +310,9 @@ namespace FreeVelo.Core.Ui
                 case Icon.SignTriangle:
                     s.Add(new Polygon(V(12, 1.5f), V(23, 21.5f), V(1, 21.5f)));
                     s.Add(new Polyline(2.6f, V(12, 1.5f), V(23, 21.5f), V(1, 21.5f), V(12, 1.5f)));
+                    break;
+                case Icon.SignTriangleOutline:
+                    s.Add(new Polyline(2.6f, V(12, 3), V(21.8f, 20.6f), V(2.2f, 20.6f), V(12, 3)));
                     break;
                 case Icon.SignTriangleInner:
                     s.Add(new Polygon(V(12, 6.5f), V(18.9f, 19.1f), V(5.1f, 19.1f)));

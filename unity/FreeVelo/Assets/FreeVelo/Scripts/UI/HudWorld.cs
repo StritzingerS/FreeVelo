@@ -200,9 +200,9 @@ namespace FreeVelo.UI
                 bool left = upcoming.Options.Any(o => o.TurnDegrees < -25), right = upcoming.Options.Any(o => o.TurnDegrees > 25);
                 var symbol = left && !right ? Icon.SideRoadLeft : right && !left ? Icon.SideRoadRight : Icon.SideRoadBoth;
                 var sign = new Rect(jx - 13, r.y - 6, 26, 26);
-                Ui.DrawIcon(sign, Icon.SignTriangle, new Color(0.86f, 0.15f, 0.15f));
-                Ui.DrawIcon(sign, Icon.SignTriangleInner, Color.white);
-                Ui.DrawIcon(sign, symbol, new Color(0.05f, 0.05f, 0.05f));
+                // One colour, like the line: triangle outline and the roads inside.
+                Ui.DrawIcon(sign, Icon.SignTriangleOutline, color);
+                Ui.DrawIcon(sign, symbol, color);
             }
         }
     }
