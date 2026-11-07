@@ -53,6 +53,14 @@ object GattUuids {
     // Battery
     val BATTERY_LEVEL: UUID = fromShort(0x2A19)
 
+    // Zwift
+    /**
+     * Zwift service (Click / Click V2 / Play controllers, and trainers with built-in virtual shifting): async
+     * notifications (buttons, trainer data) and sync indications (handshake answers).
+     */
+    val ZWIFT_ASYNC: UUID = UUID.fromString("00000002-19ca-4651-86e5-fa29dcdd09d1")
+    val ZWIFT_SYNC_TX: UUID = UUID.fromString("00000004-19ca-4651-86e5-fa29dcdd09d1")
+
     // Descriptors
     val CLIENT_CHARACTERISTIC_CONFIG: UUID = fromShort(0x2902)
 
@@ -75,6 +83,8 @@ object GattUuids {
         CYCLING_POWER_MEASUREMENT,
         HEART_RATE_MEASUREMENT,
         BATTERY_LEVEL,
+        ZWIFT_SYNC_TX,
+        ZWIFT_ASYNC,
     )
 
     /** Characteristics read once after connecting. */

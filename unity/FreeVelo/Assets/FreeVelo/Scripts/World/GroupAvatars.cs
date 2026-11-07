@@ -33,7 +33,7 @@ namespace FreeVelo.World
         private readonly Dictionary<ushort, Remote> _remotes = new Dictionary<ushort, Remote>();
         private WorldBuilder _world;
         private GroupRideService _group;
-        private Route _route;
+        private System.Func<Route> _route;
 
         /// <summary>Riders on screen this frame (for name tags and emoji bubbles in the HUD).</summary>
         public List<(GroupRider Rider, Vector3 HeadPosition)> Visible { get; } = new List<(GroupRider, Vector3)>();
@@ -43,7 +43,8 @@ namespace FreeVelo.World
         /// <summary>Sideways position for a lane (kept on the road).</summary>
         public static float Lateral(float laneM) => Mathf.Clamp(BaseLateralM + laneM, 0.4f, 3.0f);
 
-        public void Initialize(WorldBuilder world, GroupRideService group, Route route)
+        /// <summary><paramref name="route"/>: the group ride's route (main loop or round the mountain).</summary>
+        public void Initialize(WorldBuilder world, GroupRideService group, System.Func<Route> route)
         {
             _world = world;
             _group = group;
@@ -73,10 +74,11 @@ namespace FreeVelo.World
                     _remotes[r.Slot] = remote;
                 }
 
-                var sample = _route.Sample(r.DistanceM);
+                var route = _route();
+                var sample = route.Sample(r.DistanceM);
                 float heading = (float)sample.HeadingRad * Mathf.Rad2Deg;
                 float pitch = -Mathf.Atan((float)sample.GradePercent / 100f) * Mathf.Rad2Deg;
-                float targetLean = (float)Route.LeanAngleDeg(r.SpeedMps, _route.CurvatureAt(r.DistanceM));
+                float targetLean = (float)Route.LeanAngleDeg(r.SpeedMps, route.CurvatureAt(r.DistanceM));
                 remote.Lean = Mathf.Lerp(remote.Lean, targetLean, 1f - Mathf.Exp(-dt / 0.4f));
                 var right = Quaternion.Euler(0, heading, 0) * Vector3.right;
                 var position = new Vector3((float)sample.X, (float)sample.Y + 0.05f, (float)sample.Z) + (right * Lateral(r.LaneM));

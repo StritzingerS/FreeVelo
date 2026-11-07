@@ -102,6 +102,10 @@ namespace FreeVelo.Core.Multiplayer
             // Anchor: the average rider on the real road (nobody pedaling → it rolls out to a stop).
             var here = _route.Sample(AnchorDistanceM);
             _anchor.Step(AverageWkg * ReferenceRiderKg, here.GradePercent, RoadSurfaces.RollingResistance(here.Surface), dtSeconds);
+            // Brake for bends: every rider of the group (up to MaxOffsetM behind or ahead of the anchor) must take
+            // them slowly enough.
+            double limit = Cornering.StepLimit(_route, AnchorDistanceM, _anchor.SpeedMps, dtSeconds, MaxOffsetM, MaxOffsetM);
+            Cornering.Brake(_anchor, limit, dtSeconds);
             AnchorDistanceM += _anchor.SpeedMps * dtSeconds;
 
             double alpha = 1 - Math.Exp(-dtSeconds / OffsetTauS);

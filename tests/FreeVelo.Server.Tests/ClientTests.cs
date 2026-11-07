@@ -112,7 +112,14 @@ public sealed class ClientTests : IDisposable
         using var samiLink = new LiveLink(await Connect(sami), samiState, Now);
         using var annaLink = new LiveLink(await Connect(anna), annaState, Now);
 
-        for (int i = 0; i < 40; i++)
+        // Ride on until Anna sees both riders and Sami ahead (at least 2 s, at most 8 s – CI machines can be slow).
+        bool Ready()
+        {
+            var r = annaState.Riders(Now());
+            return r.Count == 2 && r.Single(x => !x.IsMe).DistanceM > r.Single(x => x.IsMe).DistanceM;
+        }
+
+        for (int i = 0; i < 160 && (i < 40 || !Ready()); i++)
         {
             samiLink.Post(new RiderStateMessage { Wkg = 3.5f, CadenceRpm = 90, LaneM = samiState.MyHomeLaneM });
             annaLink.Post(new RiderStateMessage { Wkg = 2.5f, CadenceRpm = 85, LaneM = annaState.MyHomeLaneM });

@@ -47,6 +47,20 @@ namespace FreeVelo.Core.Ui
         TurnRight,
         Straight,
         Tow,
+        Minus,
+
+        /// <summary>Gradient (uphill): a wedge rising to the right, like a road gradient sign.</summary>
+        GradeUp,
+
+        /// <summary>Gradient (downhill): the wedge falling to the right.</summary>
+        GradeDown,
+
+        /// <summary>Elevation gained: a mountain with an arrow up.</summary>
+        Ascent,
+
+        /// <summary>Distance: a double arrow between two end marks (a measured length).</summary>
+        Distance,
+
     }
 
     /// <summary>
@@ -266,6 +280,29 @@ namespace FreeVelo.Core.Ui
                     s.Add(new Polyline(2.4f, V(12, 5), V(12, 19)));
                     s.Add(new Polyline(2.4f, V(5, 12), V(19, 12)));
                     break;
+                case Icon.Minus:
+                    s.Add(new Polyline(2.4f, V(5, 12), V(19, 12)));
+                    break;
+                case Icon.Distance:
+                    s.Add(Line(V(3, 7), V(3, 17)));
+                    s.Add(Line(V(21, 7), V(21, 17)));
+                    s.Add(Line(V(8, 12), V(16, 12)));
+                    s.Add(new Polygon(V(5.2f, 12), V(10, 7.8f), V(10, 16.2f)));
+                    s.Add(new Polygon(V(18.8f, 12), V(14, 7.8f), V(14, 16.2f)));
+                    break;
+                case Icon.Ascent:
+                    s.Add(new Polygon(V(1.5f, 21), V(9, 9.5f), V(12.5f, 14.5f), V(15.5f, 11), V(22.5f, 21)));
+                    s.Add(Line(V(19, 9), V(19, 2.8f)));
+                    s.Add(new Polygon(V(19, 1), V(22.2f, 4.8f), V(15.8f, 4.8f)));
+                    break;
+                case Icon.GradeUp:
+                case Icon.GradeDown:
+                {
+                    // Road gradient sign: a filled wedge on the road line, the high side up.
+                    bool up = icon == Icon.GradeUp;
+                    s.Add(new Polygon(V(3, 19.5f), V(21, 19.5f), up ? V(21, 7) : V(3, 7)));
+                    break;
+                }
                 case Icon.Close:
                     s.Add(new Polyline(2.4f, V(6.5f, 6.5f), V(17.5f, 17.5f)));
                     s.Add(new Polyline(2.4f, V(17.5f, 6.5f), V(6.5f, 17.5f)));

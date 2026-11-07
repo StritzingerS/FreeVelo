@@ -87,9 +87,10 @@ namespace FreeVelo.UI
             return s;
         }
 
-        public static GUIStyle With(GUIStyle style, Color? color = null, int? size = null, TextAnchor? anchor = null)
+        public static GUIStyle With(GUIStyle style, Color? color = null, int? size = null, TextAnchor? anchor = null, bool wrap = false)
         {
             var s = new GUIStyle(style);
+            if (wrap) s.wordWrap = true;
             if (color.HasValue) s.normal.textColor = Out(color.Value);
             if (size.HasValue) s.fontSize = size.Value;
             if (anchor.HasValue) s.alignment = anchor.Value;

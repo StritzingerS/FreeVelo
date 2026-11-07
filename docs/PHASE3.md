@@ -13,7 +13,7 @@ and the bike can be controlled with Zwift Click / Play buttons and virtual gears
       an upload) – needed before friends can connect Strava
 - [ ] Long validation ride: full 4×4 on the Neo 2, partly with the phone locked; FIT file checked in
       Garmin Connect / Strava (carried over from phase 1)
-- [ ] Afterwards: merge `phase2-server` into `main`, switch the Render Blueprint to `main`
+- [x] Afterwards: merge `phase2-server` into `main`, switch the Render Blueprint to `main`
 
 Known limitations from phase 2 (fix if they get in the way): the group ride only reconnects while the app is in the
 foreground; pending friend requests are lost when the free server restarts; the free server needs up to a minute
@@ -23,14 +23,60 @@ to wake up.
 - Workout editor, power zones settings, power curve in the ride summary, Strava upload with offline queue
 
 ### C. Training plans & history
-- [ ] Ride history (saved rides with summary), power curve over time
-- [ ] Fitness / fatigue / form (CTL / ATL / TSB) from the rides' TSS
-- [ ] Adaptive training plans over several weeks
-- [ ] Backup: export / import of settings, workouts and ride history
+- [x] Ride history: one summary per ride (`history.json`), saved FIT files read once at the first start
+      (`FitReader`), FTP history (manual changes and accepted tests)
+- [x] Fitness / fatigue / form (CTL 42 d / ATL 7 d / TSB), weekly volume, power curve (90 days vs. all time)
+- [x] Training plans: templates Base, FTP Build, VO2max Block, Maintenance (4–12 weeks, 3–5 days a week);
+      recovery week every 4th week, FTP test at the end of build blocks; adaptation rules 1–7 of CONCEPT.md
+      (`PlanAdapter`, tested); today's session on the home screen, started with the plan's intensity
+- [x] Group and free rides count as load (CTL/ATL) only; a session is done when its workout was ridden
+- [x] Backup: one ZIP (settings, rides, history, own workouts, plan) via the share sheet; restored by picking it in the
+      import file picker. Not included: server identity and Strava login
+- [x] Ride detail (tap a ride in History or the calendar): tiles, power / heart rate / elevation graph, time in power
+      and heart rate zones, laps per workout block (read from the FIT file)
+- [x] Heart rate zones: 5 zones in % max HR or 7 zones in % LTHR (Friel), set in Settings → Profile
+- [x] History month calendar: TSS per day, the plan's sessions as dots, tap opens the ride
+- [ ] Test on the phone: plan for a few weeks, history after importing the existing rides, backup to another phone
 
 ### D. Controls
-- [ ] Zwift Click / Play (BLE, community-documented protocol) – prototype, see CONCEPT.md
-- [ ] Virtual gears (SIM mode)
+- [x] Virtual gears, 24 gears (0.75–5.5), one switch in Settings → Controls (on / off). How they reach the trainer
+      is automatic: trainers with built-in virtual shifting (the Zwift protocol on the Zwift service FC82 /
+      00000001-19ca…: Zwift Hub, newer Wahoo KICKR, Elite, Tacx Neo 2/2T/3M with current firmware, JetBlack, Van
+      Rysel …) get the plain road and the gear ratio and shift themselves (`ZwiftTrainer`, community-documented
+      protocol, byte patterns checked against captures from Zwift); all other trainers get a grade that brakes like
+      the road in the virtual gear. On-screen + / − while riding; in ERG workout blocks + / − change the block
+      intensity. (The earlier "SIM via ERG" variant is gone.)
+- [x] Zwift Click V2 (and Click / Play / Ride): own module `FreeVelo.Devices.Zwift` after the community-documented
+      protocol (RideOn handshake, keep-alive every 3 s, 0x23 button bitmap). + / A harder, − / B easier.
+      The Click V2 **left** unit is locked by Zwift (unlock by connecting it to Zwift, lasts about 24 h);
+      the right unit works on its own (+ harder, B easier). The devices page shows the controller next to trainer, power meter and heart rate, with "locked" for a locked unit.
+- [x] Controller settings (Settings → Trainer & shifting): what each Click V2 button does (harder / easier / nothing),
+      number of virtual gears (12–30), ERG step per press (1–5 %)
+- [ ] Test with the real Click V2 (both units, keep-alive, locked left unit)
+- [ ] Test built-in virtual shifting on the Neo 2 (it offers the Zwift service): handshake, gear changes, feel of
+      the 42×14 reference ratio; needs the Android plugin from `main` (subscribes to the Zwift characteristics)
+
+### E. The mountain – two legendary climbs
+- [x] Climb data from GPX (`tools/climbs/process_gpx.py`): Passo dello Stelvio (24.3 km, +1842 m, Ø 7.6 %) and
+      Alpe d'Huez (13.8 km, +1118 m, Ø 8.1 %), every 5 m with the original length, turns, elevation and gradient
+      (elevation smoothed over 200 m against GPS spikes). The GPX source files are not in the repo.
+- [x] Mountain range next to the home world (`Mountain`, `MountainTerrain`, `MountainLook`): both climbs end at a
+      shared summit (1577 m in-game), joined by a 1 km road over the top, so you ride down the other climb.
+      Two valleys; the Alpe d'Huez valley is higher, its access road (7.0 km) and the Stelvio's (6.9 km) take
+      up the difference at about 5 %. Forest → spruce/pine → treeline 550 m below the summit → meadows, rock, snow.
+      Summit signs at the top.
+- [x] Free ride: the access roads branch off the main loop at two junctions; the main loop always stays the
+      default, so you only get to the mountain by choosing the turn.
+- [x] Home page: "Legendary climbs" cards (profile, length, gain, best time) start a ride at the foot of a climb
+      (route `climb-stelvio` / `climb-alpe-dhuez`: up, over the top, down the other side and back).
+- [x] Group rides: the lobby chooses its route (main loop or one of the climbs); Keep Together runs on it.
+- [x] Climb timer while riding (time, km to the summit, gap to the best time), result in the ride summary,
+      best times and ascents in the history, climbs in the ride detail.
+- [x] Braking before bends (`Cornering`): every bend has a safe speed (30° lean, a 10 m hairpin ≈ 27 km/h); the
+      rider brakes early (4 m/s²) to reach it. Only the virtual speed is limited, the trainer keeps simulating
+      the road. While braking the rider freewheels and the HUD shows "Braking for the bend". Group rides: the
+      server's Keep Together group brakes so every rider (±25 m around the anchor) takes the bend safely.
+- [ ] Look at the mountain on a phone: far tiles, fog, colours, frame rate of the streamed near tiles
 
 ### Done when
 - A plan runs for weeks, rides upload to Strava automatically.

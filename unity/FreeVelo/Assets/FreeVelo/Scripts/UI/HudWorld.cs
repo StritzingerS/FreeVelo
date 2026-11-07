@@ -1,3 +1,4 @@
+using System.Linq;
 using FreeVelo.App;
 using FreeVelo.Core.Physics;
 using FreeVelo.Core.Ui;
@@ -17,18 +18,51 @@ namespace FreeVelo.UI
 
         public void InitializeWorld(WorldBuilder world) => _world = world;
 
-        /// <summary>While terrain and scenery are generated (a few seconds after the start).</summary>
-        private void DrawWorldLoading()
+        private Texture2D _splashLogo;
+        private float _worldBuiltAt = -1;
+        private const float LoadingFadeS = 0.45f;
+
+        /// <summary>
+        /// Start-up: a loading screen like the splash screen (same background and logo) covers the app until terrain,
+        /// scenery and the mountain are built, then fades out. Returns true while it hides everything behind it.
+        /// </summary>
+        private bool DrawLoadingScreen()
         {
-            if (_world == null || _world.IsBuilt) return;
-            var style = Theme.With(Theme.Body, Theme.Text, 17, TextAnchor.MiddleCenter);
-            string text = L.Get("loading_world");
-            float w = style.CalcSize(new GUIContent(text)).x + 56;
-            var r = new Rect(_w - w - 24, _h - 72, w, 48);
-            Ui.Card(r, Theme.Alpha(Theme.Background, 0.9f), 24);
-            float pulse = 0.5f + (0.5f * Mathf.Sin(Time.unscaledTime * 4f));
-            Ui.Dot(new Vector2(r.x + 22, r.center.y), 6, Theme.Alpha(Theme.Accent, 0.4f + (0.6f * pulse)));
-            GUI.Label(new Rect(r.x + 18, r.y, r.width - 18, r.height), text, style);
+            if (_world == null) return false;
+            float alpha = 1;
+            if (_world.IsLoaded)
+            {
+                if (_worldBuiltAt < 0) _worldBuiltAt = Time.unscaledTime;
+                alpha = 1 - ((Time.unscaledTime - _worldBuiltAt) / LoadingFadeS);
+                if (alpha <= 0) return false;
+            }
+
+            // Ui.Rect takes its own colour (GUI.color does not apply): the alpha is set on each colour.
+            var old = GUI.color;
+            GUI.color = new Color(1, 1, 1, alpha);
+            Ui.Rect(_full, Theme.Alpha(Theme.Background, alpha), 0);
+
+            _splashLogo ??= Resources.Load<Texture2D>("FreeVeloSplash");
+            float logoW = Mathf.Min(_w * 0.6f, 720);
+            float logoH = _splashLogo != null ? logoW * _splashLogo.height / _splashLogo.width : 0;
+            var logo = new Rect((_w - logoW) / 2f, (_h - logoH) / 2f - 30, logoW, logoH);
+            if (_splashLogo != null) GUI.DrawTexture(logo, _splashLogo, ScaleMode.ScaleToFit);
+
+            // Indeterminate progress: a short bar sweeping left to right under the logo (in at the left edge, out
+            // at the right, again), eased so it speeds up and slows down.
+            float barW = Mathf.Min(320, _w * 0.4f);
+            var track = new Rect((_w - barW) / 2f, logo.yMax + 36, barW, 6);
+            Ui.Rect(track, Theme.Alpha(Theme.Surface2, alpha), 3);
+            float t = Mathf.Repeat(Time.unscaledTime / 1.3f, 1f);
+            t = t * t * (3 - (2 * t));
+            float seg = barW * 0.3f;
+            float x0 = Mathf.Max(track.x, track.x - seg + ((barW + seg) * t));
+            float x1 = Mathf.Min(track.xMax, track.x + ((barW + seg) * t));
+            if (x1 > x0) Ui.Rect(new Rect(x0, track.y, x1 - x0, track.height), Theme.Alpha(Theme.Accent, alpha), 3);
+            GUI.Label(new Rect(0, track.yMax + 14, _w, 26), L.Get("loading_world"), Theme.With(Theme.Body, Theme.Muted, 16, TextAnchor.MiddleCenter));
+
+            GUI.color = old;
+            return !_world.IsLoaded; // during the fade the app is already usable
         }
 
         // ------------------------------------------------------------------ junctions
@@ -58,6 +92,9 @@ namespace FreeVelo.UI
                 var fg = chosen ? Color.white : Theme.Text;
                 Ui.DrawIcon(new Rect(b.x + 14, b.center.y - 14, 28, 28), icon, fg);
                 string name = o.IsMainLoop ? L.Get("main_loop") : o.Surface == RoadSurface.Asphalt ? L.Get("side_road") : L.Get("gravel_road");
+                var mountain = _ride.Map?.Mountain;
+                if (mountain != null && o.Edge.Edge == mountain.AccessStelvioEdge) name = "Passo dello Stelvio";
+                else if (mountain != null && o.Edge.Edge == mountain.AccessAlpeEdge) name = "Alpe d'Huez";
                 GUI.Label(new Rect(b.x + 54, b.y + 6, b.width - 64, 24), name, Theme.With(Theme.Body, fg, 16, TextAnchor.MiddleLeft));
                 GUI.Label(new Rect(b.x + 54, b.y + 28, b.width - 64, 20), $"{o.LengthM / 1000:0.0} km {L.Get("to_next_junction")}", Theme.With(Theme.Caption, chosen ? new Color(1, 1, 1, 0.8f) : Theme.Muted, 13, TextAnchor.MiddleLeft));
                 if (GUI.Button(b, GUIContent.none, GUIStyle.none)) _ride.ChooseTurn(i);
@@ -68,6 +105,40 @@ namespace FreeVelo.UI
         // ------------------------------------------------------------------ route strip
 
         /// <summary>Bottom strip in free rides: elevation of the next 3 km (or of the main loop in group rides).</summary>
+        /// <summary>Name of a round shown over the elevation strip: the main loop or the round over a climb.</summary>
+        private static string RouteLabel(FreeVelo.Core.World.Route route) =>
+            route.Climbs != null && route.Climbs.Count > 0 ? string.Format(L.Get("climb_loop"), route.Climbs[0].Name) : L.Get("main_loop");
+
+        private FreeVelo.Core.World.Route _aheadRoute;
+        private long _aheadFirst;
+        private double[] _aheadSamples;
+
+        private FreeVelo.Core.World.Route _climbedRoute;
+        private double[] _climbed;
+
+        /// <summary>Metres climbed from the start of a round, every 10 m (worked out once per route).</summary>
+        private double[] ClimbedAlong(FreeVelo.Core.World.Route route)
+        {
+            if (_climbedRoute == route) return _climbed;
+            int n = (int)(route.LengthM / 10) + 1;
+            var climbed = new double[n];
+            double last = route.Sample(0).Y;
+            for (int i = 1; i < n; i++)
+            {
+                double y = route.Sample(i * 10.0).Y;
+                climbed[i] = climbed[i - 1] + System.Math.Max(0, y - last);
+                last = y;
+            }
+
+            _climbedRoute = route;
+            _climbed = climbed;
+            return climbed;
+        }
+
+        /// <summary>Right-aligned summary in the strip's title row.</summary>
+        private static void StripCorner(Rect card, string text) =>
+            GUI.Label(new Rect(card.xMax - 418, card.y + 6, 400, 22), text, Theme.With(Theme.Caption, Theme.Text, anchor: TextAnchor.MiddleRight));
+
         private void DrawRideStrip()
         {
             var route = _ride.Route;
@@ -79,52 +150,68 @@ namespace FreeVelo.UI
             double d = _ride.DistanceM;
             if (route.IsLoop)
             {
-                GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), $"{L.Get("main_loop")} · {route.LengthM / 1000:0.0} km", Theme.Caption);
-                DrawElevation(graph, route, d % route.LengthM);
+                GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), $"{RouteLabel(route)} · {route.LengthM / 1000:0.0} km", Theme.Caption);
+                // Corner: climbing still to come in this round, of the whole round.
+                double pos = d % route.LengthM;
+                var climbed = ClimbedAlong(route);
+                double total = climbed[climbed.Length - 1];
+                double done = climbed[Mathf.Clamp((int)(pos / 10), 0, climbed.Length - 1)];
+                StripCorner(card, string.Format(L.Get("ascent_left"), $"<color=#4ADE80>↑</color> <b>{total - done:0} m</b>", $"{total:0} m"));
+                DrawElevation(graph, route, pos);
             }
             else
             {
                 GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), L.Get("ahead_3km"), Theme.Caption);
-                DrawElevationAhead(graph, route, d);
+                // Beyond the next junction: the way the rider would take by default (or has chosen there).
+                var ahead = _ride.Path != null && _ride.Route == _ride.Path.Route ? _ride.Path.Preview(d + 3000) : route;
+                // Corner: metres up and down in the next 3 km.
+                var (up, down) = Climbing(ahead, d, System.Math.Min(d + 3000, ahead.LengthM));
+                StripCorner(card, $"<color=#4ADE80>↑</color> <b>{up:0} m</b>   <color=#60A5FA>↓</color> <b>{down:0} m</b>");
+                DrawElevationAhead(graph, ahead, d);
             }
         }
 
         /// <summary>Profile from 300 m behind to 3 km ahead (as far as the way is known: up to the next junction).</summary>
         private void DrawElevationAhead(Rect r, FreeVelo.Core.World.Route route, double distance)
         {
-            const int n = 90;
             double from = distance - 300, to = distance + 3000;
             double end = route.LengthM;
+            // Beyond the next junction the way on can still change: drawn a little fainter.
+            var upcoming = _ride.NextJunction();
+            double fixedUntil = upcoming != null ? upcoming.DistanceM : end;
+
+            // Samples every 15 m tied to the road (not to the screen); worked out again only when the rider has moved
+            // on by one sample or the way ahead changed, so the outline scrolls smoothly.
+            const double step = 15;
+            long first = (long)System.Math.Floor(from / step) - 1;
+            int count = (int)((to - from) / step) + 4;
+            if (_aheadRoute != route || _aheadFirst != first || _aheadSamples == null || _aheadSamples.Length != count)
+            {
+                _aheadSamples = ProfileSamples(route, first * step, step, count, end);
+                _aheadRoute = route;
+                _aheadFirst = first;
+            }
+
             double min = double.MaxValue, max = double.MinValue;
-            var e = new double[n];
-            for (int i = 0; i < n; i++)
+            for (double d = from; d <= to; d += step)
             {
-                double at = from + ((to - from) * i / (n - 1));
-                e[i] = route.Sample(System.Math.Min(at, end)).Y;
-                min = System.Math.Min(min, e[i]);
-                max = System.Math.Max(max, e[i]);
+                double y = SampleAt(_aheadSamples, first * step, step, d);
+                min = System.Math.Min(min, y);
+                max = System.Math.Max(max, y);
             }
 
-            double span = System.Math.Max(20, max - min);
-            float bw = r.width / n;
-            for (int i = 0; i < n; i++)
-            {
-                double at = from + ((to - from) * i / (n - 1));
-                float h = 8 + (float)((e[i] - min) / span) * (r.height - 8);
-                bool done = at <= distance;
-                float alpha = at > end ? 0.12f : done ? 0.75f : 0.35f;
-                Ui.Rect(new Rect(r.x + (i * bw) - 0.6f, r.yMax - h, bw + 1.2f, h), Theme.Alpha(done ? Theme.Accent : Theme.Info, alpha), 0);
-            }
-
-            float px = r.x + (r.width * (float)(300 / (to - from)));
+            double span = System.Math.Max(MinAheadSpanM, max - min);
+            ProfileColumns(r, from, to, _aheadSamples, first * step, step, min, span, distance,
+                d => d > end ? 0.12f : d > fixedUntil ? 0.24f : 0.42f);
+            float px = r.x + (r.width * (float)((distance - from) / (to - from)));
             Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
 
-            // Junction marker.
-            var junction = _ride.NextJunction();
-            if (junction != null && junction.DistanceM < to)
+            // Junction marker: a dashed yellow line.
+            if (upcoming != null && upcoming.DistanceM < to)
             {
-                float jx = r.x + (r.width * (float)((junction.DistanceM - from) / (to - from)));
-                Ui.Rect(new Rect(jx - 1, r.y, 2, r.height), Theme.Alpha(Theme.Warning, 0.9f), 1);
+                float jx = r.x + (r.width * (float)((upcoming.DistanceM - from) / (to - from)));
+                var color = Theme.Alpha(Theme.Warning, 0.95f);
+                for (float y = r.y; y < r.yMax; y += 9) Ui.Rect(new Rect(jx - 1, y, 2, Mathf.Min(5, r.yMax - y)), color, 1);
             }
         }
     }

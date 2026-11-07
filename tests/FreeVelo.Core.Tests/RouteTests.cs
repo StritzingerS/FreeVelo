@@ -1,3 +1,4 @@
+using FreeVelo.Core.Physics;
 using FreeVelo.Core.World;
 
 namespace FreeVelo.Core.Tests;
@@ -47,7 +48,7 @@ public class RouteTests
         var p1 = route.Points[1];
 
         var mid = route.Sample((p0.DistanceM + p1.DistanceM) / 2);
-        Assert.Equal((p0.X + p1.X) / 2, mid.X, 6);
+        Assert.Equal((p0.X + p1.X) / 2, mid.X, 2); // on a bend the smoothed path is a fraction of a millimetre inside
         Assert.Equal((p0.ElevationM + p1.ElevationM) / 2, mid.Y, 6);
 
         var wrapped = route.Sample(route.LengthM + 2.5);
@@ -95,5 +96,80 @@ public class RouteTests
 
         var route = new Route("circle", points, isLoop: false);
         Assert.InRange(route.CurvatureAt(200), 0.0097, 0.0103); // heading increases: right-hand bend
+    }
+
+    [Fact]
+    public void HeadingTurnsSmoothlyThroughHairpins()
+    {
+        // Stelvio: 5 m points, hairpins turn up to 90° at a single point. Riding in 0.5 m steps the heading
+        // must never jump (the bike would snap to the next segment's direction).
+        var route = BuiltInRoutes.Get(BuiltInRoutes.StelvioId);
+        double maxStep = 0;
+        double last = route.Sample(0).HeadingRad;
+        for (double d = 0.5; d < route.LengthM; d += 0.5)
+        {
+            double h = route.Sample(d).HeadingRad;
+            double dh = Math.Abs(Math.IEEERemainder(h - last, 2 * Math.PI)) * 180 / Math.PI;
+            maxStep = Math.Max(maxStep, dh);
+            last = h;
+        }
+
+        Assert.True(maxStep < 10, $"heading jumped {maxStep:0.0}°");
+    }
+
+    /// <summary>Largest angle (degrees) between where the bike points and where it actually moves.</summary>
+    private static double MaxDrift(Route route, double from, double to)
+    {
+        double max = 0;
+        for (double d = from; d < to; d += 0.5)
+        {
+            var a = route.Sample(d - 0.05);
+            var b = route.Sample(d + 0.05);
+            double moving = Math.Atan2(b.X - a.X, b.Z - a.Z);
+            double drift = Math.Abs(Math.IEEERemainder(route.Sample(d).HeadingRad - moving, 2 * Math.PI)) * 180 / Math.PI;
+            max = Math.Max(max, drift);
+        }
+
+        return max;
+    }
+
+    [Fact]
+    public void NoDriftingRoundASharpJunctionCorner()
+    {
+        // Straight north, then a 90° right turn at a single point (like a junction).
+        var points = new List<RoutePoint>();
+        for (int i = 0; i <= 20; i++) points.Add(new RoutePoint(i * 5, 0, i * 5, 0, 0, RoadSurface.Asphalt));
+        for (int i = 1; i <= 20; i++) points.Add(new RoutePoint(100 + (i * 5), i * 5, 100, 0, 0, RoadSurface.Asphalt));
+        var route = new Route("corner", points, isLoop: false);
+
+        Assert.True(MaxDrift(route, 20, 180) < 2, $"drift {MaxDrift(route, 20, 180):0.0}°");
+        // The path rounds the corner but stays on the road (the corner point is at x 0, z 100).
+        var apex = route.Sample(100);
+        double cut = Math.Sqrt((apex.X * apex.X) + ((apex.Z - 100) * (apex.Z - 100)));
+        Assert.InRange(cut, 0.5, 2.5);
+        // Away from the corner the rider is exactly on the road line.
+        Assert.Equal(0, route.Sample(50).X, 6);
+        Assert.Equal(150, route.Sample(150).Z + 50, 6);
+    }
+
+    [Fact]
+    public void NoDriftingOnTheMountain()
+    {
+        var route = BuiltInRoutes.Get(BuiltInRoutes.StelvioId);
+        Assert.True(MaxDrift(route, 0, route.LengthM) < 2, $"drift {MaxDrift(route, 0, route.LengthM):0.0}°");
+    }
+
+    [Fact]
+    public void OpenRouteEndsWhereTheRoadEnds()
+    {
+        var points = new[]
+        {
+            new RoutePoint(0, 0, 0, 100, 0, RoadSurface.Asphalt),
+            new RoutePoint(100, 0, 100, 105, 5, RoadSurface.Asphalt),
+        };
+        var route = new Route("short", points, isLoop: false);
+        Assert.Equal(100, route.Sample(500).Z, 6);
+        Assert.Equal(0, route.Sample(-50).Z, 6);
+        Assert.Equal(50, route.Sample(50).Z, 6);
     }
 }

@@ -22,4 +22,7 @@
     <ProjectReference Include="..\..\src\FreeVelo.Core\FreeVelo.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Data\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

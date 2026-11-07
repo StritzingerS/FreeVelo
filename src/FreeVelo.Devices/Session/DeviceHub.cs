@@ -6,6 +6,7 @@ using FreeVelo.Devices.CyclingPower;
 using FreeVelo.Devices.Ftms;
 using FreeVelo.Devices.HeartRate;
 using FreeVelo.Devices.Tacx;
+using FreeVelo.Devices.Zwift;
 
 namespace FreeVelo.Devices.Session
 {
@@ -135,6 +136,26 @@ namespace FreeVelo.Devices.Session
         private bool _ftmsControlRequested;
         private long _ftmsControlRequestedMs;
         private long _lowCadenceSinceMs = -1;
+        private bool _ergFromGears;
+        private bool _simScale = true;
+
+        // Virtual shifting in the trainer (Zwift protocol)
+        private double? _gearFactor;
+        private double _gearSent = double.NaN;
+        private bool _shiftHandshakeSent;
+        private bool _shiftGradeSent;
+        private bool _shiftWasUsed;
+
+        private sealed class ControllerLink
+        {
+            public bool ClickV2;
+            public long HandshakeMs = NeverMs;
+            public ZwiftControllerState State = ZwiftControllerState.Connecting;
+            public HashSet<ZwiftButton> Held = new HashSet<ZwiftButton>();
+            public int? Battery;
+        }
+
+        private readonly Dictionary<string, ControllerLink> _controllers = new Dictionary<string, ControllerLink>();
         private byte? _ftmsTrainingStatus;
         private long _ergOverSinceMs = -1;
         private long _ergTooFastUntilMs = NeverMs;
@@ -192,6 +213,15 @@ namespace FreeVelo.Devices.Session
         /// <summary>Raised for diagnostics (commands, roles, trainer responses).</summary>
         public event Action<string>? Log;
 
+        /// <summary>A Zwift controller button went down (once per press).</summary>
+        public event Action<ZwiftButton>? ControllerButton;
+
+        /// <summary>Connected Zwift controllers and their state (Locked = Click V2 left unit not unlocked by Zwift).</summary>
+        public IReadOnlyList<(string Address, ZwiftControllerState State, int? Battery)> Controllers =>
+            _controllers.Select(c => (c.Key, c.Value.State, c.Value.Battery)).ToList();
+
+        public bool IsController(string address) => _controllers.ContainsKey(address);
+
         // ------------------------------------------------------------------ connection events
 
         /// <summary>A device finished connecting; <paramref name="services"/> are its GATT services.</summary>
@@ -199,6 +229,14 @@ namespace FreeVelo.Devices.Session
         {
             var set = new HashSet<Guid>(services);
             _services[address] = set;
+
+            if (ZwiftController.IsController(set) && !ZwiftTrainer.SupportsShifting(set, FtmsService, TacxFec.Service))
+            {
+                // Zwift Click / Click V2 / Play: buttons only, never trainer or power meter.
+                _controllers[address] = new ControllerLink { ClickV2 = set.Contains(ZwiftController.RideService) };
+                Log?.Invoke($"{address}: Zwift controller");
+                return;
+            }
 
             if (set.Contains(FtmsService) && TrainerProtocol != TrainerProtocol.Ftms)
             {
@@ -226,13 +264,38 @@ namespace FreeVelo.Devices.Session
                 _resendNeeded = true;
                 _ftmsControlGranted = false;
                 _ftmsControlRequested = false;
+                _shiftHandshakeSent = false;
+                _shiftGradeSent = false;
+                _gearSent = double.NaN;
+                if (TrainerSupportsShifting) Log?.Invoke($"{address}: trainer supports virtual shifting");
             }
         }
+
+        /// <summary>The trainer has virtual shifting built in (Zwift protocol, see <see cref="ZwiftTrainer"/>).</summary>
+        public bool TrainerSupportsShifting =>
+            TrainerAddress != null && _services.TryGetValue(TrainerAddress, out var s) && ZwiftTrainer.SupportsShifting(s, FtmsService, TacxFec.Service);
+
+        /// <summary>Virtual gears are being done by the trainer itself right now (SIM mode with a gear set).</summary>
+        public bool UsesTrainerShifting => TrainerSupportsShifting && _gearFactor.HasValue && !_ergMode;
+
+        /// <summary>
+        /// Virtual gear for trainers with built-in shifting: virtual ratio / ratio of the gear the bike is in (null =
+        /// no virtual gears). With such a trainer, SIM mode then sends the plain road and this gear, and the trainer
+        /// works out the resistance; other trainers ignore it (the app adjusts the grade instead).
+        /// </summary>
+        public void SetVirtualGear(double? gearFactor) => _gearFactor = gearFactor;
 
         /// <summary>A device disconnected (it may reconnect automatically and call <see cref="OnReady"/> again).</summary>
         public void OnDisconnected(string address)
         {
             _cadence.Remove(address);
+            if (_controllers.TryGetValue(address, out var controller))
+            {
+                controller.State = ZwiftControllerState.Connecting;
+                controller.HandshakeMs = NeverMs;
+                controller.Held.Clear();
+            }
+
             if (address == TrainerAddress)
             {
                 _ftmsControlGranted = false;
@@ -247,6 +310,7 @@ namespace FreeVelo.Devices.Session
         {
             OnDisconnected(address);
             _services.Remove(address);
+            _controllers.Remove(address);
             if (TrainerAddress == address)
             {
                 TrainerAddress = null;
@@ -272,6 +336,12 @@ namespace FreeVelo.Devices.Session
         {
             long now = _clockMs();
             bool isTrainer = address == TrainerAddress;
+
+            if (_controllers.TryGetValue(address, out var controller))
+            {
+                OnControllerData(address, controller, characteristic, data, now);
+                return;
+            }
 
             if (characteristic == TrainingStatusChar && data.Length >= 2)
             {
@@ -377,7 +447,13 @@ namespace FreeVelo.Devices.Session
         // ------------------------------------------------------------------ trainer control
 
         /// <summary>ERG mode: the trainer holds <paramref name="watts"/>. Large jumps are ramped.</summary>
-        public void SetErgTarget(int watts)
+        public void SetErgTarget(int watts) => SetErgTarget(watts, virtualGears: false);
+
+        /// <summary>
+        /// ERG target; <paramref name="virtualGears"/>: it comes from virtual gears ("SIM via ERG") – no low-cadence
+        /// protection and no "too fast" hint, since the target already follows the cadence.
+        /// </summary>
+        public void SetErgTarget(int watts, bool virtualGears)
         {
             if (!_ergMode)
             {
@@ -385,12 +461,21 @@ namespace FreeVelo.Devices.Session
                 _ergCurrent = double.NaN; // start immediately at the first target
             }
 
+            _ergFromGears = virtualGears;
             _ergTarget = Math.Max(0, watts);
         }
 
         /// <summary>SIM mode: the trainer simulates a road with this grade (before <see cref="TrainerDifficulty"/>).</summary>
-        public void SetSimulation(double gradePercent, double rollingResistance = 0.004, double windResistanceKgPerM = 0.51)
+        public void SetSimulation(double gradePercent, double rollingResistance = 0.004, double windResistanceKgPerM = 0.51) =>
+            SetSimulation(gradePercent, rollingResistance, windResistanceKgPerM, scaleByDifficulty: true);
+
+        /// <summary>
+        /// SIM mode; <paramref name="scaleByDifficulty"/> = false when the grade was already prepared (virtual gears are
+        /// computed from the grade after <see cref="TrainerDifficulty"/>).
+        /// </summary>
+        public void SetSimulation(double gradePercent, double rollingResistance, double windResistanceKgPerM, bool scaleByDifficulty)
         {
+            _simScale = scaleByDifficulty;
             if (_ergMode)
             {
                 _ergMode = false;
@@ -435,6 +520,7 @@ namespace FreeVelo.Devices.Session
             double dt = _lastTickMs == 0 ? 0 : Math.Min(2.0, (now - _lastTickMs) / 1000.0);
             _lastTickMs = now;
             UpdateLive(now);
+            TickControllers(now);
 
             string? trainer = TrainerAddress;
             if (trainer == null) return;
@@ -468,7 +554,7 @@ namespace FreeVelo.Devices.Session
         {
             // Low-cadence protection against the "ERG death spiral".
             double? cadence = Live.CadenceRpm;
-            if (LowCadenceProtectionEnabled && cadence.HasValue && cadence.Value > 0 && cadence.Value < LowCadenceRpm)
+            if (LowCadenceProtectionEnabled && !_ergFromGears && cadence.HasValue && cadence.Value > 0 && cadence.Value < LowCadenceRpm)
             {
                 if (_lowCadenceSinceMs < 0) _lowCadenceSinceMs = now;
             }
@@ -518,7 +604,7 @@ namespace FreeVelo.Devices.Session
             int? power = Live.TrainerPowerW ?? Live.PowerW;
             double? speed = Live.TrainerSpeedKmh;
             // Only at a normal cadence and a settled target (not while ramping or reduced for low cadence)
-            bool pedaling = _ergMode && target > 0 && power.HasValue && Live.CadenceRpm >= LowCadenceRpm
+            bool pedaling = _ergMode && !_ergFromGears && target > 0 && power.HasValue && Live.CadenceRpm >= LowCadenceRpm
                 && Math.Abs(_ergCurrent - _ergTarget) < 1;
 
             bool over = pedaling && power!.Value > target + Math.Max(ErgOverWatts, target * ErgOverFraction);
@@ -546,7 +632,23 @@ namespace FreeVelo.Devices.Session
 
         private void TickSim(string trainer, long now)
         {
-            double grade = Math.Round(_simGrade * Math.Max(0, Math.Min(1, TrainerDifficulty)), 1);
+            if (UsesTrainerShifting)
+            {
+                TickTrainerShifting(trainer, now);
+                return;
+            }
+
+            if (_shiftWasUsed && TrainerSupportsShifting && _shiftHandshakeSent)
+            {
+                // Virtual gears switched off: back to the neutral ratio, so the trainer's own gear doesn't linger.
+                if (Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.Gear(1.0), "Zwift gear neutral"))
+                {
+                    _shiftWasUsed = false;
+                    _gearSent = double.NaN;
+                }
+            }
+
+            double grade = Math.Round(_simScale ? _simGrade * Math.Max(0, Math.Min(1, TrainerDifficulty)) : _simGrade, 1);
             bool changed = double.IsNaN(_simSentGrade) || Math.Abs(grade - _simSentGrade) >= 0.1;
             if (!_resendNeeded && (!changed || now - _simSentMs < SimMinIntervalMs)) return;
 
@@ -564,6 +666,43 @@ namespace FreeVelo.Devices.Session
             }
         }
 
+        /// <summary>SIM with the trainer's built-in virtual shifting: the plain road and the gear, over the Zwift service.</summary>
+        private void TickTrainerShifting(string trainer, long now)
+        {
+            _shiftWasUsed = true;
+            if (!_shiftHandshakeSent)
+            {
+                _shiftHandshakeSent = Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.Handshake, "Zwift trainer handshake")
+                    && Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.Physical((uint)Math.Round(10000 * ZwiftTrainer.ReferenceRatio), 8, RiderWeightKg), null);
+                if (!_shiftHandshakeSent) return;
+                _resendNeeded = true;
+            }
+
+            double grade = Math.Round(_simScale ? _simGrade * Math.Max(0, Math.Min(1, TrainerDifficulty)) : _simGrade, 1);
+            bool changed = double.IsNaN(_simSentGrade) || Math.Abs(grade - _simSentGrade) >= 0.1;
+            if (_resendNeeded || (changed && now - _simSentMs >= SimMinIntervalMs))
+            {
+                if (Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.Simulation(grade, _simCrr, _simCw), null))
+                {
+                    _simSentGrade = grade;
+                    _simSentMs = now;
+                    _ergSent = double.NaN;
+                    _shiftGradeSent = true;
+                }
+            }
+
+            // Gears only take effect once a grade has been sent; a shift goes out right away (no rate limit).
+            double factor = Math.Round(_gearFactor!.Value, 4);
+            if (_shiftGradeSent && (_resendNeeded || double.IsNaN(_gearSent) || Math.Abs(factor - _gearSent) > 1e-4))
+            {
+                if (Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.Gear(factor), null)
+                    && Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.ConfirmGear, null))
+                {
+                    _gearSent = factor;
+                }
+            }
+        }
+
         private void SendFecUserConfig(string trainer, long now)
         {
             if (Send(trainer, TacxFec.TxCharacteristic, TacxFec.SetUserConfiguration(RiderWeightKg), null))
@@ -571,6 +710,54 @@ namespace FreeVelo.Devices.Session
                 _fecUserConfigSentMs = now;
                 _fecUserConfigRequested = false;
             }
+        }
+
+        private void TickControllers(long now)
+        {
+            foreach (var entry in _controllers)
+            {
+                var c = entry.Value;
+                if (c.State == ZwiftControllerState.Locked) continue; // a locked unit only answers with challenges
+                // Handshake, repeated as keep-alive: the Click V2 right unit sleeps after about a minute otherwise.
+                if (now - c.HandshakeMs >= ZwiftController.KeepAliveMs)
+                {
+                    c.HandshakeMs = now;
+                    Send(entry.Key, ZwiftController.SyncRxChar, ZwiftController.StartCommand(c.ClickV2), null);
+                }
+            }
+        }
+
+        private void OnControllerData(string address, ControllerLink c, Guid characteristic, byte[] data, long now)
+        {
+            if (characteristic == ZwiftController.SyncTxChar)
+            {
+                var answer = ZwiftController.HandshakeAnswer(data);
+                if (answer.HasValue && answer.Value != c.State)
+                {
+                    c.State = answer.Value;
+                    Log?.Invoke(c.State == ZwiftControllerState.Locked
+                        ? $"{address}: Zwift controller locked (unlock it in the Zwift app, or use the right unit)"
+                        : $"{address}: Zwift controller ready");
+                }
+
+                return;
+            }
+
+            if (characteristic != ZwiftController.AsyncChar) return;
+            if (ZwiftController.Battery(data) is int battery) c.Battery = battery;
+            var pressed = ZwiftController.PressedButtons(data);
+            if (pressed == null) return;
+            if (c.State != ZwiftControllerState.Ready)
+            {
+                c.State = ZwiftControllerState.Ready; // button data means it works, whatever the handshake said
+            }
+
+            foreach (var button in pressed)
+            {
+                if (!c.Held.Contains(button)) ControllerButton?.Invoke(button);
+            }
+
+            c.Held = pressed;
         }
 
         private Guid CommandCharacteristic => TrainerProtocol == TrainerProtocol.Ftms ? ControlPointChar : TacxFec.TxCharacteristic;

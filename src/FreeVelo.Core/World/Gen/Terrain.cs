@@ -18,21 +18,39 @@ namespace FreeVelo.Core.World.Gen
         private readonly SegmentIndex? _river;
         private readonly float[] _heights;
 
+        /// <summary>Chunks of the 3D world (home grid and mountain): the home grid is a whole number of them.</summary>
+        public const double ChunkSize = 128;
+
         private Terrain(WorldMap map, double cell)
         {
             _map = map;
             Cell = cell;
-            var (minX, minZ, maxX, maxZ) = map.Bounds;
-            MinX = Math.Floor((minX - Margin) / cell) * cell;
-            MinZ = Math.Floor((minZ - Margin) / cell) * cell;
-            Nx = (int)Math.Ceiling((maxX + Margin - MinX) / cell) + 1;
-            Nz = (int)Math.Ceiling((maxZ + Margin - MinZ) / cell) + 1;
+            var rect = GridRect(map);
+            MinX = rect.MinX;
+            MinZ = rect.MinZ;
+            Nx = (int)Math.Round((rect.MaxX - rect.MinX) / cell) + 1;
+            Nz = (int)Math.Round((rect.MaxZ - rect.MinZ) / cell) + 1;
             foreach (var e in map.Edges) _roads.Add(new SegmentIndex(e.X, e.Z, 40));
             if (map.River != null) _river = new SegmentIndex(map.River.X, map.River.Z, 40);
             _heights = new float[Nx * Nz];
         }
 
         public WorldMap Map => _map;
+
+        /// <summary>
+        /// The home world's detailed grid: its roads and water plus <see cref="Margin"/>, rounded out to whole chunks
+        /// (so the mountain's chunks join it exactly).
+        /// </summary>
+        public static (double MinX, double MinZ, double MaxX, double MaxZ) GridRect(WorldMap map)
+        {
+            var (minX, minZ, maxX, maxZ) = map.Bounds;
+            double x0 = Math.Floor((minX - Margin) / ChunkSize) * ChunkSize, z0 = Math.Floor((minZ - Margin) / ChunkSize) * ChunkSize;
+            double x1 = x0 + (Math.Ceiling((maxX + Margin - x0) / ChunkSize) * ChunkSize), z1 = z0 + (Math.Ceiling((maxZ + Margin - z0) / ChunkSize) * ChunkSize);
+            return (x0, z0, x1, z1);
+        }
+
+        /// <summary>The mountain's shape (null for worlds without a mountain). Outside the home grid, heights come from it.</summary>
+        public MountainTerrain? Mountain { get; private set; }
 
         public double MinX { get; }
 
@@ -53,6 +71,7 @@ namespace FreeVelo.Core.World.Gen
         public static Terrain Build(WorldMap map, double cell = 4)
         {
             var terrain = new Terrain(map, cell);
+            if (map.Mountain != null) terrain.Mountain = MountainTerrain.Build(map, (terrain.MinX, terrain.MinZ, terrain.MaxX, terrain.MaxZ));
             Parallel.For(0, terrain.Nz, z =>
             {
                 for (int x = 0; x < terrain.Nx; x++)
@@ -66,9 +85,14 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>Grid height at a grid point.</summary>
         public float At(int x, int z) => _heights[(Math.Max(0, Math.Min(Nz - 1, z)) * Nx) + Math.Max(0, Math.Min(Nx - 1, x))];
 
-        /// <summary>Ground height anywhere (bilinear between grid points).</summary>
+        /// <summary>True inside the detailed home grid (outside it the mountain's ground is computed on demand).</summary>
+        public bool InGrid(double x, double z) => x >= MinX && x <= MaxX && z >= MinZ && z <= MaxZ;
+
+        /// <summary>Ground height anywhere: the home grid (bilinear between grid points), or the mountain's ground.</summary>
         public double Height(double x, double z)
         {
+            if (!InGrid(x, z)) return Compute(x, z);
+
             double gx = (x - MinX) / Cell, gz = (z - MinZ) / Cell;
             int ix = (int)Math.Floor(gx), iz = (int)Math.Floor(gz);
             double fx = gx - ix, fz = gz - iz;
@@ -104,6 +128,32 @@ namespace FreeVelo.Core.World.Gen
             return best;
         }
 
+        /// <summary>
+        /// Highest a terrain mesh corner may be so that no triangle of a mesh with <paramref name="cellM"/> cells rises
+        /// above a road next to it: the lowest road within reach, minus a margin (+∞ when no road is that close). A
+        /// corner on a road's own bed is left alone, so roads above each other in hairpins keep their ground.
+        /// Coarse meshes (distant views, lower detail) need this: on steep slopes their big triangles otherwise cut
+        /// through the road where it is cut into the hillside.
+        /// </summary>
+        public double RoadCap(double x, double z, double cellM)
+        {
+            // Quick exit far from the mountain roads (16 m distance map; home roads only run inside the home grid).
+            double reachCells = cellM * 1.42;
+            var m = Mountain;
+            if (m != null && !InGrid(x, z) && m.Contains(x, z) && m.RoadDistance(x, z) > reachCells + 30) return double.PositiveInfinity;
+
+            double own = DistanceToRoad(x, z, 8, out var road, out _, out _);
+            if (road != null && own <= (road.Width / 2) + 1.3) return double.PositiveInfinity;
+            double cap = double.PositiveInfinity;
+            for (int i = 0; i < _roads.Count; i++)
+            {
+                var e = _map.Edges[i];
+                cap = Math.Min(cap, _roads[i].LowestWithin(x, z, (e.Width / 2) + reachCells, e.E) - 0.6);
+            }
+
+            return cap;
+        }
+
         /// <summary>Distance to the river centre (up to <paramref name="max"/>) and its water level there.</summary>
         public double DistanceToRiver(double x, double z, double max, out double level)
         {
@@ -126,9 +176,10 @@ namespace FreeVelo.Core.World.Gen
             return _map.River != null && DistanceToRiver(x, z, _map.River.HalfWidth + margin + 1, out _) < _map.River.HalfWidth + margin;
         }
 
-        private double Compute(double x, double z)
+        /// <summary>Ground at a point, computed (for the home grid once, for the mountain whenever a chunk is built).</summary>
+        public double Compute(double x, double z)
         {
-            double h = _map.BaseHeight(x, z);
+            double h = _map.BaseHeight(x, z) + (Mountain?.Offset(x, z) ?? 0);
 
             foreach (var lake in _map.Lakes)
             {

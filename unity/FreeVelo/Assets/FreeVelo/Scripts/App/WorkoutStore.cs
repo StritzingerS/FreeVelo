@@ -49,6 +49,13 @@ namespace FreeVelo.App
                     {
                         failed.Add(File.ReadAllText(path));
                     }
+                    else if (Backup.IsBackup(path))
+                    {
+                        // A FreeVelo backup picked in the same file picker
+                        string message = Backup.Restore(path);
+                        FreeVelo.UI.Ui.Toast(message, 6f);
+                        if (message.StartsWith("✓", StringComparison.Ordinal)) imported.Add(L.Get("backup")); else failed.Add(message);
+                    }
                     else
                     {
                         var workout = Library.Import(name, File.ReadAllText(path, Encoding.UTF8));
@@ -96,7 +103,7 @@ namespace FreeVelo.App
                     files.CallStatic("pickFiles", player.GetStatic<AndroidJavaObject>("currentActivity"), ImportFolder);
                 }
 #elif UNITY_EDITOR
-                string path = UnityEditor.EditorUtility.OpenFilePanel("Import workout", string.Empty, "zwo,erg,mrc");
+                string path = UnityEditor.EditorUtility.OpenFilePanel("Import workout or backup", string.Empty, "zwo,erg,mrc,zip");
                 if (!string.IsNullOrEmpty(path))
                 {
                     File.Copy(path, Path.Combine(ImportFolder, Path.GetFileName(path)), true);

@@ -114,6 +114,46 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>Picks the way on at the next junction (index into <see cref="UpcomingJunction.Options"/>).</summary>
         public void Choose(int option) => _choice = option;
 
+        private Route? _preview;
+        private Route? _previewOf;
+        private int? _previewChoice;
+        private double _previewEnd;
+
+        /// <summary>
+        /// The road ahead up to at least <paramref name="untilDistanceM"/> (for the elevation preview): the path, the
+        /// current choice at the next junction and the default way on at every junction after it. Same distances as
+        /// <see cref="Route"/>; rebuilt only when the path, the choice or the needed length changes.
+        /// </summary>
+        public Route Preview(double untilDistanceM)
+        {
+            if (_preview != null && _previewOf == Route && _previewChoice == _choice && _previewEnd >= untilDistanceM) return _preview;
+            var steps = new List<DirectedEdge>(_steps);
+            double end = EndDistanceM;
+            double want = untilDistanceM + 2000; // some margin, so it is not rebuilt every metre
+            var next = Next();
+            if (next.Options.Count > 0)
+            {
+                steps.Add(next.Options[next.Chosen].Edge);
+                end += _map.Edges[steps[steps.Count - 1].Edge].Length;
+            }
+
+            while (end < want && steps.Count < 64)
+            {
+                var last = steps[steps.Count - 1];
+                var options = Options(last);
+                if (options.Count == 0) break;
+                var step = options[DefaultChoice(last, options)].Edge;
+                steps.Add(step);
+                end += _map.Edges[step.Edge].Length;
+            }
+
+            _preview = _map.BuildRoute("Preview", steps, isLoop: false, _startDistanceM);
+            _previewOf = Route;
+            _previewChoice = _choice;
+            _previewEnd = end;
+            return _preview;
+        }
+
         /// <summary>
         /// Call with the rider's distance: close to the junction the chosen edge is added and old edges are dropped.
         /// Returns true when <see cref="Route"/> changed.
@@ -162,14 +202,18 @@ namespace FreeVelo.Core.World.Gen
             return options.OrderBy(o => o.TurnDegrees).ToList();
         }
 
-        private static int DefaultChoice(DirectedEdge arriving, List<TurnOption> options)
+        private bool IsMainLoopEdge(DirectedEdge e) => _map.Edges[e.Edge].IsMainLoop;
+
+        private int DefaultChoice(DirectedEdge arriving, List<TurnOption> options)
         {
             int best = 0;
             double bestScore = double.MaxValue;
             for (int i = 0; i < options.Count; i++)
             {
-                // Straight on, and stay on the main loop while on it.
+                // Straight on, and stay on the main loop while on it (the mountain's access roads are only taken on
+                // purpose: never by default from the main loop).
                 double score = Math.Abs(options[i].TurnDegrees) - (options[i].IsMainLoop ? 60 : 0);
+                if (options[i].IsMainLoop && IsMainLoopEdge(arriving)) score -= 1000;
                 if (score < bestScore)
                 {
                     bestScore = score;
