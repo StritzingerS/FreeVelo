@@ -90,8 +90,9 @@ namespace FreeVelo.Core.World
         }
 
         /// <summary>
-        /// The heading is the road's direction over this distance before and after the point, so it turns smoothly
-        /// through a bend instead of jumping at every polyline corner (up to 90° in a hairpin with 5 m points).
+        /// The rider follows the road line averaged over this distance before and after the point: a smooth path
+        /// through every polyline corner (junctions turn by up to 90° at a single point, hairpins by up to 90° with
+        /// 5 m points). The heading is the direction of that path, so bike and movement always agree (no drifting).
         /// </summary>
         public const double HeadingWindowM = 6;
 
@@ -104,18 +105,71 @@ namespace FreeVelo.Core.World
             double span = b.DistanceM - a.DistanceM;
             double f = span > 0 ? (d - a.DistanceM) / span : 0;
 
-            var (bx, bz) = PointAt(Clamp(distanceM - HeadingWindowM));
-            var (ax, az) = PointAt(Clamp(distanceM + HeadingWindowM));
+            // Smoothed path: the mean of the road line over ±HeadingWindowM. Its direction is exactly the chord from
+            // −window to +window, which is the heading.
+            // (open routes: around the clamped distance, so the rider never goes past the end of the road)
+            double c = IsLoop ? distanceM : d;
+            var (x, z) = Average(c - HeadingWindowM, c + HeadingWindowM);
+            var (bx, bz) = LinePoint(c - HeadingWindowM);
+            var (ax, az) = LinePoint(c + HeadingWindowM);
             double heading = (ax - bx) * (ax - bx) + ((az - bz) * (az - bz)) > 1e-6
                 ? Math.Atan2(ax - bx, az - bz)
                 : Math.Atan2(b.X - a.X, b.Z - a.Z);
             return new RouteSample(
-                Lerp(a.X, b.X, f),
+                x,
                 Lerp(a.ElevationM, b.ElevationM, f),
-                Lerp(a.Z, b.Z, f),
+                z,
                 heading,
                 Lerp(a.GradePercent, b.GradePercent, f),
                 f < 0.5 ? a.Surface : b.Surface);
+        }
+
+        /// <summary>Mean position of the road line between two distances (exact, segment by segment).</summary>
+        private (double X, double Z) Average(double from, double to)
+        {
+            double sx = 0, sz = 0, d = from;
+            int guard = 0;
+            while (d < to - 1e-9 && guard++ < 10_000)
+            {
+                double rd;
+                if (IsLoop)
+                {
+                    rd = Mod(d, LengthM);
+                }
+                else if (d < Points[0].DistanceM || d >= LengthM)
+                {
+                    // Beyond the ends of an open route the road goes on straight: the mean of that piece is its middle.
+                    double end = d < Points[0].DistanceM ? Math.Min(to, Points[0].DistanceM) : to;
+                    var (mx, mz) = LinePoint((d + end) / 2);
+                    sx += mx * (end - d);
+                    sz += mz * (end - d);
+                    d = end;
+                    continue;
+                }
+                else
+                {
+                    rd = d;
+                }
+
+                int i = Segment(rd);
+                RoutePoint a = Points[i], b = Points[i + 1];
+                double span = b.DistanceM - a.DistanceM;
+                double step = Math.Min(to - d, Math.Max(1e-6, b.DistanceM - rd));
+                if (span <= 0)
+                {
+                    d += step;
+                    continue;
+                }
+
+                // Mean of a straight piece = its middle point.
+                double mid = (rd + (step / 2) - a.DistanceM) / span;
+                sx += Lerp(a.X, b.X, mid) * step;
+                sz += Lerp(a.Z, b.Z, mid) * step;
+                d += step;
+            }
+
+            double total = Math.Max(1e-9, to - from);
+            return (sx / total, sz / total);
         }
 
         /// <summary>
@@ -157,6 +211,18 @@ namespace FreeVelo.Core.World
             }
 
             return Math.Min(lo, Points.Count - 2);
+        }
+
+        /// <summary>Point on the road line; open routes go on straight beyond their ends (along the end segments).</summary>
+        private (double X, double Z) LinePoint(double distanceM)
+        {
+            if (IsLoop || (distanceM >= Points[0].DistanceM && distanceM <= LengthM)) return PointAt(Clamp(distanceM));
+            bool before = distanceM < Points[0].DistanceM;
+            RoutePoint a = before ? Points[0] : Points[Points.Count - 2], b = before ? Points[1] : Points[Points.Count - 1];
+            double span = b.DistanceM - a.DistanceM;
+            if (span <= 0) return before ? (a.X, a.Z) : (b.X, b.Z);
+            double f = (distanceM - a.DistanceM) / span;
+            return (Lerp(a.X, b.X, f), Lerp(a.Z, b.Z, f));
         }
 
         private (double X, double Z) PointAt(double d)
