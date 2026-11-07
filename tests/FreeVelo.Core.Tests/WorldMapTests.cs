@@ -131,4 +131,33 @@ public class WorldMapTests
 
         Assert.True(path.Route.Points.Count < 4000 + Map.Edges.Max(e => e.X.Length), "old edges are dropped"); // a climb alone has ~4900 points
     }
+
+    [Fact]
+    public void PreviewShowsTheRoadBeyondTheNextJunction()
+    {
+        var path = NetworkPath.OnMainLoop(Map, 0, 0);
+        var junction = path.Next();
+        var preview = path.Preview(junction.DistanceM + 3000);
+
+        Assert.True(preview.LengthM >= junction.DistanceM + 3000, "the preview reaches 3 km past the junction");
+        // Same distances as the path, and by default it stays on the main loop.
+        for (double d = 0; d < path.Route.LengthM; d += 100)
+        {
+            Assert.Equal(path.Route.Sample(d).Y, preview.Sample(d).Y, 3);
+        }
+
+        for (double d = junction.DistanceM + 100; d < junction.DistanceM + 3000; d += 100)
+        {
+            var a = preview.Sample(d);
+            var b = Map.MainLoop.Sample(d);
+            Assert.True(Math.Abs(a.X - b.X) < 1 && Math.Abs(a.Z - b.Z) < 1, $"preview left the main loop at {d} m");
+        }
+
+        // Choosing the other way changes the preview.
+        path.Choose(1 - junction.Chosen);
+        var other = path.Preview(junction.DistanceM + 3000);
+        var p = other.Sample(junction.DistanceM + 500);
+        var q = preview.Sample(junction.DistanceM + 500);
+        Assert.True(Math.Abs(p.X - q.X) + Math.Abs(p.Z - q.Z) > 5, "the preview follows the choice");
+    }
 }

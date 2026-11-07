@@ -121,7 +121,8 @@ namespace FreeVelo.UI
             else
             {
                 GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), L.Get("ahead_3km"), Theme.Caption);
-                DrawElevationAhead(graph, route, d);
+                // Beyond the next junction: the way the rider would take by default (or has chosen there).
+                DrawElevationAhead(graph, _ride.Path != null && _ride.Route == _ride.Path.Route ? _ride.Path.Preview(d + 3000) : route, d);
             }
         }
 
@@ -131,6 +132,9 @@ namespace FreeVelo.UI
             const int n = 90;
             double from = distance - 300, to = distance + 3000;
             double end = route.LengthM;
+            // Beyond the next junction the way on can still change: drawn a little fainter.
+            var upcoming = _ride.NextJunction();
+            double fixedUntil = upcoming != null ? upcoming.DistanceM : end;
             double min = double.MaxValue, max = double.MinValue;
             var e = new double[n];
             for (int i = 0; i < n; i++)
@@ -148,7 +152,7 @@ namespace FreeVelo.UI
                 double at = from + ((to - from) * i / (n - 1));
                 float h = 8 + (float)((e[i] - min) / span) * (r.height - 8);
                 bool done = at <= distance;
-                float alpha = at > end ? 0.12f : done ? 0.75f : 0.35f;
+                float alpha = at > end ? 0.12f : done ? 0.75f : at > fixedUntil ? 0.22f : 0.38f;
                 Ui.Rect(new Rect(r.x + (i * bw) - 0.6f, r.yMax - h, bw + 1.2f, h), Theme.Alpha(done ? Theme.Accent : Theme.Info, alpha), 0);
             }
 
@@ -156,10 +160,9 @@ namespace FreeVelo.UI
             Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
 
             // Junction marker.
-            var junction = _ride.NextJunction();
-            if (junction != null && junction.DistanceM < to)
+            if (upcoming != null && upcoming.DistanceM < to)
             {
-                float jx = r.x + (r.width * (float)((junction.DistanceM - from) / (to - from)));
+                float jx = r.x + (r.width * (float)((upcoming.DistanceM - from) / (to - from)));
                 Ui.Rect(new Rect(jx - 1, r.y, 2, r.height), Theme.Alpha(Theme.Warning, 0.9f), 1);
             }
         }
