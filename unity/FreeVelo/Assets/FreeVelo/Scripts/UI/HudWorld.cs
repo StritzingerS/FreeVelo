@@ -109,6 +109,10 @@ namespace FreeVelo.UI
         private static string RouteLabel(FreeVelo.Core.World.Route route) =>
             route.Climbs != null && route.Climbs.Count > 0 ? string.Format(L.Get("climb_loop"), route.Climbs[0].Name) : L.Get("main_loop");
 
+        private FreeVelo.Core.World.Route _aheadRoute;
+        private long _aheadFirst;
+        private double[] _aheadSamples;
+
         private FreeVelo.Core.World.Route _climbedRoute;
         private double[] _climbed;
 
@@ -170,32 +174,36 @@ namespace FreeVelo.UI
         /// <summary>Profile from 300 m behind to 3 km ahead (as far as the way is known: up to the next junction).</summary>
         private void DrawElevationAhead(Rect r, FreeVelo.Core.World.Route route, double distance)
         {
-            int n = ProfileBars(r);
             double from = distance - 300, to = distance + 3000;
             double end = route.LengthM;
             // Beyond the next junction the way on can still change: drawn a little fainter.
             var upcoming = _ride.NextJunction();
             double fixedUntil = upcoming != null ? upcoming.DistanceM : end;
-            // Bars belong to fixed stretches of road (not to fixed places on screen), so they scroll smoothly with the
-            // rider – together with the junction sign – instead of changing height in steps.
-            double step = (to - from) / n;
-            long first = (long)System.Math.Floor(from / step);
-            int m = n + 2;
-            var e = ProfileHeights(route, first * step, (first + m) * step, m, end);
-            double min = e.Min(), max = e.Max();
-            double span = System.Math.Max(MinAheadSpanM, max - min);
-            float px = r.x + (r.width * (float)((distance - from) / (to - from)));
-            float scale = r.width / (float)(to - from);
-            for (int j = 0; j < m; j++)
+
+            // Samples every 15 m tied to the road (not to the screen); worked out again only when the rider has moved
+            // on by one sample or the way ahead changed, so the outline scrolls smoothly.
+            const double step = 15;
+            long first = (long)System.Math.Floor(from / step) - 1;
+            int count = (int)((to - from) / step) + 4;
+            if (_aheadRoute != route || _aheadFirst != first || _aheadSamples == null || _aheadSamples.Length != count)
             {
-                double d0 = (first + j) * step;
-                double at = d0 + (step / 2); // middle of the bar's stretch
-                float h = 8 + (float)((e[j] - min) / span) * (r.height - 8);
-                float alpha = at > end ? 0.12f : at > fixedUntil ? 0.22f : 0.38f;
-                float x0 = r.x + ((float)(d0 - from) * scale);
-                ProfileBar(r, x0, x0 + ((float)step * scale), h, px, Theme.Alpha(Theme.Info, alpha));
+                _aheadSamples = ProfileSamples(route, first * step, step, count, end);
+                _aheadRoute = route;
+                _aheadFirst = first;
             }
 
+            double min = double.MaxValue, max = double.MinValue;
+            for (double d = from; d <= to; d += step)
+            {
+                double y = SampleAt(_aheadSamples, first * step, step, d);
+                min = System.Math.Min(min, y);
+                max = System.Math.Max(max, y);
+            }
+
+            double span = System.Math.Max(MinAheadSpanM, max - min);
+            ProfileColumns(r, from, to, _aheadSamples, first * step, step, min, span, distance,
+                d => d > end ? 0.12f : d > fixedUntil ? 0.24f : 0.42f);
+            float px = r.x + (r.width * (float)((distance - from) / (to - from)));
             Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
 
             // Junction marker: a dashed line with the side-road sign symbol on top – side road left, right or both,

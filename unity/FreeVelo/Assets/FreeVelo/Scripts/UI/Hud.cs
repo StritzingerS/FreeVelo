@@ -278,27 +278,63 @@ namespace FreeVelo.UI
             DrawClimbCards(c.x, dev.yMax + 24, c.width);
         }
 
-        /// <summary>Bars of an elevation profile (more bars look smoother; the bar width stays at least ~3 units).</summary>
-        private static int ProfileBars(Rect r) => Mathf.Clamp(Mathf.RoundToInt(r.width / 4f), 40, 200);
+        /// <summary>Width of one column of an elevation profile (GUI units).</summary>
+        private const float ProfileColumnW = 3f;
 
         /// <summary>
-        /// Smoothed elevations for <paramref name="n"/> bars between two distances: each bar the mean of its stretch
-        /// (4 samples), then neighbours evened out (1-2-1), so the profile reads as a curve instead of steps.
+        /// Elevation samples every <paramref name="step"/> metres from <paramref name="start"/> (<paramref name="count"/> of
+        /// them): each the mean of its stretch (4 samples), then evened out with its neighbours (1-2-1).
         /// </summary>
-        private static double[] ProfileHeights(FreeVelo.Core.World.Route route, double from, double to, int n, double clampAt)
+        private static double[] ProfileSamples(FreeVelo.Core.World.Route route, double start, double step, int count, double clampAt)
         {
             const int samples = 4;
-            var raw = new double[n];
-            for (int i = 0; i < n; i++)
+            var raw = new double[count];
+            for (int i = 0; i < count; i++)
             {
                 double sum = 0;
-                for (int k = 0; k < samples; k++) sum += route.Sample(System.Math.Min(clampAt, from + ((to - from) * (i + ((k + 0.5) / samples)) / n))).Y;
+                for (int k = 0; k < samples; k++) sum += route.Sample(System.Math.Min(clampAt, start + (step * (i - 0.5 + ((k + 0.5) / samples))))).Y;
                 raw[i] = sum / samples;
             }
 
-            var e = new double[n];
-            for (int i = 0; i < n; i++) e[i] = (raw[System.Math.Max(0, i - 1)] + (2 * raw[i]) + raw[System.Math.Min(n - 1, i + 1)]) / 4;
+            var e = new double[count];
+            for (int i = 0; i < count; i++) e[i] = (raw[System.Math.Max(0, i - 1)] + (2 * raw[i]) + raw[System.Math.Min(count - 1, i + 1)]) / 4;
             return e;
+        }
+
+        /// <summary>Elevation at a distance, interpolated between the samples (start, step).</summary>
+        private static double SampleAt(double[] e, double start, double step, double d)
+        {
+            double f = (d - start) / step;
+            int i = Mathf.Clamp((int)System.Math.Floor(f), 0, e.Length - 1);
+            int j = System.Math.Min(e.Length - 1, i + 1);
+            double t = System.Math.Max(0, System.Math.Min(1, f - i));
+            return e[i] + ((e[j] - e[i]) * t);
+        }
+
+        /// <summary>
+        /// Draws an elevation profile as thin solid columns (no seams, no overlapping see-through bars): ridden part orange
+        /// left of <paramref name="rider"/>, the rest blue with <paramref name="alphaAt"/> (fainter where the way can still
+        /// change). Heights are interpolated from samples tied to the road, so the outline glides smoothly when it scrolls.
+        /// </summary>
+        private static void ProfileColumns(Rect r, double from, double to, double[] e, double start, double step, double min, double span,
+            double rider, System.Func<double, float> alphaAt)
+        {
+            int cols = Mathf.Max(1, Mathf.FloorToInt(r.width / ProfileColumnW));
+            float cw = r.width / cols;
+            // Opaque colours (blended over the card): neighbouring columns never double up into lighter lines.
+            var bg = Theme.Background;
+            var done = Color.Lerp(bg, Theme.Accent, 0.78f);
+            float px = r.x + (r.width * (float)((rider - from) / (to - from)));
+            for (int c = 0; c < cols; c++)
+            {
+                double d = from + ((to - from) * (c + 0.5) / cols);
+                float h = 8 + (float)((SampleAt(e, start, step, d) - min) / span) * (r.height - 8);
+                float x0 = r.x + (c * cw), x1 = x0 + cw;
+                var ahead = Color.Lerp(bg, Theme.Info, alphaAt(d));
+                float split = Mathf.Clamp(px, x0, x1);
+                if (split > x0) Ui.Rect(new Rect(x0, r.yMax - h, split - x0, h), done, 0);
+                if (split < x1) Ui.Rect(new Rect(split, r.yMax - h, x1 - split, h), ahead, 0);
+            }
         }
 
         /// <summary>Height range a whole-round profile shows at least, so small hills don't look like mountains.</summary>
@@ -322,39 +358,29 @@ namespace FreeVelo.UI
             return (up, down);
         }
 
+        private FreeVelo.Core.World.Route _roundProfileRoute;
+        private double[] _roundProfile;
+
         private void DrawElevation(Rect r, FreeVelo.Core.World.Route route, double position)
         {
-            int n = ProfileBars(r);
-            var e = ProfileHeights(route, 0, route.LengthM, n, double.MaxValue);
-            double min = e.Min(), max = e.Max();
-            double span = System.Math.Max(MinRoundSpanM, max - min);
-            float px = position >= 0 ? r.x + (r.width * (float)(position / route.LengthM)) : float.NegativeInfinity;
-            for (int i = 0; i < n; i++)
+            // The whole round: samples worked out once per route (about one per column).
+            const int count = 240;
+            double step = route.LengthM / count;
+            if (_roundProfileRoute != route)
             {
-                float h = 8 + (float)((e[i] - min) / span) * (r.height - 8);
-                ProfileBar(r, i, n, h, px, Theme.Alpha(Theme.Info, 0.35f));
+                _roundProfile = ProfileSamples(route, step / 2, step, count, double.MaxValue);
+                _roundProfileRoute = route;
             }
 
-            if (position >= 0) Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
-        }
-
-        /// <summary>
-        /// Bar <paramref name="i"/> of <paramref name="n"/> of an elevation profile: ridden (orange) left of the rider's
-        /// position <paramref name="px"/>, <paramref name="ahead"/> right of it; the bar under the rider is split there.
-        /// </summary>
-        private static void ProfileBar(Rect r, int i, int n, float h, float px, Color ahead) =>
-            ProfileBar(r, r.x + (r.width * i / n), r.x + (r.width * (i + 1) / n), h, px, ahead);
-
-        /// <summary>A bar from <paramref name="x0"/> to <paramref name="x1"/>, clipped to the graph.</summary>
-        private static void ProfileBar(Rect r, float x0, float x1, float h, float px, Color ahead)
-        {
-            // A little overlap between bars, so no seams show (but never across the rider's position or the edges).
-            float a = Mathf.Max(r.x, x0 - 0.6f), b = Mathf.Min(r.xMax, x1 + 0.6f);
-            if (b <= a) return;
-            var done = Theme.Alpha(Theme.Accent, 0.75f);
-            float split = Mathf.Clamp(px, a, b);
-            if (split > a) Ui.Rect(new Rect(a, r.yMax - h, split - a, h), done, 0);
-            if (split < b) Ui.Rect(new Rect(split, r.yMax - h, b - split, h), ahead, 0);
+            var e = _roundProfile;
+            double min = e.Min(), max = e.Max();
+            double span = System.Math.Max(MinRoundSpanM, max - min);
+            ProfileColumns(r, 0, route.LengthM, e, step / 2, step, min, span, position >= 0 ? position : double.NegativeInfinity, _ => 0.4f);
+            if (position >= 0)
+            {
+                float px = r.x + (r.width * (float)(position / route.LengthM));
+                Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
+            }
         }
 
         // ------------------------------------------------------------------ workouts
