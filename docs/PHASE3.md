@@ -66,6 +66,10 @@ to wake up.
 - [x] Group rides: the lobby chooses its route (main loop or one of the climbs); Keep Together runs on it.
 - [x] Climb timer while riding (time, km to the summit, gap to the best time), result in the ride summary,
       best times and ascents in the history, climbs in the ride detail.
+- [x] Braking before bends (`Cornering`): every bend has a safe speed (30° lean, a 10 m hairpin ≈ 27 km/h); the
+      rider brakes early (4 m/s²) to reach it. Only the virtual speed is limited, the trainer keeps simulating
+      the road. While braking the rider freewheels and the HUD shows "Braking for the bend". Group rides: the
+      server's Keep Together group brakes so every rider (±25 m around the anchor) takes the bend safely.
 - [ ] Look at the mountain on a phone: far tiles, fog, colours, frame rate of the streamed near tiles
 
 ### Done when

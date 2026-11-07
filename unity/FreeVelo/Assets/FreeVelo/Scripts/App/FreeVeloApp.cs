@@ -198,7 +198,8 @@ namespace FreeVelo.App
             _avatar.transform.SetPositionAndRotation(position, rotation);
 
             bool riding = _ride.State == RideState.Riding;
-            float cadence = riding ? (float)(_ble.Hub.Live.CadenceRpm ?? 0) : 0;
+            // Braking for a bend: the rider stops pedalling and freewheels.
+            float cadence = riding && !_ride.IsBraking ? (float)(_ble.Hub.Live.CadenceRpm ?? 0) : 0;
             float speed = riding ? (float)_ride.SpeedMps : 0f; // wheels stand still outside a ride (menus, summary)
             _avatar.Animate(speed, cadence, dt);
 

@@ -31,6 +31,7 @@ namespace FreeVelo.App
             ["interval"] = ("Interval", "Intervall"),
             ["block"] = ("Block", "Block"),
             ["ride_complete"] = ("Ride complete", "Fahrt beendet"),
+            ["braking"] = ("Braking for the bend", "Bremsen vor der Kurve"),
             ["summit_reached"] = ("{0}: summit reached – {1}", "{0}: Gipfel erreicht – {1}"),
             ["climbs"] = ("Legendary climbs", "Legendäre Anstiege"),
             ["climb"] = ("Climb", "Anstieg"),

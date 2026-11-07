@@ -126,6 +126,11 @@ namespace FreeVelo.Ride
 
         public double SpeedMps => _physics.SpeedMps;
 
+        /// <summary>True while the rider brakes for a bend ahead (descents).</summary>
+        public bool IsBraking { get; private set; }
+
+        private double _brakeHoldS;
+
         public RouteSample Position => Route.Sample(DistanceM);
 
         /// <summary>True while the rider does not pedal (time and workout stop).</summary>
@@ -221,6 +226,7 @@ namespace FreeVelo.Ride
             _sampleTimer = 0;
             _rideStartDistanceM = DistanceM; // continue where the rider is, but count this ride from 0
             _physics.SpeedMps = 0;
+            IsBraking = false;
             _physics.RiderMassKg = AppSettings.RiderWeightKg;
             ElapsedS = 0;
             Summary = null;
@@ -295,6 +301,7 @@ namespace FreeVelo.Ride
 
             _wasGroupRide = IsGroupRide;
             IsGroupRide = false;
+            IsBraking = false;
             _physics.SpeedMps = 0; // the rider stops: no more wheel/world movement after the ride
             _ble.Hub.SetSimulation(0); // release ERG resistance
             _ble.Hub.LowCadenceProtectionEnabled = true;
@@ -434,8 +441,17 @@ namespace FreeVelo.Ride
             var position = Route.Sample(DistanceM);
             double crr = RoadSurfaces.RollingResistance(position.Surface);
             _physics.Step(IsPaused ? 0 : power, position.GradePercent, crr, dt);
+            // Brake before tight bends (descents): only the virtual speed, the trainer keeps simulating the road.
+            double limit = Cornering.StepLimit(Route, DistanceM, _physics.SpeedMps, dt);
+            // Shown for at least half a second, so the brake chip and the freewheeling legs do not flicker.
+            _brakeHoldS = Cornering.Brake(_physics, limit, dt) ? 0.5 : Math.Max(0, _brakeHoldS - dt);
+            IsBraking = _brakeHoldS > 0;
             DistanceM += _physics.SpeedMps * dt;
-            if (IsGroupRide) ApplyGroup(cadence, dt);
+            if (IsGroupRide)
+            {
+                ApplyGroup(cadence, dt);
+                IsBraking = _physics.SpeedMps > 3 && _physics.SpeedMps >= limit - 0.3; // the server brakes for the group
+            }
             else if (Path != null && Path.Update(DistanceM)) Route = Path.Route; // next junction reached: chosen road added
             UpdateClimb();
 
@@ -672,6 +688,7 @@ namespace FreeVelo.Ride
                 double power = WorkoutState != null && WorkoutState.TargetW.HasValue && !WorkoutState.IsFinished ? WorkoutState.TargetW.Value : lastPower;
                 var position = Route.Sample(DistanceM);
                 _physics.Step(power, position.GradePercent, RoadSurfaces.RollingResistance(position.Surface), 1f);
+                Cornering.Brake(_physics, Cornering.StepLimit(Route, DistanceM, _physics.SpeedMps, 1f), 1f);
                 DistanceM += _physics.SpeedMps;
                 ElapsedS += 1;
 
