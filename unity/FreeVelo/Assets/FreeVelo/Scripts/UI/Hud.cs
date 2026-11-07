@@ -956,13 +956,13 @@ namespace FreeVelo.UI
             string grade = $"{pos.GradePercent:+0.0;-0.0;0.0} %";
             var gradeColor = pos.GradePercent > 4 ? Theme.Danger : pos.GradePercent > 1.5 ? Theme.Warning : pos.GradePercent < -1.5 ? Theme.Info : Theme.Muted;
             var chipStyle = Theme.With(Theme.H3, size: 17, anchor: TextAnchor.MiddleLeft);
-            // The gradient only from 3 % up or down (flat roads need no chip).
-            bool showGrade = System.Math.Abs(pos.GradePercent) >= 3;
+            // The gradient only on climbs from 3 % (not on flat roads or descents).
+            bool showGrade = pos.GradePercent >= 3;
             float w2 = showGrade ? chipStyle.CalcSize(new GUIContent(grade)).x + 56 : 0;
             string brake = L.Get("braking");
             float w3 = _ride.IsBraking ? chipStyle.CalcSize(new GUIContent(brake)).x + 56 : 0;
             float cx = (_w - (w2 + w3 + (w2 > 0 && w3 > 0 ? 10 : 0))) / 2f;
-            if (showGrade) InfoChip(new Rect(cx, cy, w2, 38), pos.GradePercent < 0 ? Icon.GradeDown : Icon.GradeUp, grade, gradeColor, chipStyle);
+            if (showGrade) InfoChip(new Rect(cx, cy, w2, 38), Icon.GradeUp, grade, gradeColor, chipStyle);
             if (_ride.IsBraking) InfoChip(new Rect(cx + w2 + (w2 > 0 ? 10 : 0), cy, w3, 38), Icon.Hand, brake, Theme.Warning, chipStyle);
 
             // Warnings
