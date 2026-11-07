@@ -176,16 +176,24 @@ namespace FreeVelo.UI
             // Beyond the next junction the way on can still change: drawn a little fainter.
             var upcoming = _ride.NextJunction();
             double fixedUntil = upcoming != null ? upcoming.DistanceM : end;
-            var e = ProfileHeights(route, from, to, n, end);
+            // Bars belong to fixed stretches of road (not to fixed places on screen), so they scroll smoothly with the
+            // rider – together with the junction sign – instead of changing height in steps.
+            double step = (to - from) / n;
+            long first = (long)System.Math.Floor(from / step);
+            int m = n + 2;
+            var e = ProfileHeights(route, first * step, (first + m) * step, m, end);
             double min = e.Min(), max = e.Max();
             double span = System.Math.Max(MinAheadSpanM, max - min);
             float px = r.x + (r.width * (float)((distance - from) / (to - from)));
-            for (int i = 0; i < n; i++)
+            float scale = r.width / (float)(to - from);
+            for (int j = 0; j < m; j++)
             {
-                double at = from + ((to - from) * (i + 0.5) / n); // middle of the bar's stretch
-                float h = 8 + (float)((e[i] - min) / span) * (r.height - 8);
+                double d0 = (first + j) * step;
+                double at = d0 + (step / 2); // middle of the bar's stretch
+                float h = 8 + (float)((e[j] - min) / span) * (r.height - 8);
                 float alpha = at > end ? 0.12f : at > fixedUntil ? 0.22f : 0.38f;
-                ProfileBar(r, i, n, h, px, Theme.Alpha(Theme.Info, alpha));
+                float x0 = r.x + ((float)(d0 - from) * scale);
+                ProfileBar(r, x0, x0 + ((float)step * scale), h, px, Theme.Alpha(Theme.Info, alpha));
             }
 
             Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);

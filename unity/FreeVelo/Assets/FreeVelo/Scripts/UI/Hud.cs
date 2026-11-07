@@ -342,14 +342,19 @@ namespace FreeVelo.UI
         /// Bar <paramref name="i"/> of <paramref name="n"/> of an elevation profile: ridden (orange) left of the rider's
         /// position <paramref name="px"/>, <paramref name="ahead"/> right of it; the bar under the rider is split there.
         /// </summary>
-        private static void ProfileBar(Rect r, int i, int n, float h, float px, Color ahead)
+        private static void ProfileBar(Rect r, int i, int n, float h, float px, Color ahead) =>
+            ProfileBar(r, r.x + (r.width * i / n), r.x + (r.width * (i + 1) / n), h, px, ahead);
+
+        /// <summary>A bar from <paramref name="x0"/> to <paramref name="x1"/>, clipped to the graph.</summary>
+        private static void ProfileBar(Rect r, float x0, float x1, float h, float px, Color ahead)
         {
-            float x0 = r.x + (r.width * i / n), x1 = r.x + (r.width * (i + 1) / n);
+            // A little overlap between bars, so no seams show (but never across the rider's position or the edges).
+            float a = Mathf.Max(r.x, x0 - 0.6f), b = Mathf.Min(r.xMax, x1 + 0.6f);
+            if (b <= a) return;
             var done = Theme.Alpha(Theme.Accent, 0.75f);
-            float split = Mathf.Clamp(px, x0, x1);
-            // A little overlap between bars, so no seams show (but never across the rider's position).
-            if (split > x0) Ui.Rect(new Rect(x0 - 0.6f, r.yMax - h, split - x0 + (split < x1 ? 0 : 1.2f), h), done, 0);
-            if (split < x1) Ui.Rect(new Rect(split - (split > x0 ? 0 : 0.6f), r.yMax - h, x1 - split + 1.2f, h), ahead, 0);
+            float split = Mathf.Clamp(px, a, b);
+            if (split > a) Ui.Rect(new Rect(a, r.yMax - h, split - a, h), done, 0);
+            if (split < b) Ui.Rect(new Rect(split, r.yMax - h, b - split, h), ahead, 0);
         }
 
         // ------------------------------------------------------------------ workouts
