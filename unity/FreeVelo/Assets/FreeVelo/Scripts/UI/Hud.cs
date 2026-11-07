@@ -898,7 +898,7 @@ namespace FreeVelo.UI
             float w3 = _ride.IsBraking ? chipStyle.CalcSize(new GUIContent(brake)).x + 56 : 0;
             float cx = (_w - (w1 + w2 + 10 + (w3 > 0 ? w3 + 10 : 0))) / 2f;
             InfoChip(new Rect(cx, cy, w1, 38), Icon.Route, dist, Theme.Info, chipStyle);
-            InfoChip(new Rect(cx + w1 + 10, cy, w2, 38), Icon.Speed, grade, gradeColor, chipStyle);
+            InfoChip(new Rect(cx + w1 + 10, cy, w2, 38), pos.GradePercent < -0.05 ? Icon.GradeDown : Icon.GradeUp, grade, gradeColor, chipStyle);
             if (_ride.IsBraking) InfoChip(new Rect(cx + w1 + w2 + 20, cy, w3, 38), Icon.Hand, brake, Theme.Warning, chipStyle);
 
             // Warnings
