@@ -525,19 +525,16 @@ namespace FreeVelo.UI
             switch (_workoutTab)
             {
                 case WorkoutTab.Library:
+                    if (modified && _confirmReset == w.Id)
+                    {
+                        // Confirming: only the confirm button next to Start, as wide as its text.
+                        if (ConfirmButton(r, by, L.Get("confirm_reset"))) ResetTemplate(w);
+                        break;
+                    }
+
                     if (modified)
                     {
-                        bool confirm = _confirmReset == w.Id;
-                        if (confirm)
-                        {
-                            ix -= 112;
-                            if (Ui.Button(new Rect(ix, by, 160, 48), L.Get("confirm_reset"), ButtonKind.Danger)) ResetTemplate(w);
-                        }
-                        else if (Ui.IconButton(new Rect(ix, by, 48, 48), Icon.Reset))
-                        {
-                            _confirmReset = w.Id;
-                        }
-
+                        if (Ui.IconButton(new Rect(ix, by, 48, 48), Icon.Reset)) _confirmReset = w.Id;
                         ix -= 56;
                     }
 
@@ -546,20 +543,18 @@ namespace FreeVelo.UI
 
                 case WorkoutTab.Mine:
                 {
-                    bool confirm = _confirmDelete == w.Id;
-                    if (confirm)
+                    if (_confirmDelete == w.Id)
                     {
-                        ix -= 112;
-                        if (Ui.Button(new Rect(ix, by, 160, 48), L.Get("confirm_delete"), ButtonKind.Danger))
+                        if (ConfirmButton(r, by, L.Get("confirm_delete")))
                         {
                             WorkoutStore.Delete(w);
                             _confirmDelete = null;
                         }
+
+                        break;
                     }
-                    else if (Ui.IconButton(new Rect(ix, by, 48, 48), Icon.Trash))
-                    {
-                        _confirmDelete = w.Id;
-                    }
+
+                    if (Ui.IconButton(new Rect(ix, by, 48, 48), Icon.Trash)) _confirmDelete = w.Id;
 
                     ix -= 56;
                     if (Ui.IconButton(new Rect(ix, by, 48, 48), Icon.Share)) WorkoutStore.Share(w);
@@ -568,6 +563,13 @@ namespace FreeVelo.UI
                     break;
                 }
             }
+        }
+
+        /// <summary>Red confirm button at the right of a workout card, as wide as its text (at most up to the Start button).</summary>
+        private static bool ConfirmButton(Rect card, float y, string text)
+        {
+            float w = Mathf.Min(Ui.ButtonWidth(text, false, 48), card.width - 40 - 132 - 12);
+            return Ui.Button(new Rect(card.xMax - 20 - w, y, w, 48), text, ButtonKind.Danger);
         }
 
         private void ResetTemplate(Workout w)
