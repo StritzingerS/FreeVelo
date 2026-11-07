@@ -176,6 +176,15 @@ namespace FreeVelo.Devices.Session
 
         public string? HeartRateAddress { get; private set; }
 
+        private string? _relayHeartRateAddress;
+
+        /// <summary>
+        /// Where the heart rate comes from: the heart rate sensor, or else a trainer / power meter that is passing on
+        /// a heart rate right now (null when there is none).
+        /// </summary>
+        public string? HeartRateSource =>
+            HeartRateAddress ?? (Fresh(_trainerHeartRate, _clockMs()) && _relayHeartRateAddress != null ? _relayHeartRateAddress : null);
+
         public PowerSource PowerSource { get; set; } = PowerSource.Trainer;
 
         /// <summary>Rider weight sent to Tacx FE-C trainers (SIM physics).</summary>
@@ -252,7 +261,10 @@ namespace FreeVelo.Devices.Session
                 Log?.Invoke($"{address}: power meter");
             }
 
-            if (set.Contains(HeartRateService) && HeartRateAddress == null)
+            // Heart rate role only for a real heart rate sensor. Trainers and power meters that offer the heart rate
+            // service (e.g. a KICKR passing on a strap paired with it) only count while they actually send values.
+            bool combined = set.Contains(FtmsService) || set.Contains(TacxFec.Service) || set.Contains(CyclingPowerService);
+            if (set.Contains(HeartRateService) && !combined && (HeartRateAddress == null || HeartRateAddress == _relayHeartRateAddress))
             {
                 HeartRateAddress = address;
                 Log?.Invoke($"{address}: heart rate");
@@ -412,8 +424,17 @@ namespace FreeVelo.Devices.Session
             }
             else if (characteristic == HeartRateChar && HeartRateMeasurement.TryParse(data, out var hr) && hr != null)
             {
-                _heartRate = (now, hr.Bpm);
-                Live.LatestRrIntervalsMs = hr.RrIntervalsMs;
+                if (address == HeartRateAddress)
+                {
+                    _heartRate = (now, hr.Bpm);
+                    Live.LatestRrIntervalsMs = hr.RrIntervalsMs;
+                }
+                else if (hr.Bpm > 0)
+                {
+                    // Passed on by a trainer / power meter: used only without a heart rate sensor of its own.
+                    _trainerHeartRate = (now, hr.Bpm);
+                    _relayHeartRateAddress = address;
+                }
             }
 
             UpdateLive(now);

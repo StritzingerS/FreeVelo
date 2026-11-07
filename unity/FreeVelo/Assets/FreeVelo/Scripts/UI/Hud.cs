@@ -261,7 +261,7 @@ namespace FreeVelo.UI
             {
                 (Icon.Trainer, L.Get("trainer"), hub.TrainerAddress),
                 (Icon.Bolt, L.Get("power_meter"), hub.PowerMeterAddress),
-                (Icon.Heart, L.Get("heart_rate"), hub.HeartRateAddress),
+                (Icon.Heart, L.Get("heart_rate"), hub.HeartRateSource),
             };
             float rw = (dev.width - 150) / 3f;
             for (int i = 0; i < roles.Length; i++)
@@ -603,7 +603,7 @@ namespace FreeVelo.UI
             {
                 (Icon.Trainer, L.Get("trainer"), hub.TrainerAddress, hub.TrainerAddress != null ? ProtocolName(hub.TrainerProtocol.ToString()) : null),
                 (Icon.Bolt, L.Get("power_meter"), hub.PowerMeterAddress, null),
-                (Icon.Heart, L.Get("heart_rate"), hub.HeartRateAddress, null),
+                (Icon.Heart, L.Get("heart_rate"), hub.HeartRateSource, null),
             };
             float rw = (c.width - 48) / 4f;
             DrawControllerCard(new Rect(c.x + (3 * (rw + 16)), c.y + 86, rw, 96));

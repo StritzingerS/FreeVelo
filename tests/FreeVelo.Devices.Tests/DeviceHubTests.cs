@@ -86,6 +86,32 @@ public class DeviceHubTests
     }
 
     [Fact]
+    public void TrainerWithAHeartRateServiceIsNotTheHeartRateSensor()
+    {
+        // KICKR CORE: FTMS + power + heart rate service (it passes on a strap paired with it) – here without a strap.
+        _hub.OnReady("KICKR", new[] { Ftms, Cps, Hrs });
+        Assert.Equal("KICKR", _hub.TrainerAddress);
+        Assert.Null(_hub.HeartRateAddress);
+        _hub.OnData("KICKR", GattUuids.FromShort(GattUuids.HeartRateMeasurement), new byte[] { 0x00, 0x00 });
+        _hub.Tick();
+        Assert.Null(_hub.HeartRateSource);
+        Assert.Null(_hub.Live.HeartRateBpm);
+
+        // A strap paired with the trainer: its heart rate is used …
+        _hub.OnData("KICKR", GattUuids.FromShort(GattUuids.HeartRateMeasurement), new byte[] { 0x00, 128 });
+        _hub.Tick();
+        Assert.Equal("KICKR", _hub.HeartRateSource);
+        Assert.Equal(128, _hub.Live.HeartRateBpm);
+
+        // … until a heart rate sensor of its own connects.
+        _hub.OnReady("HRM", new[] { Hrs });
+        _hub.OnData("HRM", GattUuids.FromShort(GattUuids.HeartRateMeasurement), new byte[] { 0x00, 141 });
+        _hub.Tick();
+        Assert.Equal("HRM", _hub.HeartRateAddress);
+        Assert.Equal(141, _hub.Live.HeartRateBpm);
+    }
+
+    [Fact]
     public void FtmsIsPreferredOverFec()
     {
         _hub.OnReady("BOTH", new[] { Ftms, TacxFec.Service });
