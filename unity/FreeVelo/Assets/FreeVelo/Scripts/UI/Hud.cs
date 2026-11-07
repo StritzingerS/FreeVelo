@@ -859,16 +859,20 @@ namespace FreeVelo.UI
             // otherwise below the distance/grade chips.
             const float sideSpace = 344 + 16;
             bool sidesBeside = _w - (2 * sideSpace) >= 640;
-            float barW = sidesBeside ? Mathf.Min(820, _w - (2 * sideSpace)) : Mathf.Min(820, _w - 48);
+            float barW = sidesBeside ? Mathf.Min(900, _w - (2 * sideSpace)) : Mathf.Min(900, _w - 48);
             var bar = new Rect((_w - barW) / 2f, 20, barW, 112);
             Ui.Card(bar, Theme.Alpha(Theme.Background, 0.88f));
-            float powerW = barW * 0.3f;
-            float side = (barW - powerW) / 4f;
-            Metric(new Rect(bar.x, bar.y, side, bar.height), Icon.Cadence, L.Get("cadence"), live.CadenceRpm.HasValue ? $"{live.CadenceRpm:0}" : "–", "rpm", Theme.Text);
-            Metric(new Rect(bar.x + side, bar.y, side, bar.height), Icon.Heart, L.Get("heart_rate"), live.HeartRateBpm.HasValue ? $"{live.HeartRateBpm}" : "–", "bpm", Theme.HeartRed);
+            float powerW = barW * 0.24f;
+            float side = (barW - powerW) / 6f;
+
+            // Left: the ride so far (time, distance, elevation gained); right: live values (speed, cadence, heart rate).
+            double km = _ride.RideDistanceM / 1000;
+            Metric(new Rect(bar.x, bar.y, side, bar.height), Icon.Timer, L.Get("time"), Ui.Clock(_ride.ElapsedS), null, Theme.Text);
+            Metric(new Rect(bar.x + side, bar.y, side, bar.height), Icon.Route, L.Get("distance"), km < 10 ? $"{km:0.00}" : $"{km:0.0}", "km", Theme.Info);
+            Metric(new Rect(bar.x + (2 * side), bar.y, side, bar.height), Icon.Ascent, L.Get("ascent"), $"{_ride.AscentM:0}", "m", Theme.Success);
 
             // Power (centre), coloured by how well the target is held.
-            var p = new Rect(bar.x + (2 * side), bar.y - 8, powerW, bar.height + 16);
+            var p = new Rect(bar.x + (3 * side), bar.y - 8, powerW, bar.height + 16);
             Ui.Card(p, Theme.Surface2);
             Color powerColor = Theme.Text;
             if (workout && state.TargetW.HasValue && state.TargetW.Value > 0)
@@ -883,23 +887,22 @@ namespace FreeVelo.UI
             GUI.Label(new Rect(p.x, p.yMax - 32, p.width, 22), sub, Theme.With(Theme.Caption, anchor: TextAnchor.MiddleCenter));
 
             Metric(new Rect(p.xMax, bar.y, side, bar.height), Icon.Speed, L.Get("speed"), $"{_ride.SpeedMps * 3.6:0.0}", "km/h", Theme.Text);
-            Metric(new Rect(p.xMax + side, bar.y, side, bar.height), Icon.Timer, L.Get("time"), Ui.Clock(_ride.ElapsedS), null, Theme.Text);
+            Metric(new Rect(p.xMax + side, bar.y, side, bar.height), Icon.Cadence, L.Get("cadence"), live.CadenceRpm.HasValue ? $"{live.CadenceRpm:0}" : "–", "rpm", Theme.Text);
+            Metric(new Rect(p.xMax + (2 * side), bar.y, side, bar.height), Icon.Heart, L.Get("heart_rate"), live.HeartRateBpm.HasValue ? $"{live.HeartRateBpm}" : "–", "bpm", Theme.HeartRed);
 
-            // Chips under the bar: distance, grade
+            // Chips under the bar: gradient (and braking)
             float cy = bar.yMax + 16;
             _sideTop = sidesBeside ? 24 : cy + 54;
             _leftTop = sidesBeside ? 100 : cy + 54;
             string grade = $"{pos.GradePercent:+0.0;-0.0;0.0} %";
             var gradeColor = pos.GradePercent > 4 ? Theme.Danger : pos.GradePercent > 1.5 ? Theme.Warning : pos.GradePercent < -1.5 ? Theme.Info : Theme.Muted;
             var chipStyle = Theme.With(Theme.H3, size: 17, anchor: TextAnchor.MiddleLeft);
-            string dist = $"{_ride.RideDistanceM / 1000:0.00} km";
-            float w1 = chipStyle.CalcSize(new GUIContent(dist)).x + 56, w2 = chipStyle.CalcSize(new GUIContent(grade)).x + 56;
+            float w2 = chipStyle.CalcSize(new GUIContent(grade)).x + 56;
             string brake = L.Get("braking");
             float w3 = _ride.IsBraking ? chipStyle.CalcSize(new GUIContent(brake)).x + 56 : 0;
-            float cx = (_w - (w1 + w2 + 10 + (w3 > 0 ? w3 + 10 : 0))) / 2f;
-            InfoChip(new Rect(cx, cy, w1, 38), Icon.Route, dist, Theme.Info, chipStyle);
-            InfoChip(new Rect(cx + w1 + 10, cy, w2, 38), pos.GradePercent < -0.05 ? Icon.GradeDown : Icon.GradeUp, grade, gradeColor, chipStyle);
-            if (_ride.IsBraking) InfoChip(new Rect(cx + w1 + w2 + 20, cy, w3, 38), Icon.Hand, brake, Theme.Warning, chipStyle);
+            float cx = (_w - (w2 + (w3 > 0 ? w3 + 10 : 0))) / 2f;
+            InfoChip(new Rect(cx, cy, w2, 38), pos.GradePercent < -0.05 ? Icon.GradeDown : Icon.GradeUp, grade, gradeColor, chipStyle);
+            if (_ride.IsBraking) InfoChip(new Rect(cx + w2 + 10, cy, w3, 38), Icon.Hand, brake, Theme.Warning, chipStyle);
 
             // Warnings
             string warning = _ble.Hub.TrainerAddress == null ? L.Get("no_trainer")
@@ -947,8 +950,11 @@ namespace FreeVelo.UI
         private static void Metric(Rect r, Icon icon, string label, string value, string unit, Color iconColor)
         {
             Ui.DrawIcon(new Rect(r.center.x - 10, r.y + 16, 20, 20), icon, iconColor);
-            string v = unit != null ? $"{value}<size=16><color=#B3BECA> {unit}</color></size>" : value;
-            GUI.Label(new Rect(r.x, r.y + 40, r.width, 56), v, Theme.With(Theme.Value, anchor: TextAnchor.MiddleCenter));
+            string v = unit != null ? $"{value}<size=15><color=#B3BECA> {unit}</color></size>" : value;
+            // Seven values share the bar: long ones (1:23:45, 36.5 km/h) get a smaller font instead of overflowing.
+            var style = Theme.With(Theme.Value, anchor: TextAnchor.MiddleCenter);
+            while (style.fontSize > 20 && style.CalcSize(new GUIContent(v)).x > r.width - 8) style.fontSize -= 2;
+            GUI.Label(new Rect(r.x, r.y + 40, r.width, 56), v, style);
         }
 
         private static void InfoChip(Rect r, Icon icon, string text, Color iconColor, GUIStyle style)

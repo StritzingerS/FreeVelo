@@ -73,7 +73,7 @@ namespace FreeVelo.UI
             var c = _ride.ActiveClimb;
             if (c == null) return;
             float top = workout ? _sideTop + (_ride.WorkoutComplete ? 150 : 330) + 16 : _leftTop;
-            var card = new Rect(workout ? _w - 344 : 24, top, 320, 176);
+            var card = new Rect(workout ? _w - 344 : 24, top, 320, 204);
             Ui.Card(card, Theme.Alpha(Theme.Background, 0.88f));
             GUI.Label(new Rect(card.x + 22, card.y + 16, card.width - 44, 18), L.Get("climb").ToUpperInvariant(), Theme.With(Theme.Overline, Theme.Accent));
             GUI.Label(new Rect(card.x + 22, card.y + 34, card.width - 44, 28), c.Name, Clip(Theme.With(Theme.H3, size: 20)));
@@ -88,6 +88,12 @@ namespace FreeVelo.UI
 
             double toGo = System.Math.Max(0, c.LengthM - _ride.ActiveClimbProgressM);
             GUI.Label(new Rect(card.x + 22, card.y + 140, card.width - 44, 22), $"{toGo / 1000:0.0} km {L.Get("to_summit")}", Theme.Caption);
+
+            // Elevation gained on the climb so far, of its total gain.
+            double gained = System.Math.Max(0, _ride.Position.Y - _ride.Route.Sample(c.StartM).Y);
+            Ui.DrawIcon(new Rect(card.x + 22, card.y + 170, 18, 18), Icon.Ascent, Theme.Success);
+            GUI.Label(new Rect(card.x + 48, card.y + 168, card.width - 70, 22),
+                $"<b>{System.Math.Min(gained, c.GainM):0} m</b> <color=#B3BECA>/ {c.GainM:0} m</color>", Theme.With(Theme.Body, size: 16));
 
             // Gap to the best time, assuming the best ascent went at an even pace over the distance.
             if (ClimbRecords().TryGetValue(c.Id, out var rec) && frac > 0.02f)

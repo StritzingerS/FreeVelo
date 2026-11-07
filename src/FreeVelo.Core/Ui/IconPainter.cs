@@ -54,6 +54,9 @@ namespace FreeVelo.Core.Ui
 
         /// <summary>Gradient (downhill): the wedge falling to the right.</summary>
         GradeDown,
+
+        /// <summary>Elevation gained: a mountain with an arrow up.</summary>
+        Ascent,
     }
 
     /// <summary>
@@ -275,6 +278,11 @@ namespace FreeVelo.Core.Ui
                     break;
                 case Icon.Minus:
                     s.Add(new Polyline(2.4f, V(5, 12), V(19, 12)));
+                    break;
+                case Icon.Ascent:
+                    s.Add(new Polygon(V(1.5f, 21), V(9, 9.5f), V(12.5f, 14.5f), V(15.5f, 11), V(22.5f, 21)));
+                    s.Add(Line(V(19, 9), V(19, 2.8f)));
+                    s.Add(new Polygon(V(19, 1), V(22.2f, 4.8f), V(15.8f, 4.8f)));
                     break;
                 case Icon.GradeUp:
                 case Icon.GradeDown:

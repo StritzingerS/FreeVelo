@@ -124,6 +124,24 @@ namespace FreeVelo.Ride
 
         public double ElapsedS { get; private set; }
 
+        /// <summary>Elevation gained in this ride (metres climbed, descents not subtracted).</summary>
+        public double AscentM { get; private set; }
+
+        private double? _lastElevation;
+
+        /// <summary>Adds the climb since the last step; jumps (joining a group, a new route) are not counted.</summary>
+        private void TrackAscent()
+        {
+            double y = Route.Sample(DistanceM).Y;
+            if (_lastElevation.HasValue)
+            {
+                double rise = y - _lastElevation.Value;
+                if (rise > 0 && rise < 5) AscentM += rise;
+            }
+
+            _lastElevation = y;
+        }
+
         public double SpeedMps => _physics.SpeedMps;
 
         /// <summary>True while the rider brakes for a bend ahead (descents).</summary>
@@ -229,6 +247,8 @@ namespace FreeVelo.Ride
             IsBraking = false;
             _physics.RiderMassKg = AppSettings.RiderWeightKg;
             ElapsedS = 0;
+            AscentM = 0;
+            _lastElevation = null;
             Summary = null;
             IsPaused = false;
             IsAutoPaused = false;
@@ -454,6 +474,7 @@ namespace FreeVelo.Ride
             }
             else if (Path != null && Path.Update(DistanceM)) Route = Path.Route; // next junction reached: chosen road added
             UpdateClimb();
+            TrackAscent();
 
             if (running)
             {
@@ -691,6 +712,7 @@ namespace FreeVelo.Ride
                 Cornering.Brake(_physics, Cornering.StepLimit(Route, DistanceM, _physics.SpeedMps, 1f), 1f);
                 DistanceM += _physics.SpeedMps;
                 ElapsedS += 1;
+                TrackAscent();
 
                 if (Engine != null && !Engine.IsFinished)
                 {
