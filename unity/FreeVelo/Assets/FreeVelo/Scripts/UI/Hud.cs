@@ -278,32 +278,57 @@ namespace FreeVelo.UI
             DrawClimbCards(c.x, dev.yMax + 24, c.width);
         }
 
-        private void DrawElevation(Rect r, FreeVelo.Core.World.Route route, double position)
+        /// <summary>Bars of an elevation profile (more bars look smoother; the bar width stays at least ~3 units).</summary>
+        private static int ProfileBars(Rect r) => Mathf.Clamp(Mathf.RoundToInt(r.width / 4f), 40, 200);
+
+        /// <summary>
+        /// Smoothed elevations for <paramref name="n"/> bars between two distances: each bar the mean of its stretch
+        /// (4 samples), then neighbours evened out (1-2-1), so the profile reads as a curve instead of steps.
+        /// </summary>
+        private static double[] ProfileHeights(FreeVelo.Core.World.Route route, double from, double to, int n, double clampAt)
         {
-            const int n = 90;
-            double min = double.MaxValue, max = double.MinValue;
-            var e = new double[n];
+            const int samples = 4;
+            var raw = new double[n];
             for (int i = 0; i < n; i++)
             {
-                e[i] = route.Sample(route.LengthM * i / (n - 1)).Y;
-                min = System.Math.Min(min, e[i]);
-                max = System.Math.Max(max, e[i]);
+                double sum = 0;
+                for (int k = 0; k < samples; k++) sum += route.Sample(System.Math.Min(clampAt, from + ((to - from) * (i + ((k + 0.5) / samples)) / n))).Y;
+                raw[i] = sum / samples;
             }
 
+            var e = new double[n];
+            for (int i = 0; i < n; i++) e[i] = (raw[System.Math.Max(0, i - 1)] + (2 * raw[i]) + raw[System.Math.Min(n - 1, i + 1)]) / 4;
+            return e;
+        }
+
+        private void DrawElevation(Rect r, FreeVelo.Core.World.Route route, double position)
+        {
+            int n = ProfileBars(r);
+            var e = ProfileHeights(route, 0, route.LengthM, n, double.MaxValue);
+            double min = e.Min(), max = e.Max();
             double span = System.Math.Max(20, max - min);
-            float bw = r.width / n;
+            float px = position >= 0 ? r.x + (r.width * (float)(position / route.LengthM)) : float.NegativeInfinity;
             for (int i = 0; i < n; i++)
             {
                 float h = 8 + (float)((e[i] - min) / span) * (r.height - 8);
-                bool done = position >= 0 && (i / (float)(n - 1)) <= position / route.LengthM;
-                Ui.Rect(new Rect(r.x + (i * bw) - 0.6f, r.yMax - h, bw + 1.2f, h), Theme.Alpha(done ? Theme.Accent : Theme.Info, done ? 0.75f : 0.35f), 0); // overlap: no seams
+                ProfileBar(r, i, n, h, px, Theme.Alpha(Theme.Info, 0.35f));
             }
 
-            if (position >= 0)
-            {
-                float px = r.x + (r.width * (float)(position / route.LengthM));
-                Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
-            }
+            if (position >= 0) Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
+        }
+
+        /// <summary>
+        /// Bar <paramref name="i"/> of <paramref name="n"/> of an elevation profile: ridden (orange) left of the rider's
+        /// position <paramref name="px"/>, <paramref name="ahead"/> right of it; the bar under the rider is split there.
+        /// </summary>
+        private static void ProfileBar(Rect r, int i, int n, float h, float px, Color ahead)
+        {
+            float x0 = r.x + (r.width * i / n), x1 = r.x + (r.width * (i + 1) / n);
+            var done = Theme.Alpha(Theme.Accent, 0.75f);
+            float split = Mathf.Clamp(px, x0, x1);
+            // A little overlap between bars, so no seams show (but never across the rider's position).
+            if (split > x0) Ui.Rect(new Rect(x0 - 0.6f, r.yMax - h, split - x0 + (split < x1 ? 0 : 1.2f), h), done, 0);
+            if (split < x1) Ui.Rect(new Rect(split - (split > x0 ? 0 : 0.6f), r.yMax - h, x1 - split + 1.2f, h), ahead, 0);
         }
 
         // ------------------------------------------------------------------ workouts

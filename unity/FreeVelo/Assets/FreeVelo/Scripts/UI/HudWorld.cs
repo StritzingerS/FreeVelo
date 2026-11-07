@@ -1,3 +1,4 @@
+using System.Linq;
 using FreeVelo.App;
 using FreeVelo.Core.Physics;
 using FreeVelo.Core.Ui;
@@ -129,34 +130,24 @@ namespace FreeVelo.UI
         /// <summary>Profile from 300 m behind to 3 km ahead (as far as the way is known: up to the next junction).</summary>
         private void DrawElevationAhead(Rect r, FreeVelo.Core.World.Route route, double distance)
         {
-            const int n = 90;
+            int n = ProfileBars(r);
             double from = distance - 300, to = distance + 3000;
             double end = route.LengthM;
             // Beyond the next junction the way on can still change: drawn a little fainter.
             var upcoming = _ride.NextJunction();
             double fixedUntil = upcoming != null ? upcoming.DistanceM : end;
-            double min = double.MaxValue, max = double.MinValue;
-            var e = new double[n];
-            for (int i = 0; i < n; i++)
-            {
-                double at = from + ((to - from) * i / (n - 1));
-                e[i] = route.Sample(System.Math.Min(at, end)).Y;
-                min = System.Math.Min(min, e[i]);
-                max = System.Math.Max(max, e[i]);
-            }
-
+            var e = ProfileHeights(route, from, to, n, end);
+            double min = e.Min(), max = e.Max();
             double span = System.Math.Max(20, max - min);
-            float bw = r.width / n;
+            float px = r.x + (r.width * (float)((distance - from) / (to - from)));
             for (int i = 0; i < n; i++)
             {
-                double at = from + ((to - from) * i / (n - 1));
+                double at = from + ((to - from) * (i + 0.5) / n); // middle of the bar's stretch
                 float h = 8 + (float)((e[i] - min) / span) * (r.height - 8);
-                bool done = at <= distance;
-                float alpha = at > end ? 0.12f : done ? 0.75f : at > fixedUntil ? 0.22f : 0.38f;
-                Ui.Rect(new Rect(r.x + (i * bw) - 0.6f, r.yMax - h, bw + 1.2f, h), Theme.Alpha(done ? Theme.Accent : Theme.Info, alpha), 0);
+                float alpha = at > end ? 0.12f : at > fixedUntil ? 0.22f : 0.38f;
+                ProfileBar(r, i, n, h, px, Theme.Alpha(Theme.Info, alpha));
             }
 
-            float px = r.x + (r.width * (float)(300 / (to - from)));
             Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
 
             // Junction marker.
