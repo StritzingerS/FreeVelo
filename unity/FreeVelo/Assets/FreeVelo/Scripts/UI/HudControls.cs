@@ -40,7 +40,12 @@ namespace FreeVelo.UI
                 VirtualGearMode.Erg => L.Get("gears_erg_hint"),
                 _ => L.Get("gears_off_hint"),
             };
-            GUI.Label(new Rect(card.x + 24, card.y + 140, card.width - 48, 110), hint, Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+            GUI.Label(new Rect(card.x + 24, card.y + 140, card.width - 48, 64), hint, Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+
+            // Workouts: the same in all three modes, so on its own line.
+            var line = new Rect(card.x + 24, card.yMax - 70, card.width - 48, 52);
+            Ui.DrawIcon(new Rect(line.x, line.y + 4, 18, 18), Icon.Target, Theme.Accent);
+            GUI.Label(new Rect(line.x + 28, line.y, line.width - 28, line.height), L.Get("gears_workout_hint"), Theme.With(Theme.Caption, Theme.Muted, wrap: true));
         }
 
         /// <summary>Devices page: the Zwift controller(s) next to trainer, power meter and heart rate.</summary>
