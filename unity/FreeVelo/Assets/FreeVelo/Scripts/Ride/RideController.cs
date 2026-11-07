@@ -93,11 +93,11 @@ namespace FreeVelo.Ride
         /// <summary>The current ride follows a fixed route (a climb started from the menu).</summary>
         public bool IsClimbRide => _fixedRoute;
 
-        /// <summary>Virtual gears (used when <see cref="AppSettings.GearMode"/> is not Off).</summary>
+        /// <summary>Virtual gears (used when <see cref="AppSettings.VirtualGears"/> is on).</summary>
         public VirtualGears Gears { get; private set; } = new VirtualGears();
 
         /// <summary>Virtual gears act now: a free / group ride or a free part of a workout (in ERG blocks, shifting changes the intensity).</summary>
-        public bool GearsActive => State == RideState.Riding && AppSettings.GearMode != VirtualGearMode.Off && !InErgBlock;
+        public bool GearsActive => State == RideState.Riding && AppSettings.VirtualGears && !InErgBlock;
 
         public bool InErgBlock => WorkoutState != null && WorkoutState.TargetW.HasValue && !WorkoutState.IsFinished;
 
@@ -288,7 +288,7 @@ namespace FreeVelo.Ride
         {
             if (State != RideState.Riding) return;
             if (InErgBlock) AdjustBlockIntensity(0.01 * AppSettings.ErgStepPercent * steps);
-            else if (AppSettings.GearMode != VirtualGearMode.Off) Gears.Shift(steps);
+            else if (AppSettings.VirtualGears) Gears.Shift(steps);
         }
 
         /// <summary>Zwift controller buttons (may come from the Bluetooth thread); what they do is set in Settings.</summary>
@@ -531,26 +531,27 @@ namespace FreeVelo.Ride
             {
                 _ble.Hub.SetErgTarget(WorkoutState.TargetW.Value);
             }
-            else if (AppSettings.GearMode == VirtualGearMode.Off)
+            else if (!AppSettings.VirtualGears)
             {
+                _ble.Hub.SetVirtualGear(null);
+                _ble.Hub.SetSimulation(position.GradePercent, crr, _physics.WindResistanceCoefficient);
+            }
+            else if (_ble.Hub.TrainerSupportsShifting)
+            {
+                // Virtual gears built into the trainer: it gets the plain road and the gear, and works out the rest.
+                _ble.Hub.SetVirtualGear(Gears.Factor);
                 _ble.Hub.SetSimulation(position.GradePercent, crr, _physics.WindResistanceCoefficient);
             }
             else
             {
-                // Virtual gears: the bike stays in one gear, the trainer gets the road as felt in the virtual gear.
+                // Other trainers: the bike stays in one gear, the trainer gets the road as felt in the virtual gear.
+                _ble.Hub.SetVirtualGear(null);
                 double grade = position.GradePercent * _ble.Hub.TrainerDifficulty; // (not PlayerPrefs: may run in the background)
                 double mass = _physics.TotalMassKg;
                 double cw = _physics.WindResistanceCoefficient;
-                if (AppSettings.GearMode == VirtualGearMode.Erg)
-                {
-                    _ble.Hub.SetErgTarget((int)Math.Round(Gears.ErgTarget(grade, cadence, mass, crr, cw)), virtualGears: true);
-                }
-                else
-                {
-                    double? trainerKmh = live.TrainerSpeedKmh;
-                    double trainerSpeed = trainerKmh.HasValue ? trainerKmh.Value / 3.6 : _physics.SpeedMps / Gears.Factor;
-                    _ble.Hub.SetSimulation(Gears.EffectiveGrade(grade, trainerSpeed, mass, crr, cw), crr, cw, scaleByDifficulty: false);
-                }
+                double? trainerKmh = live.TrainerSpeedKmh;
+                double trainerSpeed = trainerKmh.HasValue ? trainerKmh.Value / 3.6 : _physics.SpeedMps / Gears.Factor;
+                _ble.Hub.SetSimulation(Gears.EffectiveGrade(grade, trainerSpeed, mass, crr, cw), crr, cw, scaleByDifficulty: false);
             }
 
             CompleteWorkoutIfDone(background);

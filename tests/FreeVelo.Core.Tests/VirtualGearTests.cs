@@ -49,15 +49,11 @@ public class VirtualGearTests
     }
 
     [Fact]
-    public void ErgTargetFollowsCadenceAndGear()
+    public void VirtualSpeedFollowsCadenceAndGear()
     {
         var gears = new VirtualGears();
         gears.Set(gears.NearestGear(50.0 / 17)); // ≈ 50×17
-        double v = gears.VirtualSpeed(90);
-        Assert.InRange(v * 3.6, 34, 36); // 90 rpm in 50×17 ≈ 35 km/h
-        double flat = gears.ErgTarget(0, 90, Mass, Crr, Cw);
-        Assert.InRange(flat, 200, 300);
-        Assert.True(gears.ErgTarget(0, 70, Mass, Crr, Cw) < flat);
-        Assert.Equal(0, gears.ErgTarget(5, 0, Mass, Crr, Cw));
+        Assert.InRange(gears.VirtualSpeed(90) * 3.6, 34, 36); // 90 rpm in 50×17 ≈ 35 km/h
+        Assert.True(gears.VirtualSpeed(70) < gears.VirtualSpeed(90));
     }
 }

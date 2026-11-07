@@ -139,6 +139,13 @@ namespace FreeVelo.Devices.Session
         private bool _ergFromGears;
         private bool _simScale = true;
 
+        // Virtual shifting in the trainer (Zwift protocol)
+        private double? _gearFactor;
+        private double _gearSent = double.NaN;
+        private bool _shiftHandshakeSent;
+        private bool _shiftGradeSent;
+        private bool _shiftWasUsed;
+
         private sealed class ControllerLink
         {
             public bool ClickV2;
@@ -223,7 +230,7 @@ namespace FreeVelo.Devices.Session
             var set = new HashSet<Guid>(services);
             _services[address] = set;
 
-            if (ZwiftController.IsController(set))
+            if (ZwiftController.IsController(set) && !ZwiftTrainer.SupportsShifting(set, FtmsService, TacxFec.Service))
             {
                 // Zwift Click / Click V2 / Play: buttons only, never trainer or power meter.
                 _controllers[address] = new ControllerLink { ClickV2 = set.Contains(ZwiftController.RideService) };
@@ -257,8 +264,26 @@ namespace FreeVelo.Devices.Session
                 _resendNeeded = true;
                 _ftmsControlGranted = false;
                 _ftmsControlRequested = false;
+                _shiftHandshakeSent = false;
+                _shiftGradeSent = false;
+                _gearSent = double.NaN;
+                if (TrainerSupportsShifting) Log?.Invoke($"{address}: trainer supports virtual shifting");
             }
         }
+
+        /// <summary>The trainer has virtual shifting built in (Zwift protocol, see <see cref="ZwiftTrainer"/>).</summary>
+        public bool TrainerSupportsShifting =>
+            TrainerAddress != null && _services.TryGetValue(TrainerAddress, out var s) && ZwiftTrainer.SupportsShifting(s, FtmsService, TacxFec.Service);
+
+        /// <summary>Virtual gears are being done by the trainer itself right now (SIM mode with a gear set).</summary>
+        public bool UsesTrainerShifting => TrainerSupportsShifting && _gearFactor.HasValue && !_ergMode;
+
+        /// <summary>
+        /// Virtual gear for trainers with built-in shifting: virtual ratio / ratio of the gear the bike is in (null =
+        /// no virtual gears). With such a trainer, SIM mode then sends the plain road and this gear, and the trainer
+        /// works out the resistance; other trainers ignore it (the app adjusts the grade instead).
+        /// </summary>
+        public void SetVirtualGear(double? gearFactor) => _gearFactor = gearFactor;
 
         /// <summary>A device disconnected (it may reconnect automatically and call <see cref="OnReady"/> again).</summary>
         public void OnDisconnected(string address)
@@ -607,6 +632,22 @@ namespace FreeVelo.Devices.Session
 
         private void TickSim(string trainer, long now)
         {
+            if (UsesTrainerShifting)
+            {
+                TickTrainerShifting(trainer, now);
+                return;
+            }
+
+            if (_shiftWasUsed && TrainerSupportsShifting && _shiftHandshakeSent)
+            {
+                // Virtual gears switched off: back to the neutral ratio, so the trainer's own gear doesn't linger.
+                if (Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.Gear(1.0), "Zwift gear neutral"))
+                {
+                    _shiftWasUsed = false;
+                    _gearSent = double.NaN;
+                }
+            }
+
             double grade = Math.Round(_simScale ? _simGrade * Math.Max(0, Math.Min(1, TrainerDifficulty)) : _simGrade, 1);
             bool changed = double.IsNaN(_simSentGrade) || Math.Abs(grade - _simSentGrade) >= 0.1;
             if (!_resendNeeded && (!changed || now - _simSentMs < SimMinIntervalMs)) return;
@@ -622,6 +663,43 @@ namespace FreeVelo.Devices.Session
 
                 // The Neo 2 asks for the user configuration again after grade changes: send it right away.
                 if (TrainerProtocol == TrainerProtocol.TacxFec) SendFecUserConfig(trainer, now);
+            }
+        }
+
+        /// <summary>SIM with the trainer's built-in virtual shifting: the plain road and the gear, over the Zwift service.</summary>
+        private void TickTrainerShifting(string trainer, long now)
+        {
+            _shiftWasUsed = true;
+            if (!_shiftHandshakeSent)
+            {
+                _shiftHandshakeSent = Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.Handshake, "Zwift trainer handshake")
+                    && Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.Physical((uint)Math.Round(10000 * ZwiftTrainer.ReferenceRatio), 8, RiderWeightKg), null);
+                if (!_shiftHandshakeSent) return;
+                _resendNeeded = true;
+            }
+
+            double grade = Math.Round(_simScale ? _simGrade * Math.Max(0, Math.Min(1, TrainerDifficulty)) : _simGrade, 1);
+            bool changed = double.IsNaN(_simSentGrade) || Math.Abs(grade - _simSentGrade) >= 0.1;
+            if (_resendNeeded || (changed && now - _simSentMs >= SimMinIntervalMs))
+            {
+                if (Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.Simulation(grade, _simCrr, _simCw), null))
+                {
+                    _simSentGrade = grade;
+                    _simSentMs = now;
+                    _ergSent = double.NaN;
+                    _shiftGradeSent = true;
+                }
+            }
+
+            // Gears only take effect once a grade has been sent; a shift goes out right away (no rate limit).
+            double factor = Math.Round(_gearFactor!.Value, 4);
+            if (_shiftGradeSent && (_resendNeeded || double.IsNaN(_gearSent) || Math.Abs(factor - _gearSent) > 1e-4))
+            {
+                if (Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.Gear(factor), null)
+                    && Send(trainer, ZwiftController.SyncRxChar, ZwiftTrainer.ConfirmGear, null))
+                {
+                    _gearSent = factor;
+                }
             }
         }
 

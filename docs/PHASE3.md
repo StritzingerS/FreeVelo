@@ -39,16 +39,22 @@ to wake up.
 - [ ] Test on the phone: plan for a few weeks, history after importing the existing rides, backup to another phone
 
 ### D. Controls
-- [x] Virtual gears, 24 gears (0.75–5.5), both variants of CONCEPT.md 4.4 selectable in Settings → Controls:
-      "Grade" (SIM grade so the trainer brakes like the road in the virtual gear) and "ERG" (SIM via ERG: road power
-      at cadence × virtual gear); on-screen + / − while riding; in ERG workout blocks + / − change the block intensity
+- [x] Virtual gears, 24 gears (0.75–5.5), one switch in Settings → Controls (on / off). How they reach the trainer
+      is automatic: trainers with built-in virtual shifting (the Zwift protocol on the Zwift service FC82 /
+      00000001-19ca…: Zwift Hub, newer Wahoo KICKR, Elite, Tacx Neo 2/2T/3M with current firmware, JetBlack, Van
+      Rysel …) get the plain road and the gear ratio and shift themselves (`ZwiftTrainer`, community-documented
+      protocol, byte patterns checked against captures from Zwift); all other trainers get a grade that brakes like
+      the road in the virtual gear. On-screen + / − while riding; in ERG workout blocks + / − change the block
+      intensity. (The earlier "SIM via ERG" variant is gone.)
 - [x] Zwift Click V2 (and Click / Play / Ride): own module `FreeVelo.Devices.Zwift` after the community-documented
       protocol (RideOn handshake, keep-alive every 3 s, 0x23 button bitmap). + / A harder, − / B easier.
       The Click V2 **left** unit is locked by Zwift (unlock by connecting it to Zwift, lasts about 24 h);
       the right unit works on its own (+ harder, B easier). The devices page shows the controller next to trainer, power meter and heart rate, with "locked" for a locked unit.
 - [x] Controller settings (Settings → Trainer & shifting): what each Click V2 button does (harder / easier / nothing),
       number of virtual gears (12–30), ERG step per press (1–5 %)
-- [ ] Test with the real Click V2 (both units, keep-alive, locked left unit) and decide Grade vs. ERG gears by feel
+- [ ] Test with the real Click V2 (both units, keep-alive, locked left unit)
+- [ ] Test built-in virtual shifting on the Neo 2 (it offers the Zwift service): handshake, gear changes, feel of
+      the 42×14 reference ratio; needs the Android plugin from `main` (subscribes to the Zwift characteristics)
 
 ### E. The mountain – two legendary climbs
 - [x] Climb data from GPX (`tools/climbs/process_gpx.py`): Passo dello Stelvio (24.3 km, +1842 m, Ø 7.6 %) and

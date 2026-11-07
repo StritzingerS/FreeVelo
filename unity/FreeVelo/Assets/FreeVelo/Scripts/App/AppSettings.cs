@@ -41,14 +41,18 @@ namespace FreeVelo.App
             _buttonMap = ParseButtonMap(PlayerPrefs.GetString("zwiftMap", string.Empty));
         }
 
-        /// <summary>Virtual gears (Off / Grade / Erg, see FreeVelo.Core.Physics.VirtualGearMode).</summary>
-        public static FreeVelo.Core.Physics.VirtualGearMode GearMode
+        /// <summary>
+        /// Virtual gears on/off. How they reach the trainer is chosen automatically: a trainer with built-in virtual
+        /// shifting gets the gear itself, others a matching grade. (Stored as "gearMode": 0 = off; the former
+        /// "grade" 1 and "ERG" 2 both mean on.)
+        /// </summary>
+        public static bool VirtualGears
         {
-            get => (FreeVelo.Core.Physics.VirtualGearMode)(_gearMode >= 0 ? _gearMode : 0);
+            get => _gearMode > 0;
             set
             {
-                _gearMode = (int)value;
-                SetInt("gearMode", (int)value);
+                _gearMode = value ? 1 : 0;
+                SetInt("gearMode", _gearMode);
             }
         }
 

@@ -25,24 +25,22 @@ namespace FreeVelo.UI
             if (Ui.IconButton(new Rect(card.x + 12, card.yMax - 76, 64, 64), Icon.Minus, ButtonKind.Secondary, gears.Gear > 0)) _ride.Shift(-1);
         }
 
-        /// <summary>Settings: virtual gear mode (the controller itself is on the devices page).</summary>
+        /// <summary>Settings: virtual gears on/off (the controller itself is on the devices page).</summary>
         private void DrawControlsCard(Rect card)
         {
             Ui.Card(card);
             SectionTitle(card, L.Get("virtual_gears"), Icon.Cadence);
 
-            var options = new[] { L.Get("off"), L.Get("gears_grade"), L.Get("gears_erg") };
-            int mode = Ui.Segmented(new Rect(card.x + 24, card.y + 76, card.width - 48, 50), options, (int)AppSettings.GearMode);
-            if (mode != (int)AppSettings.GearMode) AppSettings.GearMode = (VirtualGearMode)mode;
-            string hint = AppSettings.GearMode switch
-            {
-                VirtualGearMode.Grade => L.Get("gears_grade_hint"),
-                VirtualGearMode.Erg => L.Get("gears_erg_hint"),
-                _ => L.Get("gears_off_hint"),
-            };
-            GUI.Label(new Rect(card.x + 24, card.y + 140, card.width - 48, 64), hint, Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+            // One switch; how the gears reach the trainer is automatic (built into the trainer, or a matching grade).
+            bool on = Ui.Segmented(new Rect(card.xMax - 24 - 180, card.y + 18, 180, 40), new[] { L.Get("off"), L.Get("on") }, AppSettings.VirtualGears ? 1 : 0) == 1;
+            if (on != AppSettings.VirtualGears) AppSettings.VirtualGears = on;
+            string hint = !on ? L.Get("gears_off_hint")
+                : _ble.Hub.TrainerAddress == null ? L.Get("gears_on_hint")
+                : _ble.Hub.TrainerSupportsShifting ? L.Get("gears_on_hint") + " " + L.Get("gears_trainer_hint")
+                : L.Get("gears_on_hint") + " " + L.Get("gears_grade_hint");
+            GUI.Label(new Rect(card.x + 24, card.y + 76, card.width - 48, 120), hint, Theme.With(Theme.Caption, Theme.Muted, wrap: true));
 
-            // Workouts: the same in all three modes, so on its own line.
+            // Workouts: the same with gears on or off, so on its own line.
             var line = new Rect(card.x + 24, card.yMax - 70, card.width - 48, 52);
             Ui.DrawIcon(new Rect(line.x, line.y + 4, 18, 18), Icon.Target, Theme.Accent);
             GUI.Label(new Rect(line.x + 28, line.y, line.width - 28, line.height), L.Get("gears_workout_hint"), Theme.With(Theme.Caption, Theme.Muted, wrap: true));

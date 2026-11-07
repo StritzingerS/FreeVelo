@@ -2,22 +2,6 @@ using System;
 
 namespace FreeVelo.Core.Physics
 {
-    /// <summary>How virtual gears act on the trainer (concept 4.4: both are built, the better-feeling one stays).</summary>
-    public enum VirtualGearMode
-    {
-        /// <summary>No virtual gears: the trainer simulates the road, shift on the bike.</summary>
-        Off = 0,
-
-        /// <summary>
-        /// SIM: the grade sent to the trainer is changed so that, at the trainer's own speed, it brakes as hard as the road
-        /// would in the virtual gear.
-        /// </summary>
-        Grade = 1,
-
-        /// <summary>"SIM via ERG": target power = road resistance at the virtual speed (cadence × virtual gear), sent as ERG.</summary>
-        Erg = 2,
-    }
-
     /// <summary>
     /// 24 virtual gears (ratio chainring/cog). The rider leaves the bike in one middle gear (about 50×23, ratio
     /// ≈ 2.2 = <see cref="ReferenceRatio"/>) and shifts virtually.
@@ -87,7 +71,7 @@ namespace FreeVelo.Core.Physics
         }
 
         /// <summary>
-        /// <see cref="VirtualGearMode.Grade"/>: the grade to send so that the trainer, which itself computes slope + rolling
+        /// For trainers without built-in virtual shifting: the grade to send so that the trainer, which itself computes slope + rolling
         /// + air at its own speed, brakes like the road at the virtual speed (force × factor, since the virtual gear moves
         /// the bike factor times as far per pedal turn).
         /// </summary>
@@ -103,12 +87,5 @@ namespace FreeVelo.Core.Physics
 
         /// <summary>Virtual speed for a cadence in the current gear.</summary>
         public double VirtualSpeed(double cadenceRpm) => Math.Max(0, cadenceRpm) / 60.0 * Ratio * WheelCircumferenceM;
-
-        /// <summary><see cref="VirtualGearMode.Erg"/>: power the road asks for at this cadence in the current gear (W).</summary>
-        public double ErgTarget(double gradePercent, double cadenceRpm, double massKg, double crr, double cw)
-        {
-            double v = VirtualSpeed(cadenceRpm);
-            return Math.Max(0, RoadForce(gradePercent, v, massKg, crr, cw) * v);
-        }
     }
 }
