@@ -206,17 +206,12 @@ namespace FreeVelo.UI
             float px = r.x + (r.width * (float)((distance - from) / (to - from)));
             Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
 
-            // Junction marker: a dashed line with the side-road sign symbol on top – side road left, right or both,
-            // as the junction branches off.
+            // Junction marker: a dashed yellow line.
             if (upcoming != null && upcoming.DistanceM < to)
             {
                 float jx = r.x + (r.width * (float)((upcoming.DistanceM - from) / (to - from)));
                 var color = Theme.Alpha(Theme.Warning, 0.95f);
-                for (float y = r.y + 20; y < r.yMax; y += 9) Ui.Rect(new Rect(jx - 1, y, 2, Mathf.Min(5, r.yMax - y)), color, 1);
-                bool left = upcoming.Options.Any(o => o.TurnDegrees < -25), right = upcoming.Options.Any(o => o.TurnDegrees > 25);
-                var symbol = left && !right ? Icon.SideRoadLeft : right && !left ? Icon.SideRoadRight : Icon.SideRoadBoth;
-                // One colour, like the line: just the roads, as big as the triangle was.
-                Ui.DrawIcon(new Rect(jx - 11, r.y - 4, 22, 22), symbol, color);
+                for (float y = r.y; y < r.yMax; y += 9) Ui.Rect(new Rect(jx - 1, y, 2, Mathf.Min(5, r.yMax - y)), color, 1);
             }
         }
     }

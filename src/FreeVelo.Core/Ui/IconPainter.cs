@@ -61,14 +61,6 @@ namespace FreeVelo.Core.Ui
         /// <summary>Distance: a double arrow between two end marks (a measured length).</summary>
         Distance,
 
-        /// <summary>Side-road sign symbol: main road, side road to the left (fills the icon).</summary>
-        SideRoadLeft,
-
-        /// <summary>Side road to the right.</summary>
-        SideRoadRight,
-
-        /// <summary>Side roads to both sides (crossroads).</summary>
-        SideRoadBoth,
     }
 
     /// <summary>
@@ -291,20 +283,6 @@ namespace FreeVelo.Core.Ui
                 case Icon.Minus:
                     s.Add(new Polyline(2.4f, V(5, 12), V(19, 12)));
                     break;
-                case Icon.SideRoadLeft:
-                case Icon.SideRoadRight:
-                case Icon.SideRoadBoth:
-                {
-                    // Main road: thick, pointed at the top, swallowtail at the bottom; thinner side road(s) at mid height.
-                    // Fills the whole icon (shown on its own as the junction marker).
-                    float c = icon == Icon.SideRoadLeft ? 14 : icon == Icon.SideRoadRight ? 10 : 12;
-                    const float hw = 3.1f;
-                    s.Add(new Polygon(V(c, 1.5f), V(c + hw, 5.6f), V(c + hw, 22.5f), V(c, 19.4f), V(c - hw, 22.5f), V(c - hw, 5.6f)));
-                    if (icon != Icon.SideRoadRight) s.Add(new Box(V(icon == Icon.SideRoadBoth ? 2.5f : 3, 10.4f), V(c - hw + 0.5f, 13.4f), 0.4f));
-                    if (icon != Icon.SideRoadLeft) s.Add(new Box(V(c + hw - 0.5f, 10.4f), V(icon == Icon.SideRoadBoth ? 21.5f : 21, 13.4f), 0.4f));
-                    break;
-                }
-
                 case Icon.Distance:
                     s.Add(Line(V(3, 7), V(3, 17)));
                     s.Add(Line(V(21, 7), V(21, 17)));
