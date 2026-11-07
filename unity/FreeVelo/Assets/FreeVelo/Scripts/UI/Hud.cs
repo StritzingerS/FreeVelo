@@ -41,6 +41,9 @@ namespace FreeVelo.UI
         private const float RefH = 720f;
         private const float RailW = 108f;
 
+        /// <summary>Where the camera frames the rider in the menus (fraction of the screen width, 0.5 = centre).</summary>
+        public static float RiderScreenX { get; private set; } = 0.5f;
+
         private BleService _ble;
         private RideController _ride;
         private Page _page = Page.Home;
@@ -66,6 +69,7 @@ namespace FreeVelo.UI
         {
             if (_ble == null || _ride == null) return;
             Theme.Ensure();
+            RiderScreenX = 0.5f; // the home page moves the rider to the right of its menu (DrawMenu)
 
             // Layout inside the safe area (camera hole, rounded corners); height-based scale, narrow (4:3)
             // tablets get at least 1152 units width. _full covers the whole screen for backgrounds.
@@ -133,7 +137,10 @@ namespace FreeVelo.UI
         private void DrawMenu()
         {
             // Content background (the home screen leaves the right side to the 3D rider).
-            float contentRight = _page == Page.Home ? Mathf.Min(RailW + 660, _w * 0.58f) : _w;
+            float contentRight = _page == Page.Home ? Mathf.Min(RailW + 800, _w * 0.62f) : _w;
+            // The 3D rider is framed in the middle of the free area to the right (screen fraction for the camera).
+            float freeCentre = _page == Page.Home ? (contentRight + _w) / 2f : _w / 2f;
+            RiderScreenX = ((freeCentre * _guiScale) + _guiOffset.x) / Mathf.Max(1, Screen.width);
             Ui.Rect(new Rect(_full.x, _full.y, contentRight - _full.x, _full.height), Theme.Alpha(Theme.Background, 0.9f), 0);
             if (_page == Page.Home) Ui.Fade(new Rect(contentRight, _full.y, 160, _full.height), Theme.Alpha(Theme.Background, 0.9f), 0);
 
