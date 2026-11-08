@@ -1146,7 +1146,7 @@ namespace FreeVelo.UI
             Ui.Rect(_full, new Color(0, 0, 0, 0.45f), 0);
             float cw = Mathf.Min(900, _w - 80);
             const int tileCount = 6, cols = 3; // always two full rows
-            float contentH = 108 + (((tileCount + cols - 1) / cols) * 92) + 8 + (s.PowerCurve != null && s.PowerCurve.Count > 0 ? 146 : 0) + (s.EstimatedFtpW.HasValue ? 88 : 0) + SummaryClimbsH(s) + 104;
+            float contentH = 108 + (((tileCount + cols - 1) / cols) * 92) + 8 + (s.PowerCurve != null && s.PowerCurve.Count > 0 ? 146 : 0) + (s.EstimatedFtpW.HasValue ? 88 : 0) + SummaryClimbsH(s) + 104 + 68; // + 68: "Done" on its own line
             float ch = Mathf.Min(_h - 56, contentH);
             var r = new Rect((_w - cw) / 2f, (_h - ch) / 2f, cw, ch);
             Ui.Card(r, Theme.Surface, 24);
@@ -1217,7 +1217,8 @@ namespace FreeVelo.UI
             }
 
             // Actions
-            var actions = new Rect(x, r.yMax - 88, w, 56);
+            // File actions on one line, "Done" on the line below (the Strava button can be wide).
+            var actions = new Rect(x, r.yMax - 156, w, 56);
             if (!string.IsNullOrEmpty(s.FitPath))
             {
                 float w1 = Ui.ButtonWidth(L.Get("share"), true, 56), w2 = Ui.ButtonWidth(L.Get("save_downloads"), true, 56);
@@ -1227,7 +1228,7 @@ namespace FreeVelo.UI
                 DrawSummaryStravaButton(new Rect(actions.x + w1 + w2 + 24, actions.y, w3, 56), s.FitPath, s.Title);
             }
 
-            if (Ui.Button(new Rect(actions.xMax - 180, actions.y, 180, 56), L.Get("done"), ButtonKind.Primary))
+            if (Ui.Button(new Rect(actions.xMax - 180, r.yMax - 88, 180, 56), L.Get("done"), ButtonKind.Primary))
             {
                 _ride.Close();
                 Navigate(Page.Home);
