@@ -1228,7 +1228,7 @@ namespace FreeVelo.UI
                 DrawSummaryStravaButton(new Rect(actions.x + w1 + w2 + 24, actions.y, w3, 56), s.FitPath, s.Title);
             }
 
-            if (Ui.Button(new Rect(actions.xMax - 180, r.yMax - 88, 180, 56), L.Get("done"), ButtonKind.Primary))
+            if (Ui.Button(new Rect(x, r.yMax - 88, 180, 56), L.Get("done"), ButtonKind.Primary))
             {
                 _ride.Close();
                 Navigate(Page.Home);
