@@ -67,15 +67,15 @@ namespace FreeVelo.Core.World.Gen
 
             // Main loop (the valley round), in riding order from Laerchwald: north up the west valley to Kirchbach, down the
             // main valley to Trafon, back west to Laerchwald.
-            roads.Add(new PlannedRoad(Laerchwald, Kirchbach, Curve(p[Laerchwald], (-3250, -1250), (-2700, -350), (-2350, 600), (-1350, 1150), (-650, 1950), p[Kirchbach]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Laerchwald, Kirchbach, Curve(p[Laerchwald], (-3150, -1700), (-3380, -1100), (-2950, -500), (-2700, 250), (-2250, 650), (-1750, 1300), (-1150, 1250), (-650, 1950), p[Kirchbach]), RoadKind.Valley, true));
             roads.Add(new PlannedRoad(Kirchbach, Mitterbach, Curve(p[Kirchbach], (620, 1750), (430, 1150), (850, 600), (680, 0), (1150, -650), p[Mitterbach]), RoadKind.Valley, true));
             roads.Add(new PlannedRoad(Mitterbach, Hinterau, Curve(p[Mitterbach], (1350, -1900), (950, -2500), (1280, -3100), (880, -3700), (1120, -4100), p[Hinterau]), RoadKind.Valley, true));
             var stelvioIn = mountain.Stelvio.StartDirection;
             roads.Add(new PlannedRoad(Hinterau, Trafon, Curve(p[Hinterau], (560, -5050), (920, -5650), (560, -6250), (860, -6850), p[Trafon]), RoadKind.Valley, true));
-            roads.Add(new PlannedRoad(Trafon, Laerchwald, Curve(p[Trafon], (300, -7760), (-800, -7600), (-1500, -6900), (-1900, -5800), (-2700, -5100), (-3050, -3900), p[Laerchwald]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Trafon, Laerchwald, Curve(p[Trafon], (300, -7760), (-350, -7450), (-900, -7700), (-1450, -7100), (-1750, -6400), (-2150, -5900), (-2700, -5250), (-2850, -4600), (-3250, -4000), (-3050, -3200), p[Laerchwald]), RoadKind.Valley, true));
 
             // Over the saddle between the two valleys.
-            roads.Add(new PlannedRoad(Mitterbach, Laerchwald, Curve(p[Mitterbach], (-250, -1450), (-1750, -1950), p[Laerchwald]), RoadKind.Valley));
+            roads.Add(new PlannedRoad(Mitterbach, Laerchwald, Curve(p[Mitterbach], (500, -1550), (-150, -1300), (-800, -1750), (-1500, -1700), (-2200, -2150), (-2800, -2050), p[Laerchwald]), RoadKind.Valley));
 
             // Alm road up: north out of Kirchbach, then six long traverses with hairpins, then to Oberalm.
             var stack = Switchbacks((250, 2700), (1, 0), (0, 1), traverse: 1250, rise: 170, count: 6, radius: 16);
@@ -88,13 +88,13 @@ namespace FreeVelo.Core.World.Gen
             roads.Add(new PlannedRoad(Kirchbach, Oberalm, Curve(up.ToArray()), RoadKind.Pass));
 
             // Over the plateau, and down along the slope above the main valley to Mitterbach.
-            roads.Add(new PlannedRoad(Oberalm, AlmEnd, Curve(nodes[Oberalm], (1000, 4480), (1800, 4800), p[AlmEnd]), RoadKind.Pass));
-            roads.Add(new PlannedRoad(AlmEnd, Mitterbach, Curve(p[AlmEnd], (2820, 3600), (2650, 2300), (2450, 1000), (2380, -150), (2050, -950), (1600, -1300), p[Mitterbach]), RoadKind.Pass));
+            roads.Add(new PlannedRoad(Oberalm, AlmEnd, Curve(nodes[Oberalm], (700, 4450), (1200, 4300), (1700, 4700), (2200, 4600), p[AlmEnd]), RoadKind.Pass));
+            roads.Add(new PlannedRoad(AlmEnd, Mitterbach, Curve(p[AlmEnd], (2900, 4300), (2650, 3700), (2900, 3000), (2550, 2300), (2700, 1600), (2400, 1000), (2550, 350), (2300, -150), (2100, -800), (1600, -1300), p[Mitterbach]), RoadKind.Pass));
 
             // From the plateau up to Valbrune, arriving the way the Alpe d'Huez starts.
             var alpeOut = mountain.Alpe.StartDirection;
             var b = p[Valbrune];
-            roads.Add(new PlannedRoad(Oberalm, Valbrune, Curve(nodes[Oberalm], (700, 5250), (1900, 6150), (3100, 6850), (b.X - (alpeOut.X * 450), b.Z - (alpeOut.Z * 450)), b), RoadKind.Pass));
+            roads.Add(new PlannedRoad(Oberalm, Valbrune, Curve(nodes[Oberalm], (550, 4700), (1000, 5300), (1600, 5600), (1900, 6150), (2500, 6400), (3100, 6850), (b.X - (alpeOut.X * 450), b.Z - (alpeOut.Z * 450)), b), RoadKind.Pass));
             _ = stelvioIn;
             return (nodes, roads);
         }
