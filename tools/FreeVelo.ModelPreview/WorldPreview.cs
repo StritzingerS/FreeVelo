@@ -9,6 +9,57 @@ namespace FreeVelo.ModelPreview;
 /// <summary>Top-down map of the generated world: height shading, roads, river, lakes, junctions, bridges.</summary>
 public static class WorldPreview
 {
+    /// <summary>The world as JSON (roads, villages, water, a 50 m height raster, routes) for drawing a map elsewhere.</summary>
+    public static void Export(string output)
+    {
+        var map = WorldMap.Default;
+        var mt = MountainTerrain.Build(map, Terrain.GridRect(map));
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        string F(double v) => v.ToString("0.#", inv);
+        var sb = new System.Text.StringBuilder("{");
+        sb.Append("\"nodes\":[");
+        sb.Append(string.Join(",", map.Nodes.Select(n => $"{{\"name\":\"{n.Name}\",\"x\":{F(n.X)},\"z\":{F(n.Z)},\"e\":{F(n.Elevation)}}}")));
+        sb.Append("],\"edges\":[");
+        sb.Append(string.Join(",", map.Edges.Select(e =>
+        {
+            var idx = Enumerable.Range(0, e.X.Length).Where(i => i % 4 == 0 || i == e.X.Length - 1).ToList();
+            return $"{{\"id\":{e.Id},\"from\":{e.From},\"to\":{e.To},\"kind\":\"{e.Kind}\",\"loop\":{(e.IsMainLoop ? "true" : "false")},\"length\":{F(e.Length)}," +
+                $"\"x\":[{string.Join(",", idx.Select(i => F(e.X[i])))}],\"z\":[{string.Join(",", idx.Select(i => F(e.Z[i])))}],\"e\":[{string.Join(",", idx.Select(i => F(e.E[i])))}],\"d\":[{string.Join(",", idx.Select(i => F(e.D[i])))}]}}";
+        })));
+        var r = map.River!;
+        sb.Append($"],\"river\":{{\"x\":[{string.Join(",", r.X.Select(F))}],\"z\":[{string.Join(",", r.Z.Select(F))}]}}");
+        sb.Append(",\"lakes\":[" + string.Join(",", map.Lakes.Select(l => $"{{\"x\":{F(l.X)},\"z\":{F(l.Z)},\"r\":{F(l.Radius)}}}")) + "]");
+        sb.Append(",\"bridges\":[" + string.Join(",", map.Bridges.Select(b =>
+        {
+            var e = map.Edges[b.Edge];
+            int i = Array.FindIndex(e.D, d => d >= b.DistanceM);
+            return $"{{\"x\":{F(e.X[i])},\"z\":{F(e.Z[i])}}}";
+        })) + "]");
+        var routes = new List<(string Name, FreeVelo.Core.World.Route Route)>
+        {
+            ("valley", map.MainLoop), ("alm", map.AlmLoop()), ("stelvio", map.ClimbLoop(ClimbData.Stelvio)!), ("alpe", map.ClimbLoop(ClimbData.AlpeDHuez)!),
+        };
+        sb.Append(",\"routes\":[" + string.Join(",", routes.Select(rt =>
+        {
+            var pts = new List<string>();
+            for (double d = 0; d <= rt.Route.LengthM; d += 50) pts.Add(F(rt.Route.Sample(d).Y));
+            return $"{{\"name\":\"{rt.Name}\",\"length\":{F(rt.Route.LengthM)},\"ascent\":{F(rt.Route.TotalAscentM)},\"e\":[{string.Join(",", pts)}]}}";
+        })) + "]");
+        var (minX, minZ, maxX, maxZ) = map.MountainBounds;
+        minX -= 1500; minZ -= 1500; maxX += 1500; maxZ += 1500;
+        const double cell = 50;
+        int nx = (int)((maxX - minX) / cell) + 1, nz = (int)((maxZ - minZ) / cell) + 1;
+        var h = new double[nx * nz];
+        Parallel.For(0, nz, j =>
+        {
+            for (int i = 0; i < nx; i++) h[(j * nx) + i] = mt.Coarse(minX + (i * cell), minZ + (j * cell));
+        });
+        sb.Append($",\"raster\":{{\"minX\":{F(minX)},\"minZ\":{F(minZ)},\"cell\":{F(cell)},\"nx\":{nx},\"nz\":{nz},\"h\":[{string.Join(",", h.Select(v => F(v)))}]}}");
+        sb.Append("}");
+        File.WriteAllText(output, sb.ToString());
+        Console.WriteLine($"-> {output}");
+    }
+
     public static void Map(string output, int seed)
     {
         var sw = Stopwatch.StartNew();
@@ -30,6 +81,11 @@ public static class WorldPreview
                 Console.WriteLine($"  edge {e.Id} points:");
                 for (int i = 0; i < e.X.Length; i += 40) Console.WriteLine($"    d {e.D[i]:0} ({e.X[i]:0},{e.Z[i]:0}) e {e.E[i]:0}");
             }
+        }
+
+        if (map.Mountain != null)
+        {
+            foreach (var c in map.Mountain.Climbs) Console.WriteLine($"  climb {c.Data.Id}: angle {c.Angle:R} summit ({c.SummitX:R},{c.SummitZ:R}) foot elev {c.FootElevation:R}");
         }
 
         Console.WriteLine($"  home bounds {map.Bounds}, mountain bounds {map.MountainBounds}, grid {Terrain.GridRect(map)}");

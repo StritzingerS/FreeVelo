@@ -276,10 +276,11 @@ namespace FreeVelo.Core.World.Gen
 
                     double away = SmoothStep((dist[k] - 70) / 450);
                     double homeFade = SmoothStep((DistanceToRect(x, z) - 150) / 900);
+                    double valleyFloor = SmoothStep((_map.ValleyDistance(x, z) - 450) / 800); // no rocks on the valley floors
                     double height = SmoothStep(((fill + _map.Hills(x, z)) - LowRoad) / span);
                     double ridges = 1 - Math.Abs(Noise.Fractal(x / 900, z / 900, seed, 4));
                     double relief = ((ridges * ridges * 260) + (Noise.Fractal(x / 260, z / 260, seed + 3, 3) * 45)) * (0.35 + (0.65 * height));
-                    _offset[k] = (float)(fill + (relief * away * homeFade));
+                    _offset[k] = (float)(fill + (relief * away * homeFade * valleyFloor));
                 }
             });
         }

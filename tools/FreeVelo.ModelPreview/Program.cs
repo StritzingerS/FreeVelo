@@ -24,6 +24,12 @@ if (args.Length > 1 && args[0] == "--top")
     return;
 }
 
+if (args.Length > 1 && args[0] == "--export")
+{
+    WorldPreview.Export(args[1]);
+    return;
+}
+
 if (args.Length > 1 && args[0] == "--map")
 {
     WorldPreview.Map(args[1], args.Length > 2 ? int.Parse(args[2]) : FreeVelo.Core.World.Gen.WorldMap.DefaultSeed);

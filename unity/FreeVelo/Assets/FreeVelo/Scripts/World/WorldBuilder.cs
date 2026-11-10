@@ -393,12 +393,6 @@ namespace FreeVelo.World
                 for (int i = 0; i < river.X.Length; i++)
                 {
                     float x = (float)river.X[i], z = (float)river.Z[i];
-                    if (x < _terrain.MinX || z < _terrain.MinZ || x > _terrain.MaxX || z > _terrain.MaxZ)
-                    {
-                        water.Begin();
-                        continue;
-                    }
-
                     int a = Mathf.Max(0, i - 1), b = Mathf.Min(river.X.Length - 1, i + 1);
                     var forward = new Vector3((float)(river.X[b] - river.X[a]), 0, (float)(river.Z[b] - river.Z[a])).normalized;
                     var right = new Vector3(forward.z, 0, -forward.x);
