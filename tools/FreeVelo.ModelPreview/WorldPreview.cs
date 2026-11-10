@@ -169,7 +169,8 @@ public static class WorldPreview
                     var normals = mesh.ComputeNormals(IsFoliage(material) ? 85f : 35f);
                     var (color, smooth) = WorldMaterials.All[material];
                     // FRONT=1: turned round, so the cameras (south of the models) see their fronts.
-                    var turn = Environment.GetEnvironmentVariable("FRONT") == "1" ? Rot.AboutY(180) : Rot.Identity;
+                    var turn = Environment.GetEnvironmentVariable("ROTY") is string ry ? Rot.AboutY(float.Parse(ry, System.Globalization.CultureInfo.InvariantCulture))
+                        : Environment.GetEnvironmentVariable("FRONT") == "1" ? Rot.AboutY(180) : Rot.Identity;
                     normals = normals.Select(n => turn * n).ToArray();
                     meshes.Add(new SceneMesh { Positions = mesh.Vertices.Select(p => (turn * p) + offset).ToArray(), Normals = normals, Triangles = mesh.Triangles.ToArray(), Albedo = color, Smoothness = smooth });
                 }
