@@ -385,9 +385,6 @@ namespace FreeVelo.World
             return c + (right * (side * (((float)e.Width / 2) - inset)));
         }
 
-            return -1;
-        }
-
         /// <summary>How far from a junction roads can still overlap (shallow splits run side by side for a while).</summary>
         private const float MergeReach = 150f;
 
