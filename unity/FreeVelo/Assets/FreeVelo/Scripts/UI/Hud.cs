@@ -992,7 +992,7 @@ namespace FreeVelo.UI
             if (workout) DrawWorkoutPanel();
             else DrawRideStrip();
             if (!_ride.IsGroupRide) DrawJunctionCard(workout);
-            DrawClimbTimer(workout);
+            DrawClimbTimer();
             if (_ride.GearsActive) DrawGearControl(rightBusy: workout && !_ride.WorkoutComplete);
             if (_ride.IsGroupRide && _group != null) DrawGroupOverlay();
 

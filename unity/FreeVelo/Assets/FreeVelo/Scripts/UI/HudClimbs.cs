@@ -68,7 +68,7 @@ namespace FreeVelo.UI
         // ------------------------------------------------------------------ riding
 
         /// <summary>Climb timer: time on the climb, distance to the summit and the gap to the best time.</summary>
-        private void DrawClimbTimer(bool workout)
+        private void DrawClimbTimer()
         {
             var c = _ride.ActiveClimb;
             if (c == null) return;

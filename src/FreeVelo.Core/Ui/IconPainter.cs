@@ -52,8 +52,6 @@ namespace FreeVelo.Core.Ui
         /// <summary>Gradient (uphill): a wedge rising to the right, like a road gradient sign.</summary>
         GradeUp,
 
-        /// <summary>Gradient (downhill): the wedge falling to the right.</summary>
-        GradeDown,
 
         /// <summary>Elevation gained: a mountain with an arrow up.</summary>
         Ascent,
@@ -296,13 +294,9 @@ namespace FreeVelo.Core.Ui
                     s.Add(new Polygon(V(19, 1), V(22.2f, 4.8f), V(15.8f, 4.8f)));
                     break;
                 case Icon.GradeUp:
-                case Icon.GradeDown:
-                {
-                    // Road gradient sign: a filled wedge on the road line, the high side up.
-                    bool up = icon == Icon.GradeUp;
-                    s.Add(new Polygon(V(3, 19.5f), V(21, 19.5f), up ? V(21, 7) : V(3, 7)));
+                    // Road gradient sign: a filled wedge on the road line, rising to the right.
+                    s.Add(new Polygon(V(3, 19.5f), V(21, 19.5f), V(21, 7)));
                     break;
-                }
                 case Icon.Close:
                     s.Add(new Polyline(2.4f, V(6.5f, 6.5f), V(17.5f, 17.5f)));
                     s.Add(new Polyline(2.4f, V(17.5f, 6.5f), V(6.5f, 17.5f)));
