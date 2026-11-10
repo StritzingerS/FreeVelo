@@ -139,8 +139,10 @@ public class MountainTests
             int cx = (int)Math.Floor(px / MountainLook.ChunkSize), cz = (int)Math.Floor(pz / MountainLook.ChunkSize);
             foreach (var item in MountainLook.Items(terrain, cx, cz, 8))
             {
+                if (item.Kind is not (SceneryKind.Spruce or SceneryKind.Pine or SceneryKind.Fir or SceneryKind.Larch or SceneryKind.Beech
+                    or SceneryKind.StonePine or SceneryKind.MountainPine or SceneryKind.Rock or SceneryKind.Bush)) continue; // nature only
                 Assert.True(terrain.DistanceToRoad(item.X, item.Z, 9, out _, out _, out _) >= 9, "nothing on the road");
-                if (item.Kind is SceneryKind.Spruce or SceneryKind.Pine or SceneryKind.Oak or SceneryKind.Birch)
+                if (item.Kind is SceneryKind.Spruce or SceneryKind.Pine or SceneryKind.Fir or SceneryKind.Larch or SceneryKind.Beech or SceneryKind.StonePine)
                 {
                     trees++;
                     Assert.True(item.Y < MountainLook.Treeline(m) + 1, $"tree at {item.Y:0} m above the treeline {MountainLook.Treeline(m):0}");

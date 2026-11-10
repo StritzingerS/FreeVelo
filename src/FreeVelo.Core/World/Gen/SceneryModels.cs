@@ -40,6 +40,14 @@ namespace FreeVelo.Core.World.Gen
         Maypole,
         Fence,
         VillageSign,
+
+        // Around the houses
+        PathStone,
+        Yard,
+        GardenFence,
+        FlowerBed,
+        Bench,
+        BeerTable,
     }
 
     /// <summary>A model in two levels of detail, one mesh per material, in local space (origin on the ground, front +Z).</summary>

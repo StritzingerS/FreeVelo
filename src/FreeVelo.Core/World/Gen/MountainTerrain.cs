@@ -17,6 +17,8 @@ namespace FreeVelo.Core.World.Gen
         public const double Margin = 2600;
 
         private readonly WorldMap _map;
+
+        public WorldMap Map => _map;
         private readonly float[] _offset;
         private readonly float[] _roadDistance;
 

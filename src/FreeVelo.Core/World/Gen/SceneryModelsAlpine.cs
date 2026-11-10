@@ -37,6 +37,12 @@ namespace FreeVelo.Core.World.Gen
                 case SceneryKind.Maypole: Maypole(near, far, random); return true;
                 case SceneryKind.Fence: Fence(near); return true;
                 case SceneryKind.VillageSign: VillageSign(near); return true;
+                case SceneryKind.PathStone: near.Of(WorldMaterial.Stone).Box(new Vector3(0, 0.04f, 0), new Vector3(1.5f, 0.2f, 4.0f), Rot.Identity); return true;
+                case SceneryKind.Yard: near.Of(WorldMaterial.Gravel).Box(new Vector3(0, 0.03f, 0), new Vector3(7f, 0.2f, 6f), Rot.Identity); return true;
+                case SceneryKind.GardenFence: GardenFence(near); return true;
+                case SceneryKind.FlowerBed: FlowerBed(near, random); return true;
+                case SceneryKind.Bench: Bench(near); return true;
+                case SceneryKind.BeerTable: BeerTable(near, v); return true;
                 default: return false;
             }
         }
@@ -61,6 +67,9 @@ namespace FreeVelo.Core.World.Gen
             SceneryKind.Maypole => 1,
             SceneryKind.Fence => 0.5,
             SceneryKind.VillageSign => 1,
+            SceneryKind.Yard => 4,
+            SceneryKind.BeerTable => 1.5,
+            SceneryKind.PathStone or SceneryKind.GardenFence or SceneryKind.FlowerBed or SceneryKind.Bench => 0.5,
             _ => 1.2,
         };
 
@@ -739,6 +748,83 @@ namespace FreeVelo.Core.World.Gen
                 float x = -1.65f + (i * 0.66f);
                 wood.Box(new Vector3(x, 0.62f, 0), new Vector3(0.09f, 1.45f, 0.05f), Rot.AboutZ(-40));
             }
+        }
+
+        /// <summary>A 3 m piece of a low wooden picket fence along X.</summary>
+        private static void GardenFence(Parts near)
+        {
+            var wood = near.Of(WorldMaterial.WoodLight);
+            wood.Box(new Vector3(0, 0.3f, 0), new Vector3(3.0f, 0.07f, 0.04f), Rot.Identity);
+            wood.Box(new Vector3(0, 0.75f, 0), new Vector3(3.0f, 0.07f, 0.04f), Rot.Identity);
+            for (int i = 0; i < 12; i++) wood.Box(new Vector3(-1.4f + (i * 0.255f), 0.5f, 0.04f), new Vector3(0.09f, 1.0f, 0.025f), Rot.Identity);
+            near.Of(WorldMaterial.WoodDark).Box(new Vector3(-1.5f, 0.55f, 0), new Vector3(0.12f, 1.1f, 0.12f), Rot.Identity);
+        }
+
+        /// <summary>A flower bed along a house wall: soil, greenery, red and yellow flowers.</summary>
+        private static void FlowerBed(Parts near, Random random)
+        {
+            near.Of(WorldMaterial.Stone).Box(new Vector3(0, 0.1f, 0), new Vector3(2.6f, 0.3f, 0.9f), Rot.Identity);
+            near.Of(WorldMaterial.Soil).Box(new Vector3(0, 0.22f, 0), new Vector3(2.4f, 0.1f, 0.7f), Rot.Identity);
+            for (int i = 0; i < 6; i++)
+            {
+                var c = new Vector3(-1.0f + (i * 0.4f), 0.4f, (float)(random.NextDouble() - 0.5) * 0.3f);
+                Blob(near.Of(WorldMaterial.LeavesMid), c, new Vector3(0.22f, 0.2f, 0.22f), 0.3f, random.Next(), 6, 4);
+                Blob(near.Of(i % 2 == 0 ? WorldMaterial.Geranium : WorldMaterial.Flowers), c + new Vector3(0, 0.14f, 0), new Vector3(0.14f, 0.08f, 0.14f), 0.3f, random.Next(), 5, 3);
+            }
+        }
+
+        private static void Bench(Parts near)
+        {
+            var wood = near.Of(WorldMaterial.WoodLight);
+            wood.Box(new Vector3(0, 0.45f, 0), new Vector3(1.8f, 0.07f, 0.45f), Rot.Identity);
+            wood.Box(new Vector3(0, 0.75f, -0.22f), new Vector3(1.8f, 0.4f, 0.05f), Rot.Identity);
+            for (int s = -1; s <= 1; s += 2) wood.Box(new Vector3(s * 0.75f, 0.22f, 0), new Vector3(0.07f, 0.45f, 0.4f), Rot.Identity);
+        }
+
+        /// <summary>
+        /// Beer garden set: a slatted wooden table on a dark iron frame with four folding chairs (iron X-frame, wooden
+        /// slats); variants 1 and 2 with a parasol.
+        /// </summary>
+        private static void BeerTable(Parts near, int v)
+        {
+            var wood = near.Of(WorldMaterial.WoodLight);
+            var iron = near.Of(WorldMaterial.Iron);
+            for (int i = 0; i < 6; i++) wood.Box(new Vector3(0, 0.75f, -0.35f + (i * 0.14f)), new Vector3(1.3f, 0.035f, 0.11f), Rot.Identity);
+            for (int s = -1; s <= 1; s += 2)
+            {
+                iron.Tube(new Vector3(s * 0.55f, 0, -0.35f), new Vector3(s * 0.55f, 0.73f, 0.35f), 0.018f, 0.018f, 4, false);
+                iron.Tube(new Vector3(s * 0.55f, 0, 0.35f), new Vector3(s * 0.55f, 0.73f, -0.35f), 0.018f, 0.018f, 4, false);
+            }
+
+            // Two chairs on each long side, facing the table
+            foreach (float x in new[] { -0.33f, 0.33f })
+            {
+                FoldingChair(wood, iron, new Vector3(x, 0, 0.75f), Rot.AboutY(180));
+                FoldingChair(wood, iron, new Vector3(x, 0, -0.75f), Rot.Identity);
+            }
+
+            if (v == 0) return;
+            iron.Tube(new Vector3(0, 0.77f, 0), new Vector3(0, 2.5f, 0), 0.03f, 0.03f, 5, false);
+            near.Of(v == 1 ? WorldMaterial.WallWhite : WorldMaterial.Awning).Tube(new Vector3(0, 2.15f, 0), new Vector3(0, 2.65f, 0), 1.6f, 0.05f, 8);
+        }
+
+        /// <summary>A folding bistro chair: crossed iron legs, wooden seat slats, a slatted backrest (front = +Z).</summary>
+        private static void FoldingChair(MeshBuilder wood, MeshBuilder iron, Vector3 at, Rot facing)
+        {
+            Vector3 P(float x, float y, float z) => at + (facing * new Vector3(x, y, z));
+            for (int s = -1; s <= 1; s += 2)
+            {
+                float x = s * 0.2f;
+                // Back legs run on up into the backrest frame; front legs cross them under the seat.
+                iron.Tube(P(x, 0, -0.22f), P(x, 0.46f, -0.17f), 0.012f, 0.012f, 4, false);
+                iron.Tube(P(x, 0.46f, -0.17f), P(x, 0.9f, -0.24f), 0.012f, 0.012f, 4, false);
+                iron.Tube(P(x, 0, 0.24f), P(x, 0.45f, -0.16f), 0.012f, 0.012f, 4, false);
+                iron.Tube(P(x, 0.44f, 0.2f), P(x, 0.44f, -0.17f), 0.01f, 0.01f, 4, false);
+            }
+
+            iron.Tube(P(-0.2f, 0.08f, 0.2f), P(0.2f, 0.08f, 0.2f), 0.01f, 0.01f, 4, false);
+            for (int i = 0; i < 5; i++) wood.Box(P(0, 0.465f, -0.15f + (i * 0.085f)), Abs(facing * new Vector3(0.44f, 0.022f, 0.07f)), Rot.Identity);
+            for (int i = 0; i < 4; i++) wood.Box(P(0, 0.58f + (i * 0.09f), -0.2f - (i * 0.012f)), Abs(facing * new Vector3(0.44f, 0.065f, 0.02f)), Rot.Identity);
         }
 
         private static void VillageSign(Parts near)

@@ -255,6 +255,26 @@ namespace FreeVelo.Core.World.Gen
             return SmoothStep((_floor.Distance(x, z) - halfWidth - 30) / 800) * relief;
         }
 
+        private (double X, double Z)[]? _plateau;
+
+        /// <summary>Distance to the plateau road (Oberalm), where the alpine pasture is.</summary>
+        public double DistanceToPlateau(double x, double z)
+        {
+            _plateau ??= Edges.Where(e => e.From == Valleys.Oberalm && e.To == Valleys.AlmEnd)
+                .SelectMany(e => Enumerable.Range(0, e.X.Length).Where(i => i % 10 == 0 || i == e.X.Length - 1).Select(i => (e.X[i], e.Z[i]))).ToArray();
+            double best = double.MaxValue;
+            foreach (var (px, pz) in _plateau) best = Math.Min(best, ((px - x) * (px - x)) + ((pz - z) * (pz - z)));
+            return Math.Sqrt(best);
+        }
+
+        /// <summary>1 on a valley floor, fading to 0 over 250 m up its sides.</summary>
+        public double ValleyFloorFactor(double x, double z)
+        {
+            if (_floor == null) return 0;
+            var (halfWidth, _, _) = _floor.Shape(x, z);
+            return 1 - SmoothStep((_floor.Distance(x, z) - halfWidth) / 250);
+        }
+
         /// <summary>The valley along each valley road: wide and gentle, narrow between high slopes, or in between.</summary>
         private static (double HalfWidth, double Rise, double Relief) ValleyShape(RoadEdge e)
         {

@@ -52,6 +52,9 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>The mountain's shape (null for worlds without a mountain). Outside the home grid, heights come from it.</summary>
         public MountainTerrain? Mountain { get; private set; }
 
+        /// <summary>Villages, farms and huts (set once laid out, see <see cref="Gen.Landscape.Generate"/>); nature keeps off them.</summary>
+        public Landscape? Landscape { get; set; }
+
         public double MinX { get; }
 
         public double MinZ { get; }

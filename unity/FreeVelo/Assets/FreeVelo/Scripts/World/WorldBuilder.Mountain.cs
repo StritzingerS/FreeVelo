@@ -71,6 +71,9 @@ namespace FreeVelo.World
                 Mat(new Color(0.86f, 0.9f, 0.62f), grass, 0f),                // Alpine meadow
                 Mat(new Color(0.47f, 0.46f, 0.44f), TextureFactory.Gravel(), 0.05f), // Rock
                 Mat(new Color(0.95f, 0.97f, 1f), null, 0.35f),                // Snow
+                Mat(Color.white, TextureFactory.Rows(Crop(WorldMaterial.Wheat)), 0f),  // Fields: wheat
+                Mat(Color.white, TextureFactory.Rows(Crop(WorldMaterial.Crop)), 0f),   // green crop
+                Mat(Color.white, TextureFactory.Rows(Crop(WorldMaterial.Plowed)), 0f), // ploughed
             };
 
             // Far tiles over the whole mountain area (not over the home grid): computed in the background while the
@@ -92,6 +95,47 @@ namespace FreeVelo.World
             }
 
             BuildSummitSigns();
+            BuildVillageSigns();
+        }
+
+        /// <summary>Number of ground covers (submeshes of the mountain pieces).</summary>
+        private static readonly int CoverKinds = System.Enum.GetValues(typeof(GroundKind)).Length;
+
+        private static Color Crop(WorldMaterial crop)
+        {
+            var (c, _) = WorldMaterials.All[crop];
+            return new Color(c.X, c.Y, c.Z);
+        }
+
+        /// <summary>The village names on the signs at the village entrances (the boards themselves are scenery).</summary>
+        private void BuildVillageSigns()
+        {
+            var landscape = _terrain.Landscape;
+            if (landscape == null) return;
+            var font = Resources.Load<Font>("Fonts/Inter-Bold");
+            foreach (var place in landscape.Signs)
+            {
+                var item = place.Item;
+                var sign = new GameObject($"Sign {place.Name}");
+                sign.transform.SetParent(_root.transform, false);
+                sign.transform.SetPositionAndRotation(new Vector3(item.X, item.Y, item.Z), Quaternion.Euler(0, item.RotationDeg, 0));
+                var text = new GameObject("Text");
+                text.transform.SetParent(sign.transform, false);
+                text.transform.localPosition = new Vector3(0, 1.75f, 0.1f);
+                text.transform.localRotation = Quaternion.Euler(0, 180, 0); // a TextMesh reads from its −Z side
+                var mesh = text.AddComponent<TextMesh>();
+                mesh.text = place.Name;
+                mesh.anchor = TextAnchor.MiddleCenter;
+                mesh.alignment = TextAlignment.Center;
+                mesh.characterSize = 0.045f;
+                mesh.fontSize = 64;
+                mesh.color = Color.white;
+                if (font != null)
+                {
+                    mesh.font = font;
+                    text.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+                }
+            }
         }
 
         private static MeshRenderer AddRenderer(Transform parent, string name, Mesh mesh, Material[] materials, bool shadows)
@@ -114,7 +158,7 @@ namespace FreeVelo.World
             public readonly List<Vector3> Vertices = new List<Vector3>();
             public readonly List<Vector3> Normals = new List<Vector3>();
             public readonly List<Vector2> Uvs = new List<Vector2>();
-            public readonly List<int>[] Cover = { new List<int>(), new List<int>(), new List<int>(), new List<int>(), new List<int>() };
+            public readonly List<int>[] Cover = Enumerable.Range(0, CoverKinds).Select(_ => new List<int>()).ToArray();
 
             /// <summary>The Unity mesh (main thread only).</summary>
             public Mesh ToMesh(string name) => CoverMesh(name, Vertices, Normals, Uvs, Cover);
@@ -206,7 +250,7 @@ namespace FreeVelo.World
                             int a = start + (j * (per + 1)) + i, b = a + per + 1;
                             var center = (vertices[a] + vertices[b + 1]) * 0.5f;
                             float slope = Mathf.Sqrt(1f / (normals[a].y * normals[a].y) - 1f);
-                            var kind = MountainLook.Ground(m, center.x, center.z, center.y, slope, seed, distant: true);
+                            var kind = MountainLook.Ground(m, center.x, center.z, center.y, slope, seed, distant: true, terrain.Landscape);
                             cover[(int)kind].AddRange(new[] { a, b, a + 1, a + 1, b, b + 1 });
                         }
                     }
@@ -349,7 +393,7 @@ namespace FreeVelo.World
                             float h00 = heights[((j + 1) * n) + i + 1], h11 = heights[((j + 2) * n) + i + 2];
                             float h10 = heights[((j + 1) * n) + i + 2], h01 = heights[((j + 2) * n) + i + 1];
                             float slope = Mathf.Sqrt(((h10 - h00) * (h10 - h00)) + ((h01 - h00) * (h01 - h00))) / cell;
-                            cover[(j * cells) + i] = MountainLook.Ground(m, x0 + ((i + 0.5f) * cell), z0 + ((j + 0.5f) * cell), (h00 + h11) / 2, slope, seed, distant: false);
+                            cover[(j * cells) + i] = MountainLook.Ground(m, x0 + ((i + 0.5f) * cell), z0 + ((j + 0.5f) * cell), (h00 + h11) / 2, slope, seed, distant: false, terrain.Landscape);
                         }
                     }
 
@@ -417,7 +461,7 @@ namespace FreeVelo.World
             var vertices = new List<Vector3>();
             var normals = new List<Vector3>();
             var uvs = new List<Vector2>();
-            var tris = new List<int>[5];
+            var tris = new List<int>[CoverKinds];
             for (int k = 0; k < tris.Length; k++) tris[k] = new List<int>();
             int per = cells / step;
             for (int j = 0; j <= per; j++)

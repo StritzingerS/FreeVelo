@@ -246,6 +246,68 @@ public static class WorldPreview
         Console.WriteLine($"-> {output} ({sw.ElapsedMilliseconds} ms)");
     }
 
+    /// <summary>
+    /// Views of the villages: riding in (from 420 m out, rider's eye) and from above; names separated by commas
+    /// ("all" = every village).
+    /// </summary>
+    public static void Places(string output, string names)
+    {
+        var sw = Stopwatch.StartNew();
+        var map = WorldMap.Default;
+        var terrain = Terrain.Build(map);
+        var layout = SceneryLayout.Generate(terrain, new DateTime(2026, 5, 10));
+        var landscape = terrain.Landscape!;
+        Console.WriteLine($"world + landscape in {sw.ElapsedMilliseconds} ms: {landscape.Villages.Count} villages, {landscape.Items.Count} items, {landscape.Fields.Count} fields, {landscape.Pastures.Count} pastures");
+        foreach (var g in landscape.Items.GroupBy(i => i.Kind)) Console.Write($" {g.Key} {g.Count()}");
+        Console.WriteLine();
+        var wanted = names == "all" ? landscape.Villages.Select(v => v.Name).ToList() : names.Split(',').ToList();
+        const int ss = 2, w = 960, h = 540;
+        var tiles = new List<byte[]>();
+        foreach (var name in wanted)
+        {
+            var v = landscape.Villages.First(x => x.Name == name);
+            var node = map.Nodes[v.Node];
+            var e = map.Edges[node.Edges[0]];
+            bool outward = e.From == node.Id;
+            double s = Math.Min(e.Length - 5, 420), d = outward ? s : e.Length - s;
+            int i = Array.FindIndex(e.D, x => x >= d);
+            var p = new Vector3((float)e.X[i], (float)e.E[i], (float)e.Z[i]);
+            var toward = Vector3.Normalize(new Vector3((float)(node.X - p.X), 0, (float)(node.Z - p.Z)));
+            Vector3 Pos(RoadEdge edge, double at)
+            {
+                int k = Math.Max(0, Array.FindIndex(edge.D, x => x >= at));
+                return new Vector3((float)edge.X[k], (float)edge.E[k], (float)edge.Z[k]);
+            }
+
+            var right = new Vector3(toward.Z, 0, -toward.X);
+            var cams = new[]
+            {
+                new Camera { Name = name + " in", Position = p + (right * 1.4f) + new Vector3(0, 1.9f, 0), Target = p + (toward * 120) + new Vector3(0, 6f, 0), FieldOfView = 60 },
+                new Camera { Name = name + " street", Position = Pos(e, outward ? 140 : e.Length - 140) + new Vector3(0, 1.9f, 0), Target = Pos(e, outward ? 60 : e.Length - 60) + new Vector3(0, 2.5f, 0), FieldOfView = 60 },
+                new Camera { Name = name + " close", Position = Pos(e, outward ? 110 : e.Length - 110) + (right * 30) + new Vector3(0, 28, 0), Target = Pos(e, outward ? 70 : e.Length - 70), FieldOfView = 55 },
+                new Camera { Name = name + " above", Position = new Vector3((float)node.X, (float)node.Elevation, (float)node.Z) - (toward * 330) + new Vector3(0, 170, 0), Target = new Vector3((float)node.X, (float)node.Elevation, (float)node.Z) + (toward * 60), FieldOfView = 55 },
+            };
+            foreach (var camera in cams)
+            {
+                var meshes = SceneMeshes(map, terrain, layout, camera.Position, 1100);
+                var renderer = new Renderer(meshes, shadowCenter: camera.Position, shadowRadius: 400);
+                tiles.Add(Renderer.ToImage(renderer.Render(camera, w * ss, h * ss), w * ss, h * ss, ss, out _, out _));
+                Console.WriteLine($"  view {camera.Name}: {meshes.Sum(m => m.Triangles.Length / 3) / 1000}k triangles");
+            }
+        }
+
+        int cols = 2, rows = (tiles.Count + 1) / 2;
+        var sheet = new byte[cols * w * rows * h * 3];
+        for (int t = 0; t < tiles.Count; t++)
+        {
+            int ox = (t % cols) * w, oy = (t / cols) * h;
+            for (int y = 0; y < h; y++) Buffer.BlockCopy(tiles[t], y * w * 3, sheet, (((oy + y) * cols * w) + ox) * 3, w * 3);
+        }
+
+        Renderer.WritePng(output, sheet, cols * w, rows * h);
+        Console.WriteLine($"-> {output} ({sw.ElapsedMilliseconds} ms)");
+    }
+
     /// <summary>Straight down onto the whole world (north up), with all scenery.</summary>
     public static void Top(string output, int size)
     {
@@ -269,42 +331,58 @@ public static class WorldPreview
     {
         var meshes = new List<SceneMesh>();
 
-        // Terrain: 4 m grid close by, 12 m further away.
-        foreach (var (inner, outer, step) in detailRadius > 0 ? new[] { (0.0, 260.0, 1), (240.0, radius, 3) } : new[] { (0.0, radius, 2) })
+        // Terrain anywhere (home grid or streamed ground), 4 m close by, 12 m further away, coloured by ground cover.
+        var mt = terrain.Mountain!;
+        int natureSeed = SceneryLayout.NatureSeed(map);
+        var coverColor = new Dictionary<GroundKind, Vector3>
         {
-            var pos = new List<Vector3>();
-            var nrm = new List<Vector3>();
-            var tri = new List<int>();
-            int x0 = (int)((eye.X - outer - terrain.MinX) / terrain.Cell), x1 = (int)((eye.X + outer - terrain.MinX) / terrain.Cell);
-            int z0 = (int)((eye.Z - outer - terrain.MinZ) / terrain.Cell), z1 = (int)((eye.Z + outer - terrain.MinZ) / terrain.Cell);
-            x0 = Math.Max(1, x0 - (x0 % step)); z0 = Math.Max(1, z0 - (z0 % step));
-            x1 = Math.Min(terrain.Nx - 2, x1); z1 = Math.Min(terrain.Nz - 2, z1);
-            int nx = ((x1 - x0) / step) + 1, nz = ((z1 - z0) / step) + 1;
-            for (int j = 0; j < nz; j++)
+            [GroundKind.Grass] = new Vector3(0.36f, 0.5f, 0.22f),
+            [GroundKind.Forest] = new Vector3(0.16f, 0.27f, 0.15f),
+            [GroundKind.Meadow] = new Vector3(0.52f, 0.58f, 0.3f),
+            [GroundKind.Rock] = new Vector3(0.47f, 0.46f, 0.44f),
+            [GroundKind.Snow] = new Vector3(0.95f, 0.97f, 1f),
+            [GroundKind.Wheat] = WorldMaterials.All[WorldMaterial.Wheat].Color,
+            [GroundKind.Crop] = WorldMaterials.All[WorldMaterial.Crop].Color,
+            [GroundKind.Plowed] = WorldMaterials.All[WorldMaterial.Plowed].Color,
+        };
+        foreach (var (inner, outer, cell) in detailRadius > 0 ? new[] { (0.0, 260.0, 4.0), (240.0, radius, 12.0) } : new[] { (0.0, radius, 16.0) })
+        {
+            int n = (int)(2 * outer / cell) + 1;
+            double x0 = Math.Floor((eye.X - outer) / cell) * cell, z0 = Math.Floor((eye.Z - outer) / cell) * cell;
+            var heights = new float[n * n];
+            Parallel.For(0, n, j2 =>
             {
-                for (int i = 0; i < nx; i++)
+                for (int i2 = 0; i2 < n; i2++)
                 {
-                    int gx = x0 + (i * step), gz = z0 + (j * step);
-                    float x = (float)(terrain.MinX + (gx * terrain.Cell)), z = (float)(terrain.MinZ + (gz * terrain.Cell));
-                    pos.Add(new Vector3(x, terrain.At(gx, gz) - (step > 1 ? 0.4f : 0), z));
-                    float dx = terrain.At(gx + 1, gz) - terrain.At(gx - 1, gz), dz = terrain.At(gx, gz + 1) - terrain.At(gx, gz - 1);
-                    nrm.Add(Vector3.Normalize(new Vector3(-dx, 2 * (float)terrain.Cell, -dz)));
+                    double x = x0 + (i2 * cell), z = z0 + (j2 * cell);
+                    heights[(j2 * n) + i2] = (float)Math.Min(terrain.Height(x, z), terrain.RoadCap(x, z, cell)) - (cell > 4 ? 0.4f : 0);
                 }
-            }
+            });
 
-            for (int j = 0; j < nz - 1; j++)
+            var byCover = new Dictionary<GroundKind, (List<Vector3> P, List<Vector3> N, List<int> T)>();
+            for (int j2 = 0; j2 < n - 1; j2++)
             {
-                for (int i = 0; i < nx - 1; i++)
+                for (int i2 = 0; i2 < n - 1; i2++)
                 {
-                    int a = (j * nx) + i;
-                    var c = pos[a];
-                    double r = Math.Sqrt(((c.X - eye.X) * (c.X - eye.X)) + ((c.Z - eye.Z) * (c.Z - eye.Z)));
+                    double x = x0 + ((i2 + 0.5) * cell), z = z0 + ((j2 + 0.5) * cell);
+                    double r = Math.Sqrt(((x - eye.X) * (x - eye.X)) + ((z - eye.Z) * (z - eye.Z)));
                     if (r < inner || r > outer) continue;
-                    tri.AddRange(new[] { a, a + nx, a + 1, a + 1, a + nx, a + nx + 1 });
+                    float h00 = heights[(j2 * n) + i2], h10 = heights[(j2 * n) + i2 + 1], h01 = heights[((j2 + 1) * n) + i2], h11 = heights[((j2 + 1) * n) + i2 + 1];
+                    double slope = Math.Sqrt(((h10 - h00) * (h10 - h00)) + ((h01 - h00) * (h01 - h00))) / cell;
+                    var kind = MountainLook.Ground(mt, x, z, (h00 + h11) / 2, slope, natureSeed, distant: cell > 8, terrain.Landscape);
+                    if (!byCover.TryGetValue(kind, out var m)) byCover[kind] = m = (new List<Vector3>(), new List<Vector3>(), new List<int>());
+                    var nrm = Vector3.Normalize(new Vector3(-(h10 - h00 + h11 - h01) / 2, (float)cell, -(h01 - h00 + h11 - h10) / 2));
+                    int k = m.P.Count;
+                    m.P.Add(new Vector3((float)(x - (cell / 2)), h00, (float)(z - (cell / 2))));
+                    m.P.Add(new Vector3((float)(x + (cell / 2)), h10, (float)(z - (cell / 2))));
+                    m.P.Add(new Vector3((float)(x - (cell / 2)), h01, (float)(z + (cell / 2))));
+                    m.P.Add(new Vector3((float)(x + (cell / 2)), h11, (float)(z + (cell / 2))));
+                    for (int q = 0; q < 4; q++) m.N.Add(nrm);
+                    m.T.AddRange(new[] { k, k + 2, k + 1, k + 1, k + 2, k + 3 });
                 }
             }
 
-            meshes.Add(new SceneMesh { Positions = pos.ToArray(), Normals = nrm.ToArray(), Triangles = tri.ToArray(), Albedo = new Vector3(0.36f, 0.5f, 0.22f), CastsShadow = false });
+            foreach (var (kind, m) in byCover) meshes.Add(new SceneMesh { Positions = m.P.ToArray(), Normals = m.N.ToArray(), Triangles = m.T.ToArray(), Albedo = coverColor[kind], CastsShadow = false });
         }
 
         // Roads
@@ -360,38 +438,18 @@ public static class WorldPreview
         var (wc, ws) = WorldMaterials.All[WorldMaterial.Water];
         meshes.Add(new SceneMesh { Positions = wpos.ToArray(), Normals = Enumerable.Repeat(Vector3.UnitY, wpos.Count).ToArray(), Triangles = wtri.ToArray(), Albedo = wc, Smoothness = ws, CastsShadow = false });
 
-        // Fields
-        foreach (var field in layout.Fields)
-        {
-            var pos = new List<Vector3>();
-            var tri = new List<int>();
-            int nu = (int)(field.HalfLength / 4), nv = (int)(field.HalfWidth / 4);
-            for (int j = 0; j <= nv; j++)
-            {
-                for (int i = 0; i <= nu; i++)
-                {
-                    var (x, z) = field.Point(-field.HalfLength + (2 * field.HalfLength * i / nu), -field.HalfWidth + (2 * field.HalfWidth * j / nv));
-                    pos.Add(new Vector3((float)x, (float)terrain.Height(x, z) + 0.08f, (float)z));
-                }
-            }
-
-            for (int j = 0; j < nv; j++)
-            {
-                for (int i = 0; i < nu; i++)
-                {
-                    int a = (j * (nu + 1)) + i, b = a + nu + 1;
-                    tri.AddRange(new[] { a, a + 1, b, a + 1, b + 1, b });
-                }
-            }
-
-            var (fc, _) = WorldMaterials.All[field.Crop];
-            meshes.Add(new SceneMesh { Positions = pos.ToArray(), Normals = Enumerable.Repeat(Vector3.UnitY, pos.Count).ToArray(), Triangles = tri.ToArray(), Albedo = fc, CastsShadow = false });
-        }
-
         // Scenery, merged per material
         var merged = new Dictionary<WorldMaterial, (List<Vector3> P, List<Vector3> N, List<int> T)>();
         var normalCache = new Dictionary<MeshData, Vector3[]>();
-        foreach (var item in layout.Items)
+        var sceneItems = new List<SceneryItem>();
+        int cr = (int)Math.Ceiling(radius / MountainLook.ChunkSize);
+        int ecx = (int)Math.Floor(eye.X / MountainLook.ChunkSize), ecz = (int)Math.Floor(eye.Z / MountainLook.ChunkSize);
+        for (int cx = ecx - cr; cx <= ecx + cr; cx++)
+        {
+            for (int cz = ecz - cr; cz <= ecz + cr; cz++) sceneItems.AddRange(MountainLook.Items(terrain, cx, cz, natureSeed));
+        }
+
+        foreach (var item in sceneItems)
         {
             double dist = Math.Sqrt(((item.X - eye.X) * (item.X - eye.X)) + ((item.Z - eye.Z) * (item.Z - eye.Z)));
             if (dist > radius) continue;
@@ -425,7 +483,9 @@ public static class WorldPreview
 
     public static bool IsFoliage(WorldMaterial m) => m is WorldMaterial.SpruceNeedles or WorldMaterial.SpruceNeedlesDark or WorldMaterial.PineNeedles
         or WorldMaterial.LeavesDark or WorldMaterial.LeavesMid or WorldMaterial.LeavesLight or WorldMaterial.BirchLeaves or WorldMaterial.PoplarLeaves
-        or WorldMaterial.Bush or WorldMaterial.BushFlowering or WorldMaterial.Rock;
+        or WorldMaterial.Bush or WorldMaterial.BushFlowering or WorldMaterial.Rock or WorldMaterial.LarchNeedles or WorldMaterial.FirNeedles
+        or WorldMaterial.StonePineNeedles or WorldMaterial.BeechLeaves or WorldMaterial.MapleLeaves or WorldMaterial.LindenLeaves or WorldMaterial.AlderLeaves
+        or WorldMaterial.WillowLeaves or WorldMaterial.AppleLeaves;
 
     private static SceneMesh Ground(Vector3 min, Vector3 max)
     {
