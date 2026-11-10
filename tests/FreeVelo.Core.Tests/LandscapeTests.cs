@@ -124,6 +124,22 @@ public class LandscapeTests
     }
 
     [Fact]
+    public void BeerTablesStandOnTheGardenFloor()
+    {
+        var terrain = Terrain.Build(WorldMap.Default);
+        var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
+        var yards = l.Items.Where(i => i.Kind == SceneryKind.Yard).ToList();
+        var tables = l.Items.Where(i => i.Kind == SceneryKind.BeerTable).ToList();
+        Assert.NotEmpty(tables);
+        foreach (var t in tables)
+        {
+            // Every table stands on a gravel plate (the garden floor) and on level ground.
+            Assert.Contains(yards, y => Math.Abs(y.X - t.X) < 4.5 && Math.Abs(y.Z - t.Z) < 4.5);
+            Assert.True(Math.Abs(terrain.Height(t.X, t.Z) - terrain.Height(t.X + 1, t.Z + 1)) < 0.1, $"table at ({t.X:0},{t.Z:0}) on a slope");
+        }
+    }
+
+    [Fact]
     public void TheMaypoleOnlyStandsInMay()
     {
         var terrain = Ground.Value;

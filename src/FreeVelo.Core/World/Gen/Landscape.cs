@@ -532,6 +532,10 @@ namespace FreeVelo.Core.World.Gen
                 var inn = p(0, 0);
                 if (!room || _footprints.Any(f => Dist(f.X, f.Z, c.X, c.Z) < f.R + 6 && Dist(f.X, f.Z, inn.X, inn.Z) > 0.5)) continue;
 
+                // The garden is levelled with the inn's floor, so its gravel floor lies flat under the tables.
+                int own = _pads.FindLastIndex(q => Math.Abs(q.X - inn.X) < 0.01 && Math.Abs(q.Z - inn.Z) < 0.01);
+                if (own >= 0) _pads.Add(new Terrain.Pad(c.X, c.Z, half, halfV, rotationDeg, _pads[own].Height));
+
                 for (double u = cu - 3.5; u <= cu + 3.5; u += 7)
                 {
                     for (double v = -halfV + 3; v <= halfV - 3; v += 6) item(SceneryKind.Yard, u, v, rotationDeg, 0);
