@@ -146,6 +146,7 @@ namespace FreeVelo.Core.Plans
         public const string Endurance = "endurance-60";
         public const string LongEndurance = "endurance-90";
         public const string RampTest = "ftp-ramp";
+        public const string Openers = "openers-45";
         public const int MinSessions = 3;
 
         /// <summary>Endurance rides in recovery weeks: 10 % easier, below ~62 % FTP.</summary>
@@ -178,8 +179,17 @@ namespace FreeVelo.Core.Plans
             _ => new[] { SessionKind.Key, SessionKind.Endurance, SessionKind.Key, SessionKind.Recovery, SessionKind.Endurance },
         };
 
-        /// <summary>Every 4th week is a recovery week (rule 5) – but not the last week of a plan that ends with a test.</summary>
-        public static bool IsRecoveryWeek(PlanTemplate t, int week, int weeks) => (week + 1) % 4 == 0 && !(t.EndsWithTest && week == weeks - 1);
+        /// <summary>
+        /// Every 4th week is a recovery week (rule 5) – but not the last two weeks: the last week is the taper (or the test
+        /// week), and two easy weeks in a row would lose fitness.
+        /// </summary>
+        public static bool IsRecoveryWeek(PlanTemplate t, int week, int weeks) => (week + 1) % 4 == 0 && week < weeks - 2;
+
+        /// <summary>
+        /// The plan's last week: less volume, a little intensity (Allen &amp; Coggan) so that the plan ends fit and fresh
+        /// (form / TSB about +5 to +15). In plans that end with an FTP test it is the test week.
+        /// </summary>
+        public static bool IsTaperWeek(int week, int weeks) => week == weeks - 1;
 
         /// <summary>Monday-first order of the training days.</summary>
         public static List<DayOfWeek> Sorted(IEnumerable<DayOfWeek> days) => days.Distinct().OrderBy(d => ((int)d + 6) % 7).ToList();
@@ -212,6 +222,7 @@ namespace FreeVelo.Core.Plans
             {
                 var monday = plan.Start.AddDays(7 * week);
                 bool recoveryWeek = IsRecoveryWeek(template, week, plan.weeks);
+                bool taperWeek = IsTaperWeek(week, plan.weeks);
                 bool testWeek = template.EndsWithTest && week == plan.weeks - 1;
                 int keyIndex = week * keysPerWeek;
                 for (int i = 0; i < days.Count; i++)
@@ -240,8 +251,15 @@ namespace FreeVelo.Core.Plans
                         else (kind, workout) = (SessionKind.Recovery, Recovery);
                     }
 
-                    if (testWeek && i == days.Count - 1) (kind, workout) = (SessionKind.Test, RampTest);
-                    else if (testWeek && i == days.Count - 2) (kind, workout) = (SessionKind.Recovery, Recovery); // fresh for the test
+                    if (taperWeek)
+                    {
+                        // Taper: hard sessions become short openers, endurance rides 10 % easier and the last one shorter.
+                        if (kind == SessionKind.Key) (kind, workout) = (SessionKind.Endurance, Openers);
+                        else if (kind == SessionKind.Endurance) (workout, adjust) = (Endurance, RecoveryWeekPercent);
+                    }
+
+                    if (testWeek && i == days.Count - 1) (kind, workout, adjust) = (SessionKind.Test, RampTest, 0);
+                    else if (testWeek && i == days.Count - 2) (kind, workout, adjust) = (SessionKind.Recovery, Recovery, 0); // fresh for the test
 
                     var date = monday.AddDays(((int)days[i] + 6) % 7);
                     if (date < notBefore) continue;
@@ -267,6 +285,13 @@ namespace FreeVelo.Core.Plans
         public const string NoteEasier = "easier";
         public const string NoteHarder = "harder";
         public const string NoteRecovery = "recovery_inserted";
+        public const string NoteRamp = "ramp_recovery";
+
+        /// <summary>Fitness (CTL) rising faster than this (TSS per day, per week) for <see cref="RampWeeks"/> weeks → recovery.</summary>
+        public const double MaxRampPerWeek = 7;
+
+        /// <summary>Weeks in a row above <see cref="MaxRampPerWeek"/> (Allen &amp; Coggan: more than 4 risks overreaching).</summary>
+        public const int RampWeeks = 3;
 
         /// <summary>
         /// A ride ended: if it was the planned workout of that day (or a planned one of the last days not yet done), mark
@@ -322,7 +347,14 @@ namespace FreeVelo.Core.Plans
         /// Rules 1 and 4 for <paramref name="today"/>: missed sessions (key sessions move to a free day of the same week,
         /// others are dropped), and a recovery day when the form is very low. Returns true if the plan changed.
         /// </summary>
-        public static bool Update(TrainingPlan plan, DateTime today, double formToday)
+        public static bool Update(TrainingPlan plan, DateTime today, double formToday) => Update(plan, today, formToday, null);
+
+        /// <summary>
+        /// Same, plus rule 8: <paramref name="weeklyRamps"/> (CTL change per week, newest first, see
+        /// <see cref="TrainingLoad.WeeklyRamps"/>) above <see cref="MaxRampPerWeek"/> for <see cref="RampWeeks"/> weeks
+        /// → the next 7 days become a recovery week.
+        /// </summary>
+        public static bool Update(TrainingPlan plan, DateTime today, double formToday, IReadOnlyList<double>? weeklyRamps)
         {
             today = today.Date;
             bool changed = false;
@@ -342,6 +374,24 @@ namespace FreeVelo.Core.Plans
                 }
 
                 s.Status = SessionStatus.Missed;
+            }
+
+            // Rule 8: fitness rising too fast for weeks → recovery week now (unless an easy week is already coming).
+            if (weeklyRamps != null && weeklyRamps.Count >= RampWeeks && weeklyRamps.Take(RampWeeks).All(r => r > MaxRampPerWeek))
+            {
+                var coming = plan.sessions.Where(s => s.Status == SessionStatus.Planned && s.Date >= today && s.Date < today.AddDays(7)).ToList();
+                bool alreadyEasy = coming.All(s => s.Kind != SessionKind.Key) || coming.Any(s => s.note == NoteRamp);
+                if (!alreadyEasy)
+                {
+                    foreach (var s in coming.Where(s => s.Kind != SessionKind.Test))
+                    {
+                        if (s.Kind == SessionKind.Key) (s.Kind, s.workoutId, s.adjustPercent) = (SessionKind.Endurance, PlanTemplates.Endurance, PlanTemplates.RecoveryWeekPercent);
+                        else (s.Kind, s.workoutId, s.adjustPercent) = (SessionKind.Recovery, PlanTemplates.Recovery, 0);
+                        s.note = NoteRamp;
+                    }
+
+                    changed = true;
+                }
             }
 
             // Rule 4: very tired → the next hard session today/tomorrow becomes a recovery ride.

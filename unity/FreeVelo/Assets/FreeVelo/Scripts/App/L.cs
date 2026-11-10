@@ -176,6 +176,7 @@ namespace FreeVelo.App
             ["note_moved"] = ("moved", "verschoben"),
             ["note_easier"] = ("easier", "leichter"),
             ["note_harder"] = ("harder", "härter"),
+            ["note_ramp_recovery"] = ("recovery week – fitness rose very fast", "Erholungswoche – Fitness stieg sehr schnell"),
             ["note_recovery_inserted"] = ("recovery – you are tired", "Erholung – du bist müde"),
             ["plan_session_done"] = ("Training plan: session done ✓", "Trainingsplan: Einheit erledigt ✓"),
             ["fitness"] = ("Fitness", "Fitness"),

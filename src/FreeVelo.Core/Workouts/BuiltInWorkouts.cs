@@ -23,6 +23,7 @@ namespace FreeVelo.Core.Workouts
             SweetSpotCrissCross(),
             MicroBursts(),
             Anaerobic6x2(),
+            Openers(),
         };
 
         public static Workout? Find(string id) => All.FirstOrDefault(w => w.Id == id);
@@ -189,6 +190,20 @@ namespace FreeVelo.Core.Workouts
             {
                 Repeat(6, Steady(120, 135, "All in", "Alles geben"), Steady(240, 50, "Recover", "Erholen")),
                 CoolDown(),
+            }));
+
+        /// <summary>Taper / last days before a test or event: short, a few hard minutes to keep the legs sharp.</summary>
+        public static Workout Openers() => Create(
+            "openers-45", "Openers 45", "Aktivierung 45", WorkoutCategory.Endurance,
+            "45 min easy with 3 × 1 min at 115 % and 2 short sprints – fresh legs that stay sharp (taper).",
+            "45 min locker mit 3 × 1 min bei 115 % und 2 kurzen Sprints – frische Beine, die spritzig bleiben (Tapering).",
+            Concat(WarmUp(10), new WorkoutBlock[]
+            {
+                Repeat(3, Steady(60, 115, "Open up", "Öffnen"), Steady(180, 60)),
+                Steady(300, 65),
+                Repeat(2, Steady(20, 150, "Sprint", "Sprint"), Steady(160, 55)),
+                Steady(240, 65),
+                CoolDown(5),
             }));
 
         public static Workout FortyTwenties() => Create(

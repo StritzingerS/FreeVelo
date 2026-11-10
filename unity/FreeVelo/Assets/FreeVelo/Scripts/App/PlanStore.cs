@@ -99,7 +99,8 @@ namespace FreeVelo.App
             if (_updatedFor == today) return;
             _updatedFor = today;
             double form = TrainingLoad.FormOn(HistoryStore.Rides, today);
-            if (PlanAdapter.Update(Plan, today, form)) Save();
+            var ramps = TrainingLoad.WeeklyRamps(HistoryStore.Rides, today);
+            if (PlanAdapter.Update(Plan, today, form, ramps)) Save();
         }
 
         /// <summary>A ride ended: completes the planned session if it was that workout. Returns the session.</summary>

@@ -176,4 +176,56 @@ public class PlanTests
 
         Assert.Contains(plan.sessions, s => s.workoutId == "sweetspot-crisscross");
     }
+
+    [Fact]
+    public void LastWeekIsATaperAndNotPrecededByARecoveryWeek()
+    {
+        var days = new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
+        // Base, 5 weeks: week 4 (index 3) would be a recovery week, but it is right before the taper → stays hard.
+        var plan = PlanTemplates.Create(PlanTemplates.Find("base")!, 5, days, new DateTime(2026, 11, 9));
+        Assert.Contains(plan.sessions, s => s.week == 3 && s.Kind == SessionKind.Key);
+        var taper = plan.sessions.Where(s => s.week == 4).ToList();
+        Assert.DoesNotContain(taper, s => s.Kind == SessionKind.Key);
+        Assert.Contains(taper, s => s.workoutId == PlanTemplates.Openers);
+
+        // A plan ending with an FTP test: openers, recovery the day before, then the test.
+        var build = PlanTemplates.Create(PlanTemplates.Find("ftp-build")!, 8, days, new DateTime(2026, 11, 9));
+        var last = build.sessions.Where(s => s.week == 7).OrderBy(s => s.date).ToList();
+        Assert.Equal(new[] { PlanTemplates.Openers, PlanTemplates.Recovery, PlanTemplates.RampTest }, last.Select(s => s.workoutId));
+        Assert.Contains(build.sessions, s => s.week == 3 && s.Kind != SessionKind.Key); // normal recovery week 4 stays
+    }
+
+    [Fact]
+    public void FitnessRisingTooFastBringsTheRecoveryWeekForward()
+    {
+        var days = new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
+        var today = new DateTime(2026, 11, 9);
+        var plan = PlanTemplates.Create(PlanTemplates.Find("ftp-build")!, 8, days, today);
+
+        // Two fast weeks: no change yet.
+        Assert.False(PlanAdapter.Update(plan, today, 0, new[] { 8.0, 9.0, 4.0 }));
+        // Three fast weeks in a row: the next 7 days become easy.
+        Assert.True(PlanAdapter.Update(plan, today, 0, new[] { 8.0, 9.0, 7.5 }));
+        var week = plan.sessions.Where(s => s.Date >= today && s.Date < today.AddDays(7)).ToList();
+        Assert.DoesNotContain(week, s => s.Kind == SessionKind.Key);
+        Assert.All(week, s => Assert.Equal(PlanAdapter.NoteRamp, s.note));
+        // Only once.
+        Assert.False(PlanAdapter.Update(plan, today.AddDays(1), 0, new[] { 8.0, 9.0, 7.5 }));
+    }
+
+    [Fact]
+    public void WeeklyRampsFollowFitness()
+    {
+        // Every day 100 TSS from zero: fitness rises fast at first.
+        var start = new DateTime(2026, 9, 1);
+        var rides = Enumerable.Range(0, 30).Select(i => new RideRecord
+        {
+            startUtc = new DateTimeOffset(DateTime.SpecifyKind(start.AddDays(i).AddHours(18), DateTimeKind.Utc)).ToUnixTimeSeconds(),
+            tss = 100,
+        }).ToList();
+        var ramps = TrainingLoad.WeeklyRamps(rides, start.AddDays(29), 3, t => t);
+        Assert.Equal(3, ramps.Count);
+        Assert.All(ramps, r => Assert.InRange(r, 7, 20));
+        Assert.True(ramps[0] < ramps[2]); // the rise slows down (newest first)
+    }
 }

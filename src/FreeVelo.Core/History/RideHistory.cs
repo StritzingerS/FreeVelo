@@ -250,6 +250,24 @@ namespace FreeVelo.Core.History
             return days.Count == 0 ? 0 : days[days.Count - 1].Tsb;
         }
 
+        /// <summary>
+        /// How much fitness (CTL) changed in each of the last <paramref name="weeks"/> weeks up to <paramref name="today"/>,
+        /// newest first (TSS per day, per week; Allen &amp; Coggan recommend 3–7).
+        /// </summary>
+        public static List<double> WeeklyRamps(IEnumerable<RideRecord> rides, DateTime today, int weeks = 4, Func<DateTime, DateTime>? toLocal = null)
+        {
+            var days = Fitness(rides, today, toLocal);
+            var result = new List<double>();
+            for (int w = 0; w < weeks; w++)
+            {
+                int end = days.Count - 1 - (7 * w), start = end - 7;
+                if (start < 0) break;
+                result.Add(days[end].Ctl - days[start].Ctl);
+            }
+
+            return result;
+        }
+
         /// <summary>Best power per <see cref="RideAnalysis.CurveDurations"/> over the rides (e.g. the last 90 days).</summary>
         public static int[] BestPowerCurve(IEnumerable<RideRecord> rides)
         {
