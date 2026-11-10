@@ -69,9 +69,9 @@ namespace FreeVelo.App
             }
         }
 
-        public static void Start(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> days)
+        public static void Start(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> days, string testWorkoutId, bool startTest)
         {
-            _plan = PlanTemplates.Create(template, weeks, days, DateTime.Now);
+            _plan = PlanTemplates.Create(template, weeks, days, DateTime.Now, testWorkoutId, startTest);
             _loaded = true;
             _updatedFor = default;
             Save();
@@ -99,7 +99,8 @@ namespace FreeVelo.App
             if (_updatedFor == today) return;
             _updatedFor = today;
             double form = TrainingLoad.FormOn(HistoryStore.Rides, today);
-            if (PlanAdapter.Update(Plan, today, form)) Save();
+            var ramps = TrainingLoad.WeeklyRamps(HistoryStore.Rides, today);
+            if (PlanAdapter.Update(Plan, today, form, ramps)) Save();
         }
 
         /// <summary>A ride ended: completes the planned session if it was that workout. Returns the session.</summary>

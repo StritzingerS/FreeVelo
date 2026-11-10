@@ -321,5 +321,8 @@ namespace FreeVelo.Shared.Api
         /// <summary>The connected athlete (only after connecting, not after a refresh).</summary>
         public long athleteId;
         public string athleteName = "";
+
+        /// <summary>The rider allowed reading their activities (import of rides with power). Set when connecting.</summary>
+        public bool canRead;
     }
 }

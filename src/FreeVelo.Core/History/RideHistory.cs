@@ -48,6 +48,9 @@ namespace FreeVelo.Core.History
         /// <summary>Set when the ride was rebuilt from a FIT file (imported).</summary>
         public bool imported;
 
+        /// <summary>Strava activity id when the ride was imported from Strava (0 otherwise).</summary>
+        public long stravaId;
+
         /// <summary>FTP estimated by an FTP test (0 if none).</summary>
         public int estimatedFtpW;
 
@@ -155,6 +158,51 @@ namespace FreeVelo.Core.History
             return record;
         }
 
+        /// <summary>
+        /// One record per second: gaps up to <paramref name="maxGapS"/> (bike computers with "smart recording" store a
+        /// point only every few seconds) are filled with the previous values; longer gaps are pauses and stay gaps.
+        /// </summary>
+        public static List<FitRecord> OneHz(IReadOnlyList<FitRecord> samples, int maxGapS = 10)
+        {
+            var result = new List<FitRecord>(samples.Count);
+            for (int i = 0; i < samples.Count; i++)
+            {
+                var s = samples[i];
+                if (result.Count > 0)
+                {
+                    var prev = result[result.Count - 1];
+                    int gap = (int)Math.Round((s.TimeUtc - prev.TimeUtc).TotalSeconds);
+                    if (gap < 1) continue;
+                    if (gap <= maxGapS)
+                    {
+                        for (int k = 1; k < gap; k++)
+                        {
+                            double f = k / (double)gap;
+                            double? Lerp(double? a, double? b) => a.HasValue && b.HasValue ? a + ((b - a) * f) : a;
+                            result.Add(new FitRecord(prev.TimeUtc.AddSeconds(k), prev.PowerW, prev.HeartRateBpm, prev.CadenceRpm,
+                                Lerp(prev.DistanceM, s.DistanceM), prev.SpeedMps, Lerp(prev.AltitudeM, s.AltitudeM)));
+                        }
+                    }
+                }
+
+                result.Add(s);
+            }
+
+            return result;
+        }
+
+        /// <summary>The records as a recording, to write a FIT file for the ride detail (imported rides).</summary>
+        public static Recording.RideRecording ToRecording(string name, IReadOnlyList<FitRecord> samples)
+        {
+            var ride = new Recording.RideRecording(samples.Count > 0 ? samples[0].TimeUtc : DateTime.UtcNow, name);
+            foreach (var s in samples)
+            {
+                ride.Add(new Recording.RideSample(s.TimeUtc, s.PowerW, s.HeartRateBpm, s.CadenceRpm, s.SpeedMps ?? 0, s.DistanceM ?? 0, s.AltitudeM ?? 0, null));
+            }
+
+            return ride;
+        }
+
         public static string TitleFromFileName(string fileName)
         {
             string name = System.IO.Path.GetFileNameWithoutExtension(fileName);
@@ -248,6 +296,46 @@ namespace FreeVelo.Core.History
         {
             var days = Fitness(rides, day, toLocal);
             return days.Count == 0 ? 0 : days[days.Count - 1].Tsb;
+        }
+
+        /// <summary>
+        /// The same ride already in the history: a ride that starts within <see cref="SameRideStartS"/> and lasts about as
+        /// long (±10 %) – e.g. a FreeVelo trainer ride that is also on Strava (uploaded, or recorded by a bike computer too).
+        /// </summary>
+        public static bool IsDuplicate(IEnumerable<RideRecord> rides, DateTime startUtc, double durationS) =>
+            rides.Any(r => Math.Abs((r.StartUtc - startUtc).TotalSeconds) <= SameRideStartS
+                && Math.Abs(r.durationS - durationS) <= Math.Max(60, 0.1 * Math.Max(r.durationS, durationS)));
+
+        public const double SameRideStartS = 120;
+
+        /// <summary>FTP that applied at <paramref name="timeUtc"/> (last change before it), else <paramref name="fallback"/>.</summary>
+        public static int FtpOn(IEnumerable<FtpChange> history, DateTime timeUtc, int fallback)
+        {
+            long t = new DateTimeOffset(DateTime.SpecifyKind(timeUtc, DateTimeKind.Utc)).ToUnixTimeSeconds();
+            var last = history.Where(f => f.timeUtc <= t).OrderBy(f => f.timeUtc).LastOrDefault();
+            return last != null && last.ftpW > 0 ? last.ftpW : fallback;
+        }
+
+        /// <summary>Date of the last accepted FTP test (local time), or null.</summary>
+        public static DateTime? LastFtpTest(IEnumerable<FtpChange> history) =>
+            history.Where(f => f.source == "test").Select(f => (DateTime?)DateTimeOffset.FromUnixTimeSeconds(f.timeUtc).LocalDateTime).Max();
+
+        /// <summary>
+        /// How much fitness (CTL) changed in each of the last <paramref name="weeks"/> weeks up to <paramref name="today"/>,
+        /// newest first (TSS per day, per week; Allen &amp; Coggan recommend 3–7).
+        /// </summary>
+        public static List<double> WeeklyRamps(IEnumerable<RideRecord> rides, DateTime today, int weeks = 4, Func<DateTime, DateTime>? toLocal = null)
+        {
+            var days = Fitness(rides, today, toLocal);
+            var result = new List<double>();
+            for (int w = 0; w < weeks; w++)
+            {
+                int end = days.Count - 1 - (7 * w), start = end - 7;
+                if (start < 0) break;
+                result.Add(days[end].Ctl - days[start].Ctl);
+            }
+
+            return result;
         }
 
         /// <summary>Best power per <see cref="RideAnalysis.CurveDurations"/> over the rides (e.g. the last 90 days).</summary>

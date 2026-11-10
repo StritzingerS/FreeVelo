@@ -26,6 +26,12 @@ public sealed class StravaService
 {
     public const string HttpClientName = "strava";
     public const string RequiredScope = "activity:write";
+
+    /// <summary>Optional: reading the rider's activities (incl. private ones) to import their rides with power.</summary>
+    public const string ReadScope = "activity:read_all";
+
+    /// <summary>What FreeVelo asks for on the approval page.</summary>
+    public const string RequestedScope = RequiredScope + "," + ReadScope;
     public static readonly TimeSpan PendingLifetime = TimeSpan.FromMinutes(10);
 
     private readonly StravaOptions _options;
@@ -64,7 +70,7 @@ public sealed class StravaService
             + $"?client_id={Uri.EscapeDataString(_options.ClientId)}"
             + $"&redirect_uri={Uri.EscapeDataString(redirectUri)}"
             + "&response_type=code&approval_prompt=auto"
-            + $"&scope={Uri.EscapeDataString(RequiredScope)}"
+            + $"&scope={Uri.EscapeDataString(RequestedScope)}"
             + $"&state={state}";
     }
 
@@ -93,6 +99,7 @@ public sealed class StravaService
                 ["grant_type"] = "authorization_code",
             }, ct);
             pending.Tokens = response == null ? null : ToTokens(response);
+            if (pending.Tokens != null) pending.Tokens.canRead = (scope ?? "").Split(',').Contains(ReadScope);
             if (pending.Tokens == null) pending.Error = ApiErrors.StravaFailed;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)

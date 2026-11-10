@@ -19,6 +19,11 @@ namespace FreeVelo.Core.Workouts
             Vo2Max5x5(),
             FortyTwenties(),
             Sprints(),
+            SweetSpot2x20(),
+            SweetSpotCrissCross(),
+            MicroBursts(),
+            Anaerobic6x2(),
+            Openers(),
         };
 
         public static Workout? Find(string id) => All.FirstOrDefault(w => w.Id == id);
@@ -80,10 +85,10 @@ namespace FreeVelo.Core.Workouts
 
         public static Workout Tempo2x20() => Create(
             "tempo-2x20", "Tempo 2×20", "Tempo 2×20", WorkoutCategory.Tempo,
-            "2 × 20 min at 80 % FTP.", "2 × 20 min bei 80 % FTP.",
+            "2 × 20 min at 85 % FTP (upper tempo).", "2 × 20 min bei 85 % FTP (oberes Tempo).",
             Concat(WarmUp(), new WorkoutBlock[]
             {
-                Repeat(2, Steady(20 * 60, 80, "Tempo – steady and controlled", "Tempo – gleichmäßig und kontrolliert"), Steady(5 * 60, 55)),
+                Repeat(2, Steady(20 * 60, 85, "Tempo – steady and controlled", "Tempo – gleichmäßig und kontrolliert"), Steady(5 * 60, 55)),
                 CoolDown(),
             }));
 
@@ -99,10 +104,10 @@ namespace FreeVelo.Core.Workouts
 
         public static Workout Threshold2x20() => Create(
             "threshold-2x20", "Threshold 2×20", "Schwelle 2×20", WorkoutCategory.Threshold,
-            "The classic: 2 × 20 min at 95–100 % FTP.", "Der Klassiker: 2 × 20 min bei 95–100 % FTP.",
+            "The classic: 2 × 20 min at 95–100 % FTP, 10 min recovery.", "Der Klassiker: 2 × 20 min bei 95–100 % FTP, 10 min Erholung.",
             Concat(WarmUp(12), new WorkoutBlock[]
             {
-                Repeat(2, Steady(20 * 60, 97, "Threshold – find your rhythm", "Schwelle – finde deinen Rhythmus"), Steady(5 * 60, 50)),
+                Repeat(2, Steady(20 * 60, 97, "Threshold – find your rhythm", "Schwelle – finde deinen Rhythmus"), Steady(10 * 60, 50)),
                 CoolDown(),
             }));
 
@@ -127,21 +132,78 @@ namespace FreeVelo.Core.Workouts
 
         public static Workout Vo2Max4x4() => Create(
             "vo2max-4x4", "4×4 VO2max", "4×4 VO2max", WorkoutCategory.Vo2Max,
-            "4 × 4 min at 110 % FTP with 3 min recovery – the well-known 4×4 protocol.",
-            "4 × 4 min bei 110 % FTP mit 3 min Erholung – das bekannte 4×4-Protokoll.",
+            "4 × 4 min at 113 % FTP with 3 min recovery – the well-known 4×4 protocol.",
+            "4 × 4 min bei 113 % FTP mit 3 min Erholung – das bekannte 4×4-Protokoll.",
             Concat(WarmUp(12), new WorkoutBlock[]
             {
-                Repeat(4, Steady(240, 110, "Go hard!", "Jetzt hart!", new CadenceRange(90, 105)), Steady(180, 50, "Recover", "Erholen")),
+                Repeat(4, Steady(240, 113, "Go hard!", "Jetzt hart!", new CadenceRange(90, 105)), Steady(180, 50, "Recover", "Erholen")),
                 CoolDown(),
             }));
 
         public static Workout Vo2Max5x5() => Create(
             "vo2max-5x5", "VO2max 5×5", "VO2max 5×5", WorkoutCategory.Vo2Max,
-            "5 × 5 min at 108 % FTP with 5 min recovery.", "5 × 5 min bei 108 % FTP mit 5 min Erholung.",
+            "5 × 5 min at 110 % FTP with 5 min recovery.", "5 × 5 min bei 110 % FTP mit 5 min Erholung.",
             Concat(WarmUp(12), new WorkoutBlock[]
             {
-                Repeat(5, Steady(300, 108, "VO2max", "VO2max", new CadenceRange(90, 105)), Steady(300, 50)),
+                Repeat(5, Steady(300, 110, "VO2max", "VO2max", new CadenceRange(90, 105)), Steady(300, 50)),
                 CoolDown(),
+            }));
+
+        public static Workout SweetSpot2x20() => Create(
+            "sweetspot-2x20", "Sweet Spot 2×20", "Sweet Spot 2×20", WorkoutCategory.SweetSpot,
+            "2 × 20 min at 90 % FTP – the next step after 3 × 15.", "2 × 20 min bei 90 % FTP – der nächste Schritt nach 3 × 15.",
+            Concat(WarmUp(12), new WorkoutBlock[]
+            {
+                Repeat(2, Steady(20 * 60, 90, "Sweet spot", "Sweet Spot"), Steady(10 * 60, 55)),
+                CoolDown(),
+            }));
+
+        public static Workout SweetSpotCrissCross() => Create(
+            "sweetspot-crisscross", "Sweet Spot Crisscross", "Sweet Spot Crisscross", WorkoutCategory.SweetSpot,
+            "2 × 20 min at 88 % FTP with a 30 s surge to 120 % every 2 min – builds threshold, never boring.",
+            "2 × 20 min bei 88 % FTP mit 30 s Antritt auf 120 % alle 2 min – baut die Schwelle auf, nie langweilig.",
+            Concat(WarmUp(12), new WorkoutBlock[]
+            {
+                Repeat(2,
+                    Repeat(8, Steady(120, 88, "Hold sweet spot", "Sweet Spot halten"), Steady(30, 120, "Surge!", "Antritt!")),
+                    Steady(10 * 60, 55)),
+                CoolDown(),
+            }));
+
+        public static Workout MicroBursts() => Create(
+            "micro-bursts", "Micro-Bursts", "Micro-Bursts", WorkoutCategory.Anaerobic,
+            "2 × 10 min of 15 s at 150 % / 15 s at 50 % FTP – explosive power, ideal on the trainer.",
+            "2 × 10 min mit 15 s bei 150 % / 15 s bei 50 % FTP – Explosivkraft, ideal auf dem Rollentrainer.",
+            Concat(WarmUp(12), new WorkoutBlock[]
+            {
+                Repeat(2,
+                    Repeat(20, Steady(15, 150, "Burst", "Burst", new CadenceRange(100, 120)), Steady(15, 50)),
+                    Steady(10 * 60, 55)),
+                CoolDown(),
+            }));
+
+        public static Workout Anaerobic6x2() => Create(
+            "anaerobic-6x2", "Anaerobic 6×2", "Anaerob 6×2", WorkoutCategory.Anaerobic,
+            "6 × 2 min at 135 % FTP with 4 min recovery – anaerobic capacity.",
+            "6 × 2 min bei 135 % FTP mit 4 min Erholung – anaerobe Kapazität.",
+            Concat(WarmUp(12), new WorkoutBlock[]
+            {
+                Repeat(6, Steady(120, 135, "All in", "Alles geben"), Steady(240, 50, "Recover", "Erholen")),
+                CoolDown(),
+            }));
+
+        /// <summary>Taper / last days before a test or event: short, a few hard minutes to keep the legs sharp.</summary>
+        public static Workout Openers() => Create(
+            "openers-45", "Openers 45", "Aktivierung 45", WorkoutCategory.Endurance,
+            "45 min easy with 3 × 1 min at 115 % and 2 short sprints – fresh legs that stay sharp (taper).",
+            "45 min locker mit 3 × 1 min bei 115 % und 2 kurzen Sprints – frische Beine, die spritzig bleiben (Tapering).",
+            Concat(WarmUp(10), new WorkoutBlock[]
+            {
+                Repeat(3, Steady(60, 115, "Open up", "Öffnen"), Steady(180, 60)),
+                Steady(300, 65),
+                Repeat(2, Steady(20, 150, "Sprint", "Sprint"), Steady(160, 55)),
+                Steady(240, 65),
+                CoolDown(5),
             }));
 
         public static Workout FortyTwenties() => Create(

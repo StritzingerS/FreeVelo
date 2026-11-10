@@ -63,8 +63,7 @@ to wake up.
 - [x] Quick start on the home page: a workout that suits the form (TSB), then the workouts ridden last
 - [ ] Test with the real Click V2 (both units, keep-alive, locked left unit; the log of 2026-11-07 had the
       handshake and battery but no button messages)
-- [ ] Test built-in virtual shifting on the Neo 2 (it offers the Zwift service): handshake, gear changes, feel of
-      the 42×14 reference ratio; needs the Android plugin from `main` (subscribes to the Zwift characteristics)
+- [x] Built-in virtual shifting tested on the Neo 2: works (2026-11-10)
 
 ### E. The mountain – two legendary climbs
 - [x] Climb data from GPX (`tools/climbs/process_gpx.py`): Passo dello Stelvio (24.3 km, +1842 m, Ø 7.6 %) and

@@ -59,7 +59,7 @@ namespace FreeVelo.UI
             float x0 = Mathf.Max(track.x, track.x - seg + ((barW + seg) * t));
             float x1 = Mathf.Min(track.xMax, track.x + ((barW + seg) * t));
             if (x1 > x0) Ui.Rect(new Rect(x0, track.y, x1 - x0, track.height), Theme.Alpha(Theme.Accent, alpha), 3);
-            GUI.Label(new Rect(0, track.yMax + 14, _w, 26), L.Get("loading_world"), Theme.With(Theme.Body, Theme.Muted, 16, TextAnchor.MiddleCenter));
+            GUI.Label(new Rect(0, track.yMax + 14, _w, 26), L.Get(FreeVelo.App.FreeVeloApp.LoadingStep), Theme.With(Theme.Body, Theme.Muted, 16, TextAnchor.MiddleCenter));
 
             GUI.color = old;
             return !_world.IsLoaded; // during the fade the app is already usable

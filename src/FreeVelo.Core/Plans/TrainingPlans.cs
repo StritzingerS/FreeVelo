@@ -85,6 +85,12 @@ namespace FreeVelo.Core.Plans
         public string start = "";
         public int weeks;
 
+        /// <summary>The FTP test at the end (workout id); empty in older plans = ramp test.</summary>
+        public string testWorkoutId = "";
+
+        /// <summary>The plan begins with an FTP test (the last one was too long ago, see <see cref="PlanTemplates.NeedsStartTest"/>).</summary>
+        public bool startTest;
+
         /// <summary>Training days as <see cref="DayOfWeek"/> values.</summary>
         public int[] weekdays = new int[0];
         public List<PlannedSession> sessions = new List<PlannedSession>();
@@ -146,7 +152,11 @@ namespace FreeVelo.Core.Plans
         public const string Endurance = "endurance-60";
         public const string LongEndurance = "endurance-90";
         public const string RampTest = "ftp-ramp";
+        public const string Openers = "openers-45";
         public const int MinSessions = 3;
+
+        /// <summary>Endurance rides in recovery weeks: 10 % easier, below ~62 % FTP.</summary>
+        public const int RecoveryWeekPercent = -10;
         public const int MaxSessions = 5;
 
         public static readonly IReadOnlyList<PlanTemplate> All = new[]
@@ -155,14 +165,14 @@ namespace FreeVelo.Core.Plans
                 new LocalizedText("Aerobic base: endurance rides with tempo and sweet spot.", "Aerobe Grundlage: Ausdauerfahrten mit Tempo und Sweet Spot."),
                 8, 4, 12, new[] { "tempo-2x20", "sweetspot-3x15" }, false),
             new PlanTemplate("ftp-build", new LocalizedText("FTP Build", "FTP-Aufbau"),
-                new LocalizedText("Raise your FTP: sweet spot, threshold and over-unders, FTP test at the end.", "FTP steigern: Sweet Spot, Schwelle und Over-Unders, FTP-Test am Ende."),
-                8, 4, 12, new[] { "sweetspot-3x15", "threshold-2x20", "over-unders-3x10" }, true),
+                new LocalizedText("Raise your FTP: sweet spot, threshold, crisscross and over-unders, FTP test at the end.", "FTP steigern: Sweet Spot, Schwelle, Crisscross und Over-Unders, FTP-Test am Ende."),
+                8, 4, 12, new[] { "sweetspot-3x15", "threshold-2x20", "sweetspot-crisscross", "over-unders-3x10", "sweetspot-2x20" }, true),
             new PlanTemplate("vo2max", new LocalizedText("VO2max Block", "VO2max-Block"),
                 new LocalizedText("Short, hard intervals for top-end power, FTP test at the end.", "Kurze, harte Intervalle für die Spitzenleistung, FTP-Test am Ende."),
-                6, 4, 8, new[] { "vo2max-4x4", "vo2max-5x5", "40-20s" }, true),
+                6, 4, 8, new[] { "vo2max-4x4", "vo2max-5x5", "40-20s", "micro-bursts" }, true),
             new PlanTemplate("maintenance", new LocalizedText("Maintenance", "Erhaltung"),
-                new LocalizedText("Keep your fitness with little time: one sweet spot session, sprints and endurance.", "Form halten mit wenig Zeit: Sweet Spot, Sprints und Grundlage."),
-                4, 4, 12, new[] { "sweetspot-3x15", "sprints-8x15" }, false),
+                new LocalizedText("Keep your fitness with little time: sweet spot, sprints or micro-bursts, and endurance.", "Form halten mit wenig Zeit: Sweet Spot, Sprints oder Micro-Bursts und Grundlage."),
+                4, 4, 12, new[] { "sweetspot-3x15", "sprints-8x15", "sweetspot-crisscross", "micro-bursts" }, false),
         };
 
         public static PlanTemplate? Find(string id) => All.FirstOrDefault(t => t.Id == id);
@@ -175,14 +185,40 @@ namespace FreeVelo.Core.Plans
             _ => new[] { SessionKind.Key, SessionKind.Endurance, SessionKind.Key, SessionKind.Recovery, SessionKind.Endurance },
         };
 
-        /// <summary>Every 4th week is a recovery week (rule 5) – but not the last week of a plan that ends with a test.</summary>
-        public static bool IsRecoveryWeek(PlanTemplate t, int week, int weeks) => (week + 1) % 4 == 0 && !(t.EndsWithTest && week == weeks - 1);
+        /// <summary>
+        /// Every 4th week is a recovery week (rule 5) – but not the last two weeks: the last week is the taper (or the test
+        /// week), and two easy weeks in a row would lose fitness.
+        /// </summary>
+        public static bool IsRecoveryWeek(PlanTemplate t, int week, int weeks) => (week + 1) % 4 == 0 && week < weeks - 2;
+
+        /// <summary>
+        /// The plan's last week: less volume, a little intensity (Allen &amp; Coggan) so that the plan ends fit and fresh
+        /// (form / TSB about +5 to +15). In plans that end with an FTP test it is the test week.
+        /// </summary>
+        public static bool IsTaperWeek(int week, int weeks) => week == weeks - 1;
 
         /// <summary>Monday-first order of the training days.</summary>
         public static List<DayOfWeek> Sorted(IEnumerable<DayOfWeek> days) => days.Distinct().OrderBy(d => ((int)d + 6) % 7).ToList();
 
         /// <summary>Creates a plan starting in the week of <paramref name="today"/>; days already over this week stay empty.</summary>
-        public static TrainingPlan Create(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> weekdays, DateTime today)
+        public static TrainingPlan Create(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> weekdays, DateTime today) =>
+            Create(template, weeks, weekdays, today, RampTest);
+
+        /// <summary>An FTP test older than this (or none) → the plan starts with a test (book: retest every 6–8 weeks).</summary>
+        public const int FtpFreshDays = 42;
+
+        /// <summary>True if the last FTP test is older than <see cref="FtpFreshDays"/> days, or there was none.</summary>
+        public static bool NeedsStartTest(DateTime? lastTest, DateTime today) => !lastTest.HasValue || (today.Date - lastTest.Value.Date).TotalDays > FtpFreshDays;
+
+        /// <summary>Same, with the FTP test the plan ends with (<see cref="RampTest"/>, "ftp-20min" or "ftp-2x8").</summary>
+        public static TrainingPlan Create(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> weekdays, DateTime today, string testWorkoutId) =>
+            Create(template, weeks, weekdays, today, testWorkoutId, startTest: false);
+
+        /// <summary>
+        /// Same; <paramref name="startTest"/>: the first session is the FTP test (when the last test is too old), so all
+        /// targets of the plan rest on a current FTP.
+        /// </summary>
+        public static TrainingPlan Create(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> weekdays, DateTime today, string testWorkoutId, bool startTest)
         {
             var days = Sorted(weekdays);
             if (days.Count < MinSessions || days.Count > MaxSessions) throw new ArgumentException($"{MinSessions}–{MaxSessions} training days");
@@ -193,9 +229,32 @@ namespace FreeVelo.Core.Plans
                 start = TrainingLoad.Monday(today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 weeks = weeks,
                 weekdays = days.Select(d => (int)d).ToArray(),
+                testWorkoutId = testWorkoutId,
+                startTest = startTest,
             };
             plan.sessions.AddRange(Generate(template, plan, 0, today.Date));
+            if (startTest) PlaceStartTest(plan);
             return plan;
+        }
+
+        /// <summary>
+        /// The first planned session becomes the FTP test. If it was a key session, the next endurance session of that
+        /// week takes over its workout, so no hard session is lost.
+        /// </summary>
+        internal static void PlaceStartTest(TrainingPlan plan)
+        {
+            var first = plan.sessions.Where(s => s.Status == SessionStatus.Planned).OrderBy(s => s.date).FirstOrDefault();
+            if (first == null || first.Kind == SessionKind.Test) return;
+            if (first.Kind == SessionKind.Key)
+            {
+                var stand = plan.sessions.Where(s => s.Status == SessionStatus.Planned && s.week == first.week && s.Kind == SessionKind.Endurance && s.Date > first.Date)
+                    .OrderBy(s => s.date).FirstOrDefault();
+                if (stand != null) (stand.Kind, stand.workoutId, stand.adjustPercent) = (SessionKind.Key, first.workoutId, first.adjustPercent);
+            }
+
+            first.Kind = SessionKind.Test;
+            first.workoutId = string.IsNullOrEmpty(plan.testWorkoutId) ? RampTest : plan.testWorkoutId;
+            first.adjustPercent = 0;
         }
 
         /// <summary>Sessions from week <paramref name="fromWeek"/> on, only on days not before <paramref name="notBefore"/>.</summary>
@@ -209,6 +268,7 @@ namespace FreeVelo.Core.Plans
             {
                 var monday = plan.Start.AddDays(7 * week);
                 bool recoveryWeek = IsRecoveryWeek(template, week, plan.weeks);
+                bool taperWeek = IsTaperWeek(week, plan.weeks);
                 bool testWeek = template.EndsWithTest && week == plan.weeks - 1;
                 int keyIndex = week * keysPerWeek;
                 for (int i = 0; i < days.Count; i++)
@@ -228,19 +288,28 @@ namespace FreeVelo.Core.Plans
                         workout = Recovery;
                     }
 
+                    int adjust = 0;
                     if (recoveryWeek)
                     {
-                        // About −40 % volume: hard sessions become short endurance, endurance becomes recovery.
-                        if (kind == SessionKind.Key) (kind, workout) = (SessionKind.Endurance, Endurance);
+                        // About −40 % volume: hard sessions become short endurance, endurance becomes recovery. Easy
+                        // weeks stay below ~62 % FTP (Allen & Coggan): the endurance rides 10 % easier (68 → ~61 %).
+                        if (kind == SessionKind.Key) (kind, workout, adjust) = (SessionKind.Endurance, Endurance, RecoveryWeekPercent);
                         else (kind, workout) = (SessionKind.Recovery, Recovery);
                     }
 
-                    if (testWeek && i == days.Count - 1) (kind, workout) = (SessionKind.Test, RampTest);
-                    else if (testWeek && i == days.Count - 2) (kind, workout) = (SessionKind.Recovery, Recovery); // fresh for the test
+                    if (taperWeek)
+                    {
+                        // Taper: hard sessions become short openers, endurance rides 10 % easier and the last one shorter.
+                        if (kind == SessionKind.Key) (kind, workout) = (SessionKind.Endurance, Openers);
+                        else if (kind == SessionKind.Endurance) (workout, adjust) = (Endurance, RecoveryWeekPercent);
+                    }
+
+                    if (testWeek && i == days.Count - 1) (kind, workout, adjust) = (SessionKind.Test, string.IsNullOrEmpty(plan.testWorkoutId) ? RampTest : plan.testWorkoutId, 0);
+                    else if (testWeek && i == days.Count - 2) (kind, workout, adjust) = (SessionKind.Recovery, Recovery, 0); // fresh for the test
 
                     var date = monday.AddDays(((int)days[i] + 6) % 7);
                     if (date < notBefore) continue;
-                    result.Add(new PlannedSession { Date = date, workoutId = workout, Kind = kind, week = week });
+                    result.Add(new PlannedSession { Date = date, workoutId = workout, Kind = kind, week = week, adjustPercent = adjust });
                 }
             }
 
@@ -262,6 +331,13 @@ namespace FreeVelo.Core.Plans
         public const string NoteEasier = "easier";
         public const string NoteHarder = "harder";
         public const string NoteRecovery = "recovery_inserted";
+        public const string NoteRamp = "ramp_recovery";
+
+        /// <summary>Fitness (CTL) rising faster than this (TSS per day, per week) for <see cref="RampWeeks"/> weeks → recovery.</summary>
+        public const double MaxRampPerWeek = 7;
+
+        /// <summary>Weeks in a row above <see cref="MaxRampPerWeek"/> (Allen &amp; Coggan: more than 4 risks overreaching).</summary>
+        public const int RampWeeks = 3;
 
         /// <summary>
         /// A ride ended: if it was the planned workout of that day (or a planned one of the last days not yet done), mark
@@ -317,7 +393,14 @@ namespace FreeVelo.Core.Plans
         /// Rules 1 and 4 for <paramref name="today"/>: missed sessions (key sessions move to a free day of the same week,
         /// others are dropped), and a recovery day when the form is very low. Returns true if the plan changed.
         /// </summary>
-        public static bool Update(TrainingPlan plan, DateTime today, double formToday)
+        public static bool Update(TrainingPlan plan, DateTime today, double formToday) => Update(plan, today, formToday, null);
+
+        /// <summary>
+        /// Same, plus rule 8: <paramref name="weeklyRamps"/> (CTL change per week, newest first, see
+        /// <see cref="TrainingLoad.WeeklyRamps"/>) above <see cref="MaxRampPerWeek"/> for <see cref="RampWeeks"/> weeks
+        /// → the next 7 days become a recovery week.
+        /// </summary>
+        public static bool Update(TrainingPlan plan, DateTime today, double formToday, IReadOnlyList<double>? weeklyRamps)
         {
             today = today.Date;
             bool changed = false;
@@ -337,6 +420,24 @@ namespace FreeVelo.Core.Plans
                 }
 
                 s.Status = SessionStatus.Missed;
+            }
+
+            // Rule 8: fitness rising too fast for weeks → recovery week now (unless an easy week is already coming).
+            if (weeklyRamps != null && weeklyRamps.Count >= RampWeeks && weeklyRamps.Take(RampWeeks).All(r => r > MaxRampPerWeek))
+            {
+                var coming = plan.sessions.Where(s => s.Status == SessionStatus.Planned && s.Date >= today && s.Date < today.AddDays(7)).ToList();
+                bool alreadyEasy = coming.All(s => s.Kind != SessionKind.Key) || coming.Any(s => s.note == NoteRamp);
+                if (!alreadyEasy)
+                {
+                    foreach (var s in coming.Where(s => s.Kind != SessionKind.Test))
+                    {
+                        if (s.Kind == SessionKind.Key) (s.Kind, s.workoutId, s.adjustPercent) = (SessionKind.Endurance, PlanTemplates.Endurance, PlanTemplates.RecoveryWeekPercent);
+                        else (s.Kind, s.workoutId, s.adjustPercent) = (SessionKind.Recovery, PlanTemplates.Recovery, 0);
+                        s.note = NoteRamp;
+                    }
+
+                    changed = true;
+                }
             }
 
             // Rule 4: very tired → the next hard session today/tomorrow becomes a recovery ride.
@@ -368,6 +469,9 @@ namespace FreeVelo.Core.Plans
             plan.sessions.AddRange(PlanTemplates.Generate(template, plan, week, today.Date)
                 .Where(n => !plan.sessions.Any(o => o.date == n.date)));
             plan.sessions.Sort((a, b) => string.CompareOrdinal(a.date, b.date));
+            // The start test not ridden yet: it stays the first session.
+            bool startTestDone = plan.sessions.Any(s => s.Kind == SessionKind.Test && s.Status == SessionStatus.Done && s.week < plan.weeks - 1);
+            if (plan.startTest && !startTestDone) PlanTemplates.PlaceStartTest(plan);
         }
     }
 }

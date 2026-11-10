@@ -1211,8 +1211,9 @@ namespace FreeVelo.UI
                 var f = new Rect(x, y, w, 72);
                 Ui.Rect(f, Theme.Alpha(Theme.Accent, 0.14f), Theme.RadiusSmall);
                 Ui.DrawIcon(new Rect(f.x + 18, f.center.y - 14, 28, 28), Icon.Target, Theme.Accent);
-                GUI.Label(new Rect(f.x + 60, f.y, w - 300, f.height), $"{L.Get("new_ftp")}: <b>{s.EstimatedFtpW} W</b>  <color=#B3BECA>({AppSettings.FtpW} W)</color>", Theme.Body);
-                if (s.EstimatedFtpW != AppSettings.FtpW && Ui.Button(new Rect(f.xMax - 230, f.y + 12, 214, 48), L.Get("apply_ftp"), ButtonKind.Primary, Icon.Check))
+                GUI.Label(new Rect(f.x + 60, f.y, w - 360, f.height), $"{L.Get("new_ftp")}: <b>{s.EstimatedFtpW} W</b>  <color=#B3BECA>({AppSettings.FtpW} W)</color>", Theme.Body);
+                float aw = Ui.ButtonWidth(L.Get("apply_ftp"), true, 48);
+                if (s.EstimatedFtpW != AppSettings.FtpW && Ui.Button(new Rect(f.xMax - 16 - aw, f.y + 12, aw, 48), L.Get("apply_ftp"), ButtonKind.Primary, Icon.Check))
                 {
                     AppSettings.FtpW = s.EstimatedFtpW.Value;
                     HistoryStore.RecordFtp(s.EstimatedFtpW.Value, "test");
@@ -1228,7 +1229,9 @@ namespace FreeVelo.UI
                 float w1 = Ui.ButtonWidth(L.Get("share"), true, 56), w2 = Ui.ButtonWidth(L.Get("save_downloads"), true, 56);
                 if (Ui.Button(new Rect(actions.x, actions.y, w1, 56), L.Get("share"), ButtonKind.Secondary, Icon.Share)) Ui.Toast(FileActions.Share(s.FitPath, L.Get("share")));
                 if (Ui.Button(new Rect(actions.x + w1 + 12, actions.y, w2, 56), L.Get("save_downloads"), ButtonKind.Secondary, Icon.Download)) Ui.Toast(FileActions.SaveToDownloads(s.FitPath));
-                float w3 = Ui.ButtonWidth(L.Get("strava_uploading"), true, 56);
+                // Wide enough for each of its states (upload / uploading / view), so the button never changes size.
+                float w3 = Mathf.Max(Ui.ButtonWidth(L.Get("strava_uploading"), true, 56),
+                    Mathf.Max(Ui.ButtonWidth(L.Get("strava_upload"), true, 56), Ui.ButtonWidth(L.Get("strava_view"), true, 56)));
                 DrawSummaryStravaButton(new Rect(actions.x + w1 + w2 + 24, actions.y, w3, 56), s.FitPath, s.Title);
             }
 
@@ -1237,7 +1240,26 @@ namespace FreeVelo.UI
                 _ride.Close();
                 Navigate(Page.Home);
             }
+
+            // Garmin has no upload for individuals: save the FIT file to Downloads and open Garmin Connect's import page.
+            if (!string.IsNullOrEmpty(s.FitPath))
+            {
+                float gw = Ui.ButtonWidth(L.Get("garmin_open_import"), true, 56);
+                if (Ui.Button(new Rect(x + 192, r.yMax - 88, gw, 56), L.Get("garmin_open_import"), ButtonKind.Secondary, Icon.Share))
+                {
+                    string saved = FileActions.SaveToDownloads(s.FitPath);
+                    if (saved.StartsWith("✗")) Ui.Toast(saved);
+                    else
+                    {
+                        Ui.Toast(string.Format(L.Get("garmin_import_hint"), System.IO.Path.GetFileName(s.FitPath)));
+                        Application.OpenURL(GarminImportPage);
+                    }
+                }
+            }
         }
+
+        /// <summary>Garmin Connect's page for uploading activity files (manual import).</summary>
+        private const string GarminImportPage = "https://connect.garmin.com/app/import-data";
 
         private static string FormatDuration(int seconds) => seconds < 60 ? $"{seconds}s" : seconds < 3600 ? $"{seconds / 60}m" : $"{seconds / 3600}h";
 

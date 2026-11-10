@@ -150,4 +150,117 @@ public class PlanTests
         Assert.Equal(plan.sessions[3].workoutId, back.sessions[3].workoutId);
         Assert.Equal(5, back.weekdays.Length);
     }
+
+    [Fact]
+    public void RecoveryWeeksStayBelow62PercentAndNewWorkoutsAreUsed()
+    {
+        var days = new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
+        var plan = PlanTemplates.Create(PlanTemplates.Find("ftp-build")!, 8, days, new DateTime(2026, 11, 9));
+        foreach (var s in plan.sessions.Where(s => s.week == 3))
+        {
+            var w = BuiltInWorkouts.Find(s.workoutId)!;
+            double maxPercent = w.Flatten().Max(seg => seg.Block is SteadyBlock b ? b.Target.Value : 0) * s.Intensity;
+            Assert.True(maxPercent <= 62, $"{s.workoutId}: {maxPercent:0} %");
+        }
+
+        // All key workouts of the templates exist and stay under 2 hours (long indoor sessions are skipped).
+        foreach (var t in PlanTemplates.All)
+        {
+            foreach (string id in t.KeyWorkouts)
+            {
+                var w = BuiltInWorkouts.Find(id);
+                Assert.NotNull(w);
+                Assert.True(w!.TotalDurationS <= 2 * 3600, id);
+            }
+        }
+
+        Assert.Contains(plan.sessions, s => s.workoutId == "sweetspot-crisscross");
+    }
+
+    [Fact]
+    public void LastWeekIsATaperAndNotPrecededByARecoveryWeek()
+    {
+        var days = new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
+        // Base, 5 weeks: week 4 (index 3) would be a recovery week, but it is right before the taper → stays hard.
+        var plan = PlanTemplates.Create(PlanTemplates.Find("base")!, 5, days, new DateTime(2026, 11, 9));
+        Assert.Contains(plan.sessions, s => s.week == 3 && s.Kind == SessionKind.Key);
+        var taper = plan.sessions.Where(s => s.week == 4).ToList();
+        Assert.DoesNotContain(taper, s => s.Kind == SessionKind.Key);
+        Assert.Contains(taper, s => s.workoutId == PlanTemplates.Openers);
+
+        // A plan ending with an FTP test: openers, recovery the day before, then the test.
+        var build = PlanTemplates.Create(PlanTemplates.Find("ftp-build")!, 8, days, new DateTime(2026, 11, 9));
+        var last = build.sessions.Where(s => s.week == 7).OrderBy(s => s.date).ToList();
+        Assert.Equal(new[] { PlanTemplates.Openers, PlanTemplates.Recovery, PlanTemplates.RampTest }, last.Select(s => s.workoutId));
+        Assert.Contains(build.sessions, s => s.week == 3 && s.Kind != SessionKind.Key); // normal recovery week 4 stays
+    }
+
+    [Fact]
+    public void FitnessRisingTooFastBringsTheRecoveryWeekForward()
+    {
+        var days = new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
+        var today = new DateTime(2026, 11, 9);
+        var plan = PlanTemplates.Create(PlanTemplates.Find("ftp-build")!, 8, days, today);
+
+        // Two fast weeks: no change yet.
+        Assert.False(PlanAdapter.Update(plan, today, 0, new[] { 8.0, 9.0, 4.0 }));
+        // Three fast weeks in a row: the next 7 days become easy.
+        Assert.True(PlanAdapter.Update(plan, today, 0, new[] { 8.0, 9.0, 7.5 }));
+        var week = plan.sessions.Where(s => s.Date >= today && s.Date < today.AddDays(7)).ToList();
+        Assert.DoesNotContain(week, s => s.Kind == SessionKind.Key);
+        Assert.All(week, s => Assert.Equal(PlanAdapter.NoteRamp, s.note));
+        // Only once.
+        Assert.False(PlanAdapter.Update(plan, today.AddDays(1), 0, new[] { 8.0, 9.0, 7.5 }));
+    }
+
+    [Fact]
+    public void WeeklyRampsFollowFitness()
+    {
+        // Every day 100 TSS from zero: fitness rises fast at first.
+        var start = new DateTime(2026, 9, 1);
+        var rides = Enumerable.Range(0, 30).Select(i => new RideRecord
+        {
+            startUtc = new DateTimeOffset(DateTime.SpecifyKind(start.AddDays(i).AddHours(18), DateTimeKind.Utc)).ToUnixTimeSeconds(),
+            tss = 100,
+        }).ToList();
+        var ramps = TrainingLoad.WeeklyRamps(rides, start.AddDays(29), 3, t => t);
+        Assert.Equal(3, ramps.Count);
+        Assert.All(ramps, r => Assert.InRange(r, 7, 20));
+        Assert.True(ramps[0] < ramps[2]); // the rise slows down (newest first)
+    }
+
+    [Fact]
+    public void ThePlanEndsWithTheChosenFtpTest()
+    {
+        var days = new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
+        var plan = PlanTemplates.Create(PlanTemplates.Find("ftp-build")!, 8, days, new DateTime(2026, 11, 9), "ftp-20min");
+        Assert.Equal("ftp-20min", plan.sessions.Single(s => s.Kind == SessionKind.Test).workoutId);
+
+        // Other training days later: the plan is regenerated and keeps its test.
+        PlanAdapter.ChangeWeekdays(plan, new[] { DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Sunday }, new DateTime(2026, 11, 10));
+        Assert.Equal("ftp-20min", plan.sessions.Single(s => s.Kind == SessionKind.Test).workoutId);
+    }
+
+    [Fact]
+    public void PlanStartsWithATestWhenTheLastOneIsTooOld()
+    {
+        var today = new DateTime(2026, 11, 9); // Monday
+        Assert.True(PlanTemplates.NeedsStartTest(null, today));
+        Assert.True(PlanTemplates.NeedsStartTest(today.AddDays(-50), today));
+        Assert.False(PlanTemplates.NeedsStartTest(today.AddDays(-30), today));
+
+        var days = new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
+        var normal = PlanTemplates.Create(PlanTemplates.Find("base")!, 8, days, today, "ftp-20min");
+        var plan = PlanTemplates.Create(PlanTemplates.Find("base")!, 8, days, today, "ftp-20min", startTest: true);
+
+        var first = plan.sessions.OrderBy(s => s.date).First();
+        Assert.Equal((SessionKind.Test, "ftp-20min"), (first.Kind, first.workoutId));
+        // The key session of that day moved to the next endurance day of the week.
+        var firstKey = normal.sessions.OrderBy(s => s.date).First(s => s.Kind == SessionKind.Key);
+        Assert.Contains(plan.sessions, s => s.week == 0 && s.Kind == SessionKind.Key && s.workoutId == firstKey.workoutId && s.Date > first.Date);
+
+        // Other training days: the test not ridden yet stays the first session.
+        PlanAdapter.ChangeWeekdays(plan, new[] { DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Sunday }, today);
+        Assert.Equal(SessionKind.Test, plan.sessions.Where(s => s.Status == SessionStatus.Planned).OrderBy(s => s.date).First().Kind);
+    }
 }

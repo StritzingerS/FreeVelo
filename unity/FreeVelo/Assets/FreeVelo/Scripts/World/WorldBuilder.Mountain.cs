@@ -56,7 +56,7 @@ namespace FreeVelo.World
 
         // ------------------------------------------------------------------ setup
 
-        private void BuildMountain()
+        private void BuildMountain(List<FarTileData> far)
         {
             if (!HasMountain) return;
             var m = _terrain.Mountain;
@@ -73,34 +73,22 @@ namespace FreeVelo.World
                 Mat(new Color(0.95f, 0.97f, 1f), null, 0.35f),                // Snow
             };
 
-            // Far tiles over the whole mountain area (not over the home grid)
-            int tx0 = Mathf.FloorToInt(((float)m.MinX - _originX) / TileSize), tx1 = Mathf.CeilToInt(((float)m.MaxX - _originX) / TileSize);
-            int tz0 = Mathf.FloorToInt(((float)m.MinZ - _originZ) / TileSize), tz1 = Mathf.CeilToInt(((float)m.MaxZ - _originZ) / TileSize);
+            // Far tiles over the whole mountain area (not over the home grid): computed in the background while the
+            // world loads (ComputeFarTiles); only the meshes are made here.
+            var farTiles = far ?? ComputeFarTiles(_terrain);
             var farRoot = new GameObject("Mountain");
             farRoot.transform.SetParent(_root.transform, false);
-            for (int tz = tz0; tz < tz1; tz++)
+            foreach (var data in farTiles)
             {
-                for (int tx = tx0; tx < tx1; tx++)
-                {
-                    var area = new Rect(_originX + (tx * TileSize), _originZ + (tz * TileSize), TileSize, TileSize);
-                    if (_homeGrid.Contains(area.min) && _homeGrid.Contains(area.max)) continue;
-                    var tile = new MountainTile { Tx = tx, Tz = tz, Area = area };
-                    var go = new GameObject($"Mountain {tx},{tz}");
-                    go.transform.SetParent(farRoot.transform, false);
-                    var lod0 = FarTileMesh(area, 32f);
-                    if (lod0 == null)
-                    {
-                        Destroy(go);
-                        continue;
-                    }
-
-                    var r0 = AddRenderer(go.transform, "LOD0", lod0, _coverMaterials, false);
-                    var r1 = AddRenderer(go.transform, "LOD1", FarTileMesh(area, 128f), _coverMaterials, false);
-                    tile.Far = go.AddComponent<LODGroup>();
-                    tile.Far.SetLODs(new[] { new LOD(0.06f, new Renderer[] { r0 }), new LOD(0.0004f, new Renderer[] { r1 }) });
-                    tile.Far.RecalculateBounds();
-                    _tiles[(tx, tz)] = tile;
-                }
+                var tile = new MountainTile { Tx = data.Tx, Tz = data.Tz, Area = data.Area };
+                var go = new GameObject($"Mountain {data.Tx},{data.Tz}");
+                go.transform.SetParent(farRoot.transform, false);
+                var r0 = AddRenderer(go.transform, "LOD0", data.Lod0.ToMesh("MountainFar"), _coverMaterials, false);
+                var r1 = AddRenderer(go.transform, "LOD1", data.Lod1.ToMesh("MountainFar"), _coverMaterials, false);
+                tile.Far = go.AddComponent<LODGroup>();
+                tile.Far.SetLODs(new[] { new LOD(0.06f, new Renderer[] { r0 }), new LOD(0.0004f, new Renderer[] { r1 }) });
+                tile.Far.RecalculateBounds();
+                _tiles[(data.Tx, data.Tz)] = tile;
             }
 
             BuildSummitSigns();
@@ -120,16 +108,73 @@ namespace FreeVelo.World
 
         // ------------------------------------------------------------------ far tiles
 
-        /// <summary>Coarse ground of a tile, one submesh per ground cover; chunks inside the home grid are left out.</summary>
-        private Mesh FarTileMesh(Rect area, float step)
+        /// <summary>Vertex data of a mesh with one submesh per ground cover (can be made off the main thread).</summary>
+        public sealed class MeshParts
         {
-            var m = _terrain.Mountain;
-            int seed = Map.Seed + 7;
-            var vertices = new List<Vector3>();
-            var normals = new List<Vector3>();
-            var uvs = new List<Vector2>();
-            var cover = new List<int>[5];
-            for (int k = 0; k < cover.Length; k++) cover[k] = new List<int>();
+            public readonly List<Vector3> Vertices = new List<Vector3>();
+            public readonly List<Vector3> Normals = new List<Vector3>();
+            public readonly List<Vector2> Uvs = new List<Vector2>();
+            public readonly List<int>[] Cover = { new List<int>(), new List<int>(), new List<int>(), new List<int>(), new List<int>() };
+
+            /// <summary>The Unity mesh (main thread only).</summary>
+            public Mesh ToMesh(string name) => CoverMesh(name, Vertices, Normals, Uvs, Cover);
+        }
+
+        /// <summary>One far tile of the mountain: 32 m and 128 m level of detail.</summary>
+        public sealed class FarTileData
+        {
+            public int Tx, Tz;
+            public Rect Area;
+            public MeshParts Lod0, Lod1;
+        }
+
+        /// <summary>
+        /// All far tiles of the mountain (pure maths, in parallel): run in the background while the world loads, so
+        /// the main thread only creates the meshes.
+        /// </summary>
+        public static List<FarTileData> ComputeFarTiles(FreeVelo.Core.World.Gen.Terrain terrain)
+        {
+            var result = new List<FarTileData>();
+            var m = terrain.Mountain;
+            if (m == null) return result;
+            var homeGrid = Rect.MinMaxRect((float)terrain.MinX, (float)terrain.MinZ, (float)terrain.MaxX, (float)terrain.MaxZ);
+            float originX = (float)terrain.MinX, originZ = (float)terrain.MinZ;
+            int seed = terrain.Map.Seed + 7;
+            int tx0 = Mathf.FloorToInt(((float)m.MinX - originX) / TileSize), tx1 = Mathf.CeilToInt(((float)m.MaxX - originX) / TileSize);
+            int tz0 = Mathf.FloorToInt(((float)m.MinZ - originZ) / TileSize), tz1 = Mathf.CeilToInt(((float)m.MaxZ - originZ) / TileSize);
+            var tiles = new List<FarTileData>();
+            for (int tz = tz0; tz < tz1; tz++)
+            {
+                for (int tx = tx0; tx < tx1; tx++)
+                {
+                    var area = new Rect(originX + (tx * TileSize), originZ + (tz * TileSize), TileSize, TileSize);
+                    if (homeGrid.Contains(area.min) && homeGrid.Contains(area.max)) continue;
+                    tiles.Add(new FarTileData { Tx = tx, Tz = tz, Area = area });
+                }
+            }
+
+            Parallel.ForEach(tiles, t =>
+            {
+                t.Lod0 = FarTileParts(terrain, homeGrid, seed, t.Area, 32f);
+                t.Lod1 = t.Lod0 != null ? FarTileParts(terrain, homeGrid, seed, t.Area, 128f) : null;
+            });
+            foreach (var t in tiles)
+            {
+                if (t.Lod0 != null && t.Lod1 != null) result.Add(t);
+            }
+
+            return result;
+        }
+
+        /// <summary>Coarse ground of a tile, one submesh per ground cover; chunks inside the home grid are left out.</summary>
+        private static MeshParts FarTileParts(FreeVelo.Core.World.Gen.Terrain terrain, Rect homeGrid, int seed, Rect area, float step)
+        {
+            var m = terrain.Mountain;
+            var parts = new MeshParts();
+            var vertices = parts.Vertices;
+            var normals = parts.Normals;
+            var uvs = parts.Uvs;
+            var cover = parts.Cover;
             int per = Mathf.RoundToInt(MountainChunk / step);
             for (int cz = 0; cz < ChunksPerTile; cz++)
             {
@@ -137,7 +182,7 @@ namespace FreeVelo.World
                 {
                     float x0 = area.xMin + (cx * MountainChunk), z0 = area.yMin + (cz * MountainChunk);
                     var chunk = new Rect(x0, z0, MountainChunk, MountainChunk);
-                    if (_homeGrid.Overlaps(chunk) && _homeGrid.Contains(chunk.center)) continue;
+                    if (homeGrid.Overlaps(chunk) && homeGrid.Contains(chunk.center)) continue;
                     if (!m.Contains(chunk.center.x, chunk.center.y)) continue;
                     int start = vertices.Count;
                     for (int j = 0; j <= per; j++)
@@ -146,7 +191,7 @@ namespace FreeVelo.World
                         {
                             float x = x0 + (i * step), z = z0 + (j * step);
                             // Natural ground, kept below the roads next to it (big triangles would cut through them).
-                            float h = (float)System.Math.Min(m.Coarse(x, z), _terrain.RoadCap(x, z, step) + 1.5); // (−1.5 below)
+                            float h = (float)System.Math.Min(m.Coarse(x, z), terrain.RoadCap(x, z, step) + 1.5); // (−1.5 below)
                             float hx = (float)(m.Coarse(x + 8, z) - m.Coarse(x - 8, z)), hz = (float)(m.Coarse(x, z + 8) - m.Coarse(x, z - 8));
                             vertices.Add(new Vector3(x, h - 1.5f, z));
                             normals.Add(new Vector3(-hx, 16f, -hz).normalized);
@@ -170,8 +215,7 @@ namespace FreeVelo.World
                 }
             }
 
-            if (vertices.Count == 0) return null;
-            return CoverMesh("MountainFar", vertices, normals, uvs, cover);
+            return vertices.Count == 0 ? null : parts;
         }
 
         /// <summary>Border of a (n × n) vertex block bent down, so neighbours at another level of detail show no gaps.</summary>
