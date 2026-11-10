@@ -212,8 +212,16 @@ namespace FreeVelo.Core.World.Gen
                     Place(SceneryKind.Church, cx, cz, lot.Item.RotationDeg, _random.Next(2));
                     // In front: the maypole (in May) and a big linden.
                     double fx = cx + (lot.TowardX * 22), fz = cz + (lot.TowardZ * 22);
-                    if (_may) Place(SceneryKind.Maypole, fx + (lot.AlongX * 12), fz + (lot.AlongZ * 12), 0, 0, block: false);
-                    Place(SceneryKind.Linden, fx - (lot.AlongX * 13), fz - (lot.AlongZ * 13), _random.Next(360), 2, block: false);
+                    // Both off every road (the square in front can touch another road leaving the village).
+                    bool OffRoad(double x, double z, double clear) => _terrain.DistanceToRoad(x, z, clear, out _, out _, out _) >= clear;
+                    if (_may && OffRoad(fx + (lot.AlongX * 12), fz + (lot.AlongZ * 12), 6)) Place(SceneryKind.Maypole, fx + (lot.AlongX * 12), fz + (lot.AlongZ * 12), 0, 0, block: false);
+                    foreach (double side in new[] { -13.0, 13.0, -20.0 })
+                    {
+                        double lx = fx + (lot.AlongX * side), lz = fz + (lot.AlongZ * side);
+                        if (!OffRoad(lx, lz, 9)) continue;
+                        Place(SceneryKind.Linden, lx, lz, _random.Next(360), 2, block: false);
+                        break;
+                    }
                     break;
                 }
             }

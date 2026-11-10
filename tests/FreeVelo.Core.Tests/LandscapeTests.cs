@@ -53,6 +53,18 @@ public class LandscapeTests
     }
 
     [Fact]
+    public void NoTreeOrObjectStandsOnARoad()
+    {
+        var terrain = Ground.Value;
+        var layout = SceneryLayout.Generate(terrain, new DateTime(2026, 5, 10));
+        foreach (var i in layout.Items.Concat(terrain.Landscape!.Items).Where(i => i.Kind is not (SceneryKind.Lane or SceneryKind.PathStone)))
+        {
+            double d = terrain.DistanceToRoad(i.X, i.Z, 10, out var road, out _, out _);
+            Assert.True(road == null || d >= (road.Width / 2) + 0.3, $"{i.Kind} at ({i.X:0},{i.Z:0}) on the road");
+        }
+    }
+
+    [Fact]
     public void TheMaypoleOnlyStandsInMay()
     {
         var terrain = Ground.Value;

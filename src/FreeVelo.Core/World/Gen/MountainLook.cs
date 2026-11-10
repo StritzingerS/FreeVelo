@@ -125,7 +125,7 @@ namespace FreeVelo.Core.World.Gen
                     double species = Noise.Random01(gx, gz, seed + 3);
                     double x = x0 + ((i + r1) * ItemCell), z = z0 + ((j + r2) * ItemCell);
                     if (!m.Contains(x, z) && !terrain.InGrid(x, z)) continue;
-                    if (m.RoadDistance(x, z) < 40 && terrain.DistanceToRoad(x, z, 9, out _, out _, out _) < 9) continue;
+                    if ((terrain.InGrid(x, z) || m.RoadDistance(x, z) < 40) && terrain.DistanceToRoad(x, z, 9, out _, out _, out _) < 9) continue;
                     if (landscape != null && landscape.Blocked(x, z)) continue;
                     if (terrain.IsWater(x, z, 2)) continue;
 

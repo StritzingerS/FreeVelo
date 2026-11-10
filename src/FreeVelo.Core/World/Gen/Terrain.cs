@@ -88,7 +88,7 @@ namespace FreeVelo.Core.World.Gen
         // ------------------------------------------------------------------ prepared worlds
 
         /// <summary>Bump when the terrain generation changes (old saved worlds are then regenerated).</summary>
-        public const int FormatVersion = 1;
+        public const int FormatVersion = 2;
         private const uint Magic = 0x4C565646; // "FVVL"
 
         /// <summary>
@@ -315,6 +315,17 @@ namespace FreeVelo.Core.World.Gen
             {
                 double flat = (road.Width / 2) + 1.3;
                 double bed = roadHeight - 0.3;
+                // Where roads meet or split, the ground stays below every road surface there, not only the nearest.
+                if (roadDistance <= flat + BedBlend)
+                {
+                    for (int i = 0; i < _roads.Count; i++)
+                    {
+                        var other = _map.Edges[i];
+                        if (other == road) continue;
+                        bed = Math.Min(bed, _roads[i].LowestWithin(x, z, (other.Width / 2) + 1.3, other.E) - 0.3);
+                    }
+                }
+
                 h = roadDistance <= flat ? bed : bed + ((h - bed) * SmoothStep((roadDistance - flat) / BedBlend));
             }
 
