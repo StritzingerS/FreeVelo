@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using FreeVelo.Core.Physics;
 using FreeVelo.Core.World.Gen;
 using UnityEngine;
@@ -220,6 +221,7 @@ namespace FreeVelo.World
             var lines = new Strips();
             var posts = new MeshBuilder();
             var postBands = new MeshBuilder();
+            BuildJunctionCorners(road, dirt);
 
             foreach (var e in Map.Edges)
             {
@@ -243,8 +245,8 @@ namespace FreeVelo.World
                     // Where another road meets or splits off, this road's edge lies on the other road's asphalt:
                     // no gravel shoulder, edge line or posts there, so the two surfaces run into each other.
                     bool nearEnd = e.D[i] < MergeReach || e.D[i] > e.Length - MergeReach;
-                    bool leftMerged = nearEnd && OnOtherRoad(e, c - (right * (half + 0.4f)), 0.6f);
-                    bool rightMerged = nearEnd && OnOtherRoad(e, c + (right * (half + 0.4f)), 0.6f);
+                    bool leftMerged = nearEnd && (InCorner(e, i, -1) || OnOtherRoad(e, c - (right * (half + 0.4f)), 0.6f));
+                    bool rightMerged = nearEnd && (InCorner(e, i, 1) || OnOtherRoad(e, c + (right * (half + 0.4f)), 0.6f));
                     var edgeLeft = c - (right * half) + (Vector3.up * -0.01f);
                     var edgeRight = c + (right * half) + (Vector3.up * -0.01f);
                     shoulders.Add(leftMerged ? edgeLeft : c - (right * (half + ShoulderWidth)) + drop, edgeLeft, sv);
@@ -273,7 +275,7 @@ namespace FreeVelo.World
                     {
                         for (int s = -1; s <= 1; s += 2)
                         {
-                            if (nearEnd && OnOtherRoad(e, c + (right * (s * (half + ShoulderWidth + 0.4f))), 1.5f)) continue;
+                            if (nearEnd && (InCorner(e, i, s, 6) || OnOtherRoad(e, c + (right * (s * (half + ShoulderWidth + 0.4f))), 1.5f))) continue;
                             var foot = c + (right * (s * (half + ShoulderWidth + 0.4f))) + new Vector3(0, -0.35f, 0);
                             posts.EllipticTube(foot, foot + (Vector3.up * 1.35f), new Vector2(0.04f, 0.055f), new Vector2(0.035f, 0.048f), right, 6);
                             postBands.EllipticTube(foot + (Vector3.up * 1.08f), foot + (Vector3.up * 1.24f), new Vector2(0.038f, 0.052f), new Vector2(0.037f, 0.05f), right, 6);
@@ -295,6 +297,126 @@ namespace FreeVelo.World
             CreateMesh("Markings", lines.ToMesh("Markings"), paint, false);
             CreateMesh("Posts", posts.ToMesh("Posts"), Mat(new Color(0.93f, 0.93f, 0.9f), null, 0.4f), true);
             CreateMesh("PostBands", postBands.ToMesh("PostBands"), Mat(new Color(0.05f, 0.05f, 0.05f), null, 0.3f), false);
+        }
+
+        /// <summary>Per road end and side (−1 left, +1 right): how far from the junction its rounded corner reaches.</summary>
+        private readonly Dictionary<(int Edge, bool Start, int Side), float> _cornerReach = new Dictionary<(int, bool, int), float>();
+
+        private bool InCorner(RoadEdge e, int i, int side, float extra = 1f)
+        {
+            float fromStart = (float)e.D[i], fromEnd = (float)(e.Length - e.D[i]);
+            return (_cornerReach.TryGetValue((e.Id, true, side), out float a) && fromStart < a + extra)
+                || (_cornerReach.TryGetValue((e.Id, false, side), out float b) && fromEnd < b + extra);
+        }
+
+        /// <summary>
+        /// Rounded asphalt corners between neighbouring roads at each junction, as real junctions are built: from where
+        /// the two road edges cross, a curve joins them, wider the shallower the split. Lines, shoulders and posts keep
+        /// off the corners (see <see cref="InCorner"/>).
+        /// </summary>
+        private void BuildJunctionCorners(Strips paved, Strips gravel)
+        {
+            const float radius = 9f;
+            foreach (var node in Map.Nodes)
+            {
+                if (node.Edges.Count < 3) continue;
+                var ends = node.Edges.Select(id =>
+                {
+                    var e = Map.Edges[id];
+                    bool start = e.From == node.Id;
+                    var (p, _) = OnEdge(e, start ? 15f : (float)e.Length - 15f);
+                    return (Edge: e, Start: start, Angle: Mathf.Atan2(p.z - (float)node.Z, p.x - (float)node.X));
+                }).OrderBy(t => t.Angle).ToList();
+
+                for (int k = 0; k < ends.Count; k++)
+                {
+                    var a = ends[k];
+                    var b = ends[(k + 1) % ends.Count];
+                    float gap = b.Angle - a.Angle;
+                    if (gap <= 0) gap += Mathf.PI * 2;
+                    if (gap > 150 * Mathf.Deg2Rad) continue; // nearly straight on: nothing to round
+
+                    int sideA = FacingSide(a.Edge, a.Start, b.Edge, b.Start);
+                    int sideB = FacingSide(b.Edge, b.Start, a.Edge, a.Start);
+                    float sa = Crossing(a.Edge, a.Start, sideA, b.Edge, b.Start);
+                    float sb = Crossing(b.Edge, b.Start, sideB, a.Edge, a.Start);
+                    if (sa < 0 || sb < 0) continue;
+
+                    var x = EdgeSide(a.Edge, a.Start, sa, sideA);
+                    var dirA = (EdgeSide(a.Edge, a.Start, sa + 5, sideA) - x).normalized;
+                    var dirB = (EdgeSide(b.Edge, b.Start, sb + 5, sideB) - EdgeSide(b.Edge, b.Start, sb, sideB)).normalized;
+                    float theta = Vector3.Angle(new Vector3(dirA.x, 0, dirA.z), new Vector3(dirB.x, 0, dirB.z)) * Mathf.Deg2Rad;
+                    float reach = Mathf.Clamp(radius / Mathf.Tan(Mathf.Max(0.05f, theta / 2)), 2f, 30f);
+                    var pa = EdgeSide(a.Edge, a.Start, sa + reach, sideA);
+                    var pb = EdgeSide(b.Edge, b.Start, sb + reach, sideB);
+
+                    const int segments = 14;
+                    var rim = new Vector3[segments + 1];
+                    for (int j = 0; j <= segments; j++)
+                    {
+                        float t = j / (float)segments;
+                        var q = ((1 - t) * (1 - t) * pa) + (2 * t * (1 - t) * x) + (t * t * pb);
+                        q.y = Mathf.Max(Mathf.Lerp(pa.y, pb.y, t), (float)_terrain.Height(q.x, q.z) + 0.06f) + 0.004f;
+                        rim[j] = q;
+                    }
+
+                    bool asphalt = a.Edge.Surface == RoadSurface.Asphalt || b.Edge.Surface == RoadSurface.Asphalt;
+                    (asphalt ? paved : gravel).Fan(x + (Vector3.up * 0.004f), rim);
+                    Remember(a.Edge, a.Start, sideA, sa + reach);
+                    Remember(b.Edge, b.Start, sideB, sb + reach);
+                }
+            }
+        }
+
+        private void Remember(RoadEdge e, bool start, int side, float reach)
+        {
+            var key = (e.Id, start, side);
+            _cornerReach[key] = _cornerReach.TryGetValue(key, out float old) ? Mathf.Max(old, reach) : reach;
+        }
+
+        /// <summary>A point on one edge of a road, <paramref name="s"/> metres from the junction end.</summary>
+        private static Vector3 EdgeSide(RoadEdge e, bool start, float s, int side)
+        {
+            var (c, forward) = OnEdge(e, start ? s : (float)e.Length - s);
+            var right = new Vector3(forward.z, 0, -forward.x);
+            return c + (right * (side * (float)e.Width / 2));
+        }
+
+        /// <summary>The side of road <paramref name="e"/> that faces road <paramref name="o"/>.</summary>
+        private static int FacingSide(RoadEdge e, bool start, RoadEdge o, bool oStart)
+        {
+            var (target, _) = OnEdge(o, oStart ? 12f : (float)o.Length - 12f);
+            return (EdgeSide(e, start, 12, 1) - target).sqrMagnitude < (EdgeSide(e, start, 12, -1) - target).sqrMagnitude ? 1 : -1;
+        }
+
+        /// <summary>How far from the junction an edge of road <paramref name="e"/> leaves road <paramref name="o"/>'s asphalt (−1: not within 80 m).</summary>
+        private static float Crossing(RoadEdge e, bool start, int side, RoadEdge o, bool oStart)
+        {
+            float half = (float)o.Width / 2;
+            for (float s = 0; s < 80; s += 0.5f)
+            {
+                var p = EdgeSide(e, start, s, side);
+                if (DistanceNearEnd(o, oStart, p) >= half) return s;
+            }
+
+            return -1;
+        }
+
+        private static float DistanceNearEnd(RoadEdge o, bool start, Vector3 p)
+        {
+            float best = float.MaxValue;
+            for (int k = 0; k < o.X.Length - 1; k++)
+            {
+                double along = start ? o.D[k] : o.Length - o.D[k + 1];
+                if (along > 140) continue;
+                float ax = (float)o.X[k], az = (float)o.Z[k], bx = (float)o.X[k + 1], bz = (float)o.Z[k + 1];
+                float abx = bx - ax, abz = bz - az, len2 = (abx * abx) + (abz * abz);
+                float f = len2 > 0 ? Mathf.Clamp01((((p.x - ax) * abx) + ((p.z - az) * abz)) / len2) : 0;
+                float dx = ax + (abx * f) - p.x, dz = az + (abz * f) - p.z;
+                best = Mathf.Min(best, (dx * dx) + (dz * dz));
+            }
+
+            return Mathf.Sqrt(best);
         }
 
         /// <summary>How far from a junction roads can still overlap (shallow splits run side by side for a while).</summary>

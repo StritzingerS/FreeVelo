@@ -151,8 +151,8 @@ namespace FreeVelo.World
             CreateMesh("GravelLanes", gravel.ToMesh("GravelLanes"), Mat(Color.white, TextureFactory.GravelRoad(), 0.05f), false);
         }
 
-        /// <summary>Dark blue letters, as on the white Austrian place-name and direction signs.</summary>
-        private static readonly Color SignInk = new Color(0.08f, 0.12f, 0.3f);
+        /// <summary>Black letters, as on the white Austrian place-name and direction signs.</summary>
+        private static readonly Color SignInk = Color.black;
 
         /// <summary>
         /// The writing on the signs (the boards themselves are scenery): the village names at the village entrances
