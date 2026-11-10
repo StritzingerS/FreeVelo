@@ -298,6 +298,12 @@ namespace FreeVelo.Core.World.Gen
             return ((a + ((b - a) * fx)) * (1 - fz)) + ((c + ((d - c) * fx)) * fz);
         }
 
+        /// <summary>
+        /// The ground as the app draws it close by (4 m mesh, kept under the roads next to it): what things placed on
+        /// the ground have to stand on.
+        /// </summary>
+        public double DrawnHeight(double x, double z) => Math.Min(Height(x, z), RoadCap(x, z, Cell));
+
         /// <summary>Slope (rise per metre) at a point.</summary>
         public double Slope(double x, double z)
         {
@@ -342,11 +348,38 @@ namespace FreeVelo.Core.World.Gen
 
             double own = DistanceToRoad(x, z, 8, out var road, out _, out _);
             if (road != null && own <= (road.Width / 2) + 1.3) return double.PositiveInfinity;
+
+            // Detailed meshes (4 and 8 m): a triangle reaching over a road has its other corner on the road's bed (0.3 m under the surface), at most
+            // reachCells away. With this corner `beyond` metres outside the road's edge, the triangle stays under the
+            // surface (+0.05) at the edge if this corner is at most 0.35·reach/(reach − beyond) − 0.3 above the road
+            // there, less what the road climbs over that length. Close to the road that keeps the ground just below
+            // it; a few metres away a level plot a bit above the road keeps its ground (no pit before the houses).
             double cap = double.PositiveInfinity;
+            if (cellM > 8)
+            {
+                // Distant meshes are not carved under the roads: keep them below the lowest road within reach.
+                for (int i = 0; i < _roads.Count; i++)
+                {
+                    var e = _map.Edges[i];
+                    cap = Math.Min(cap, _roads[i].LowestWithin(x, z, (e.Width / 2) + reachCells, e.E) - 0.6);
+                }
+
+                return cap;
+            }
+
             for (int i = 0; i < _roads.Count; i++)
             {
                 var e = _map.Edges[i];
-                cap = Math.Min(cap, _roads[i].LowestWithin(x, z, (e.Width / 2) + reachCells, e.E) - 0.6);
+                double half = e.Width / 2;
+                double d = _roads[i].Nearest(x, z, half + reachCells, out int seg, out double f);
+                double beyond = d - half;
+                if (beyond >= reachCells || seg < 0 || seg >= e.E.Length - 1) continue;
+                if (beyond <= 1.3) continue; // on this road's bed: it carries the corner
+                double h = e.E[seg] + ((e.E[seg + 1] - e.E[seg]) * f);
+                double length = Math.Max(0.1, e.D[seg + 1] - e.D[seg]);
+                double grade = Math.Abs(e.E[seg + 1] - e.E[seg]) / length;
+                double allowance = (0.35 * reachCells / Math.Max(0.05, reachCells - beyond)) - 0.3 - (grade * reachCells);
+                cap = Math.Min(cap, h + allowance);
             }
 
             return cap;

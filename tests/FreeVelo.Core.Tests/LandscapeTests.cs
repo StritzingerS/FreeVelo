@@ -94,7 +94,7 @@ public class LandscapeTests
             double r = i.RotationDeg * Math.PI / 180;
             foreach (var (u, v) in new[] { (-hx, -hz), (hx, -hz), (-hx, hz), (hx, hz) })
             {
-                double g = terrain.Height(i.X + (u * Math.Cos(r)) + (v * Math.Sin(r)), i.Z - (u * Math.Sin(r)) + (v * Math.Cos(r)));
+                double g = terrain.DrawnHeight(i.X + (u * Math.Cos(r)) + (v * Math.Sin(r)), i.Z - (u * Math.Sin(r)) + (v * Math.Cos(r)));
                 Assert.True(g >= i.Y - 0.01, $"{i.Kind} at ({i.X:0},{i.Z:0}) floats");
                 Assert.True(g - i.Y <= 0.5, $"{i.Kind} at ({i.X:0},{i.Z:0}) buried");
             }
@@ -136,6 +136,18 @@ public class LandscapeTests
             // Every table stands on a gravel plate (the garden floor) and on level ground.
             Assert.Contains(yards, y => Math.Abs(y.X - t.X) < 4.5 && Math.Abs(y.Z - t.Z) < 4.5);
             Assert.True(Math.Abs(terrain.Height(t.X, t.Z) - terrain.Height(t.X + 1, t.Z + 1)) < 0.1, $"table at ({t.X:0},{t.Z:0}) on a slope");
+        }
+    }
+
+    [Fact]
+    public void GardenThingsStandOnTheGroundTheAppDraws()
+    {
+        var terrain = Terrain.Build(WorldMap.Default);
+        var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
+        foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.BeerTable or SceneryKind.Bench or SceneryKind.FlowerBed or SceneryKind.GardenFence))
+        {
+            double gap = i.Y - terrain.DrawnHeight(i.X, i.Z);
+            Assert.True(gap < 0.15, $"{i.Kind} at ({i.X:0},{i.Z:0}) floats {gap:0.00} m above the ground");
         }
     }
 

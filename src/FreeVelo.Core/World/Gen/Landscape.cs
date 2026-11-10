@@ -698,7 +698,7 @@ namespace FreeVelo.Core.World.Gen
                 double low = double.MaxValue, high = double.MinValue;
                 foreach (var (u, v) in new[] { (-hx, -hz), (hx, -hz), (-hx, hz), (hx, hz), (0.0, 0.0) })
                 {
-                    double g = _terrain.Height(item.X + (u * cos) + (v * sin), item.Z - (u * sin) + (v * cos));
+                    double g = _terrain.DrawnHeight(item.X + (u * cos) + (v * sin), item.Z - (u * sin) + (v * cos));
                     low = Math.Min(low, g);
                     high = Math.Max(high, g);
                 }
@@ -1073,7 +1073,7 @@ namespace FreeVelo.Core.World.Gen
             {
                 var item = Items[k];
                 if (IsBuilding(item.Kind)) continue;
-                double shift = _terrain.Height(item.X, item.Z) - before[k];
+                double shift = _terrain.DrawnHeight(item.X, item.Z) - before[k];
                 if (Math.Abs(shift) < 0.001) continue;
                 item.Y += (float)shift;
                 Items[k] = item;
