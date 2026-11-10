@@ -659,7 +659,10 @@ namespace FreeVelo.UI
                     if (count != rep.Count) ed.SetRepeatCount(i, count);
                     // Checkbox: the last repetition without its last block (e.g. no recovery after the last interval).
                     var check = new Rect(r.x + 24, rowY + 58, 40, 40);
-                    if (Ui.IconButton(check, rep.SkipLastBlock ? Icon.Check : Icon.Minus, rep.SkipLastBlock ? ButtonKind.Primary : ButtonKind.Secondary, rep.Blocks.Count > 1))
+                    bool clicked = rep.SkipLastBlock
+                        ? Ui.IconButton(check, Icon.Check, ButtonKind.Primary, rep.Blocks.Count > 1)
+                        : Ui.Button(check, string.Empty, ButtonKind.Secondary, null, rep.Blocks.Count > 1); // empty box
+                    if (clicked)
                     {
                         ed.SetSkipLast(i, !rep.SkipLastBlock);
                     }
