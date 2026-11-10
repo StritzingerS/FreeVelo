@@ -71,6 +71,9 @@ namespace FreeVelo.World
                 Mat(new Color(0.86f, 0.9f, 0.62f), grass, 0f),                // Alpine meadow
                 Mat(new Color(0.47f, 0.46f, 0.44f), TextureFactory.Gravel(), 0.05f), // Rock
                 Mat(new Color(0.95f, 0.97f, 1f), null, 0.35f),                // Snow
+                Mat(Color.white, TextureFactory.Rows(Crop(WorldMaterial.Wheat)), 0f),  // Fields: wheat
+                Mat(Color.white, TextureFactory.Rows(Crop(WorldMaterial.Crop)), 0f),   // green crop
+                Mat(Color.white, TextureFactory.Rows(Crop(WorldMaterial.Plowed)), 0f), // ploughed
             };
 
             // Far tiles over the whole mountain area (not over the home grid): computed in the background while the
@@ -92,6 +95,137 @@ namespace FreeVelo.World
             }
 
             BuildSummitSigns();
+            BuildVillageSigns();
+            BuildLanes();
+        }
+
+        /// <summary>Number of ground covers (submeshes of the mountain pieces).</summary>
+        private static readonly int CoverKinds = System.Enum.GetValues(typeof(GroundKind)).Length;
+
+        private static Color Crop(WorldMaterial crop)
+        {
+            var (c, _) = WorldMaterials.All[crop];
+            return new Color(c.X, c.Y, c.Z);
+        }
+
+        /// <summary>
+        /// The side lanes as one strip each, following the ground every 2 m and rising to the road surface where they
+        /// leave the road (rigid pieces stuck out of the meadow wherever it sloped).
+        /// </summary>
+        private void BuildLanes()
+        {
+            var landscape = _terrain.Landscape;
+            if (landscape == null || landscape.Lanes.Count == 0) return;
+            var paved = new Strips();
+            var gravel = new Strips();
+            foreach (var (ax, az, bx, bz, isGravel) in landscape.Lanes)
+            {
+                float length = Mathf.Sqrt((float)(((bx - ax) * (bx - ax)) + ((bz - az) * (bz - az))));
+                if (length < 1) continue;
+                var along = new Vector3((float)(bx - ax), 0, (float)(bz - az)) / length;
+                var right = new Vector3(along.z, 0, -along.x);
+                float half = isGravel ? 1.5f : 1.7f;
+                var strip = isGravel ? gravel : paved;
+                strip.Begin();
+                int steps = Mathf.CeilToInt(length / 2f);
+                for (int k = 0; k <= steps; k++)
+                {
+                    float t = length * k / steps;
+                    double x = ax + (along.x * t), z = az + (along.z * t);
+                    float y = (float)_terrain.Height(x, z) + 0.08f;
+                    double d = _terrain.DistanceToRoad(x, z, 12, out var road, out double roadHeight, out _);
+                    if (road != null)
+                    {
+                        // Up onto the road where the lane joins it, then down to the meadow over a couple of metres.
+                        float over = (float)(d - (road.Width / 2));
+                        float blend = Mathf.Clamp01(1 - (over / 3.5f));
+                        y = Mathf.Max(y, Mathf.Lerp(y, (float)roadHeight + 0.03f, blend));
+                    }
+
+                    var c = new Vector3((float)x, y, (float)z);
+                    strip.Add(c - (right * half), c + (right * half), t / (half * 2));
+                }
+            }
+
+            CreateMesh("Lanes", paved.ToMesh("Lanes"), Mat(Color.white, TextureFactory.Asphalt(), 0.12f), false);
+            CreateMesh("GravelLanes", gravel.ToMesh("GravelLanes"), Mat(Color.white, TextureFactory.GravelRoad(), 0.05f), false);
+        }
+
+        /// <summary>Black letters, as on the white Austrian place-name and direction signs.</summary>
+        private static readonly Color SignInk = Color.black;
+
+        /// <summary>
+        /// The writing on the signs (the boards themselves are scenery): the village names at the village entrances
+        /// and, on the signposts before each junction, an arrow and where each road leads.
+        /// </summary>
+        private void BuildVillageSigns()
+        {
+            var landscape = _terrain.Landscape;
+            if (landscape == null) return;
+            var font = Resources.Load<Font>("Fonts/Inter-Bold");
+            foreach (var place in landscape.Signs)
+            {
+                var sign = SignRoot($"Sign {place.Name}", place.Item);
+                SignText(sign.transform, place.Name, new Vector3(0, 1.75f, 0.047f), 0.045f, font, front: true);
+                SignText(sign.transform, place.Name, new Vector3(0, 1.75f, -0.047f), 0.045f, font, front: false); // the back (end of the village)
+            }
+
+            foreach (var (item, boards) in landscape.Signposts)
+            {
+                var post = SignRoot("Signpost", item);
+                for (int i = 0; i < boards.Length; i++)
+                {
+                    var (arrow, name) = boards[i];
+                    string line = arrow == "→" ? name + " →" : arrow + " " + name;
+                    float size = 0.026f * Mathf.Min(1, 15f / Mathf.Max(1, line.Length));
+                    SignText(post.transform, line, new Vector3(0.75f, 2.4f - (i * 0.42f), 0.08f), size, font, front: true);
+                }
+            }
+        }
+
+        private GameObject SignRoot(string name, SceneryItem item)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(_root.transform, false);
+            go.transform.SetPositionAndRotation(new Vector3(item.X, item.Y, item.Z), Quaternion.Euler(0, item.RotationDeg, 0));
+            return go;
+        }
+
+        /// <summary>The font's material, but hidden behind the board like any other surface (the default draws on top).</summary>
+        private static Material _signTextMaterial;
+
+        private static void SignText(Transform parent, string value, Vector3 at, float characterSize, Font font, bool front)
+        {
+            var text = new GameObject("Text");
+            text.transform.SetParent(parent, false);
+            text.transform.localPosition = at;
+            text.transform.localRotation = Quaternion.Euler(0, front ? 180 : 0, 0); // a TextMesh reads from its −Z side
+            var mesh = text.AddComponent<TextMesh>();
+            mesh.text = value;
+            mesh.anchor = TextAnchor.MiddleCenter;
+            mesh.alignment = TextAlignment.Center;
+            mesh.characterSize = characterSize;
+            mesh.fontSize = 64;
+            mesh.color = SignInk;
+            if (font != null)
+            {
+                mesh.font = font;
+                if (_signTextMaterial == null)
+                {
+                    // The font's own shader (GUI/Text) draws on top of everything, so the name showed through the
+                    // board from behind, mirrored. Sprites/Default tests depth like any surface: letters behind the
+                    // board stay hidden. Its colour comes from the vertices (black), the shapes from the atlas' alpha.
+                    var depthTested = Shader.Find("Sprites/Default");
+                    _signTextMaterial = depthTested != null ? new Material(depthTested) { mainTexture = font.material.mainTexture } : new Material(font.material);
+                    _signTextMaterial.renderQueue = 3000;
+                    Font.textureRebuilt += rebuilt =>
+                    {
+                        if (rebuilt == font && _signTextMaterial != null) _signTextMaterial.mainTexture = font.material.mainTexture;
+                    };
+                }
+
+                text.GetComponent<MeshRenderer>().sharedMaterial = _signTextMaterial;
+            }
         }
 
         private static MeshRenderer AddRenderer(Transform parent, string name, Mesh mesh, Material[] materials, bool shadows)
@@ -114,7 +248,7 @@ namespace FreeVelo.World
             public readonly List<Vector3> Vertices = new List<Vector3>();
             public readonly List<Vector3> Normals = new List<Vector3>();
             public readonly List<Vector2> Uvs = new List<Vector2>();
-            public readonly List<int>[] Cover = { new List<int>(), new List<int>(), new List<int>(), new List<int>(), new List<int>() };
+            public readonly List<int>[] Cover = Enumerable.Range(0, CoverKinds).Select(_ => new List<int>()).ToArray();
 
             /// <summary>The Unity mesh (main thread only).</summary>
             public Mesh ToMesh(string name) => CoverMesh(name, Vertices, Normals, Uvs, Cover);
@@ -206,7 +340,7 @@ namespace FreeVelo.World
                             int a = start + (j * (per + 1)) + i, b = a + per + 1;
                             var center = (vertices[a] + vertices[b + 1]) * 0.5f;
                             float slope = Mathf.Sqrt(1f / (normals[a].y * normals[a].y) - 1f);
-                            var kind = MountainLook.Ground(m, center.x, center.z, center.y, slope, seed, distant: true);
+                            var kind = MountainLook.Ground(m, center.x, center.z, center.y, slope, seed, distant: true, terrain.Landscape);
                             cover[(int)kind].AddRange(new[] { a, b, a + 1, a + 1, b, b + 1 });
                         }
                     }
@@ -349,7 +483,7 @@ namespace FreeVelo.World
                             float h00 = heights[((j + 1) * n) + i + 1], h11 = heights[((j + 2) * n) + i + 2];
                             float h10 = heights[((j + 1) * n) + i + 2], h01 = heights[((j + 2) * n) + i + 1];
                             float slope = Mathf.Sqrt(((h10 - h00) * (h10 - h00)) + ((h01 - h00) * (h01 - h00))) / cell;
-                            cover[(j * cells) + i] = MountainLook.Ground(m, x0 + ((i + 0.5f) * cell), z0 + ((j + 0.5f) * cell), (h00 + h11) / 2, slope, seed, distant: false);
+                            cover[(j * cells) + i] = MountainLook.Ground(m, x0 + ((i + 0.5f) * cell), z0 + ((j + 0.5f) * cell), (h00 + h11) / 2, slope, seed, distant: false, terrain.Landscape);
                         }
                     }
 
@@ -417,7 +551,7 @@ namespace FreeVelo.World
             var vertices = new List<Vector3>();
             var normals = new List<Vector3>();
             var uvs = new List<Vector2>();
-            var tris = new List<int>[5];
+            var tris = new List<int>[CoverKinds];
             for (int k = 0; k < tris.Length; k++) tris[k] = new List<int>();
             int per = cells / step;
             for (int j = 0; j <= per; j++)

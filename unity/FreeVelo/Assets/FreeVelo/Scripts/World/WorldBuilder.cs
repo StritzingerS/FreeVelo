@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using FreeVelo.Core.Physics;
 using FreeVelo.Core.World.Gen;
 using UnityEngine;
@@ -77,8 +78,12 @@ namespace FreeVelo.World
             BuildMountains();
             BuildMountain(far);
             Step("mountain");
-            Debug.Log(times.ToString());
+            BuildTimes = times.ToString();
+            Debug.Log(BuildTimes);
         }
+
+        /// <summary>Time of each step of the last <see cref="Build"/> (for the log on the devices page).</summary>
+        public string BuildTimes { get; private set; } = "";
 
         /// <summary>Ground height (same grid as the terrain mesh).</summary>
         public float GroundHeight(float x, float z) => _terrain != null ? (float)_terrain.Height(x, z) : 0f;
@@ -216,6 +221,7 @@ namespace FreeVelo.World
             var lines = new Strips();
             var posts = new MeshBuilder();
             var postBands = new MeshBuilder();
+            BuildJunctionCorners(road, dirt);
 
             foreach (var e in Map.Edges)
             {
@@ -236,21 +242,26 @@ namespace FreeVelo.World
 
                     var drop = new Vector3(0, -0.32f, 0);
                     float sv = (float)e.D[i] / 2f;
-                    shoulders.Add(c - (right * (half + ShoulderWidth)) + drop, c - (right * half) + (Vector3.up * -0.01f), sv);
-                    shoulders.AddSecond(c + (right * half) + (Vector3.up * -0.01f), c + (right * (half + ShoulderWidth)) + drop, sv);
+                    // Where another road meets or splits off, this road's edge lies on the other road's asphalt:
+                    // no gravel shoulder, edge line or posts there, so the two surfaces run into each other.
+                    bool nearEnd = e.D[i] < MergeReach || e.D[i] > e.Length - MergeReach;
+                    bool leftMerged = nearEnd && (InCorner(e, i, -1) || OnOtherRoad(e, c - (right * (half + 0.4f)), 0.6f));
+                    bool rightMerged = nearEnd && (InCorner(e, i, 1) || OnOtherRoad(e, c + (right * (half + 0.4f)), 0.6f));
+                    var edgeLeft = c - (right * half) + (Vector3.up * -0.01f);
+                    var edgeRight = c + (right * half) + (Vector3.up * -0.01f);
+                    shoulders.Add(leftMerged ? edgeLeft : c - (right * (half + ShoulderWidth)) + drop, edgeLeft, sv);
+                    shoulders.AddSecond(edgeRight, rightMerged ? edgeRight : c + (right * (half + ShoulderWidth)) + drop, sv);
 
                     if (!paved) continue;
                     bool atJunction = e.D[i] < 9 || e.D[i] > e.Length - 9;
+                    bool centreOnOther = nearEnd && OnOtherRoad(e, c, -0.5f);
                     var up = Vector3.up * 0.015f;
-                    if (atJunction)
+                    if (atJunction || leftMerged) leftLine.Break();
+                    else leftLine.Add(c - (right * (half - 0.2f)) + up, c - (right * (half - 0.32f)) + up);
+                    if (atJunction || rightMerged) rightLine.Break();
+                    else rightLine.Add(c + (right * (half - 0.32f)) + up, c + (right * (half - 0.2f)) + up);
+                    if (!atJunction && !centreOnOther)
                     {
-                        leftLine.Break();
-                        rightLine.Break();
-                    }
-                    else
-                    {
-                        leftLine.Add(c - (right * (half - 0.2f)) + up, c - (right * (half - 0.32f)) + up);
-                        rightLine.Add(c + (right * (half - 0.32f)) + up, c + (right * (half - 0.2f)) + up);
                         if (i % 2 == 0 && i < n - 1 && e.D[i + 1] < e.Length - 9)
                         {
                             var cn = new Vector3((float)e.X[i + 1], (float)e.E[i + 1] + 0.065f, (float)e.Z[i + 1]);
@@ -264,6 +275,7 @@ namespace FreeVelo.World
                     {
                         for (int s = -1; s <= 1; s += 2)
                         {
+                            if (nearEnd && (InCorner(e, i, s, 6) || OnOtherRoad(e, c + (right * (s * (half + ShoulderWidth + 0.4f))), 1.5f))) continue;
                             var foot = c + (right * (s * (half + ShoulderWidth + 0.4f))) + new Vector3(0, -0.35f, 0);
                             posts.EllipticTube(foot, foot + (Vector3.up * 1.35f), new Vector2(0.04f, 0.055f), new Vector2(0.035f, 0.048f), right, 6);
                             postBands.EllipticTube(foot + (Vector3.up * 1.08f), foot + (Vector3.up * 1.24f), new Vector2(0.038f, 0.052f), new Vector2(0.037f, 0.05f), right, 6);
@@ -272,11 +284,25 @@ namespace FreeVelo.World
                 }
             }
 
-            // Junctions: an asphalt pad covers where the roads overlap.
+            // Junctions: a pad between the road ends (their convex hull), so the edges run straight on round the
+            // outside instead of bulging into the meadow.
             foreach (var node in Map.Nodes)
             {
                 var c = new Vector3((float)node.X, (float)node.Elevation + 0.06f, (float)node.Z);
-                road.Disc(c, 6.2f, 24);
+                var corners = new List<Vector3>();
+                foreach (int id in node.Edges)
+                {
+                    var e = Map.Edges[id];
+                    bool start = e.From == node.Id;
+                    foreach (float s in new[] { 0f, 2f })
+                    {
+                        foreach (int side in new[] { -1, 1 }) corners.Add(EdgeSide(e, start, s, side));
+                    }
+                }
+
+                var hull = ConvexHull(corners);
+                for (int k = 0; k < hull.Length; k++) hull[k].y = c.y;
+                if (hull.Length >= 3) road.Fan(c, hull);
             }
 
             CreateMesh("Roads", road.ToMesh("Roads"), asphalt, false);
@@ -285,6 +311,111 @@ namespace FreeVelo.World
             CreateMesh("Markings", lines.ToMesh("Markings"), paint, false);
             CreateMesh("Posts", posts.ToMesh("Posts"), Mat(new Color(0.93f, 0.93f, 0.9f), null, 0.4f), true);
             CreateMesh("PostBands", postBands.ToMesh("PostBands"), Mat(new Color(0.05f, 0.05f, 0.05f), null, 0.3f), false);
+        }
+
+        /// <summary>Per road end and side (−1 left, +1 right): how far from the junction its rounded corner reaches.</summary>
+        private readonly Dictionary<(int Edge, bool Start, int Side), float> _cornerReach = new Dictionary<(int, bool, int), float>();
+
+        private bool InCorner(RoadEdge e, int i, int side, float extra = 1f)
+        {
+            float fromStart = (float)e.D[i], fromEnd = (float)(e.Length - e.D[i]);
+            return (_cornerReach.TryGetValue((e.Id, true, side), out float a) && fromStart < a + extra)
+                || (_cornerReach.TryGetValue((e.Id, false, side), out float b) && fromEnd < b + extra);
+        }
+
+        /// <summary>
+        /// Rounded asphalt corners between neighbouring roads at each junction, as real junctions are built: from where
+        /// the two road edges cross, a curve joins them, wider the shallower the split. Lines, shoulders and posts keep
+        /// off the corners (see <see cref="InCorner"/>).
+        /// </summary>
+        private void BuildJunctionCorners(Strips paved, Strips gravel)
+        {
+            // The shapes come from the core (the terrain is lowered under them there too).
+            foreach (var corner in _terrain.Corners)
+            {
+                var rim = new Vector3[corner.X.Length];
+                for (int j = 0; j < rim.Length; j++)
+                {
+                    float x = (float)corner.X[j], z = (float)corner.Z[j];
+                    float y = Mathf.Max((float)corner.Y[j] + 0.05f, (float)_terrain.Height(x, z) + 0.06f) + 0.004f;
+                    rim[j] = new Vector3(x, y, z);
+                }
+
+                var centre = new Vector3((float)corner.CX, (float)corner.CY + 0.054f, (float)corner.CZ);
+                (corner.Asphalt ? paved : gravel).Fan(centre, rim);
+                Remember(Map.Edges[corner.EdgeA], corner.StartA, corner.SideA, (float)corner.ReachA);
+                Remember(Map.Edges[corner.EdgeB], corner.StartB, corner.SideB, (float)corner.ReachB);
+            }
+        }
+
+        private void Remember(RoadEdge e, bool start, int side, float reach)
+        {
+            var key = (e.Id, start, side);
+            _cornerReach[key] = _cornerReach.TryGetValue(key, out float old) ? Mathf.Max(old, reach) : reach;
+        }
+
+        /// <summary>Convex hull (x/z) of a few points, counter-clockwise (monotone chain).</summary>
+        private static Vector3[] ConvexHull(List<Vector3> points)
+        {
+            var p = points.OrderBy(v => v.x).ThenBy(v => v.z).ToList();
+            if (p.Count < 3) return p.ToArray();
+            float Cross(Vector3 o, Vector3 a, Vector3 b) => ((a.x - o.x) * (b.z - o.z)) - ((a.z - o.z) * (b.x - o.x));
+            var hull = new List<Vector3>();
+            for (int pass = 0; pass < 2; pass++)
+            {
+                int start = hull.Count;
+                foreach (var v in p)
+                {
+                    while (hull.Count >= start + 2 && Cross(hull[hull.Count - 2], hull[hull.Count - 1], v) <= 0) hull.RemoveAt(hull.Count - 1);
+                    hull.Add(v);
+                }
+
+                hull.RemoveAt(hull.Count - 1);
+                p.Reverse();
+            }
+
+            return hull.ToArray();
+        }
+
+        /// <summary>A point on one edge of a road, <paramref name="s"/> metres from the junction end.</summary>
+        private static Vector3 EdgeSide(RoadEdge e, bool start, float s, int side, float inset = 0)
+        {
+            var (c, forward) = OnEdge(e, start ? s : (float)e.Length - s);
+            var right = new Vector3(forward.z, 0, -forward.x);
+            return c + (right * (side * (((float)e.Width / 2) - inset)));
+        }
+
+        /// <summary>How far from a junction roads can still overlap (shallow splits run side by side for a while).</summary>
+        private const float MergeReach = 150f;
+
+        /// <summary>
+        /// Whether <paramref name="p"/> lies on another road that shares a junction with <paramref name="e"/>
+        /// (within that road's half width plus <paramref name="margin"/>; negative = well inside).
+        /// </summary>
+        private bool OnOtherRoad(RoadEdge e, Vector3 p, float margin)
+        {
+            foreach (int node in new[] { e.From, e.To })
+            {
+                foreach (int id in Map.Nodes[node].Edges)
+                {
+                    if (id == e.Id) continue;
+                    var o = Map.Edges[id];
+                    float reach = ((float)o.Width / 2) + margin;
+                    bool atStart = o.From == node;
+                    for (int k = 0; k < o.X.Length - 1; k++)
+                    {
+                        double along = atStart ? o.D[k] : o.Length - o.D[k + 1];
+                        if (along > MergeReach + 20) continue;
+                        float ax = (float)o.X[k], az = (float)o.Z[k], bx = (float)o.X[k + 1], bz = (float)o.Z[k + 1];
+                        float abx = bx - ax, abz = bz - az, len2 = (abx * abx) + (abz * abz);
+                        float f = len2 > 0 ? Mathf.Clamp01((((p.x - ax) * abx) + ((p.z - az) * abz)) / len2) : 0;
+                        float dx = ax + (abx * f) - p.x, dz = az + (abz * f) - p.z;
+                        if ((dx * dx) + (dz * dz) < reach * reach) return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static Vector3 Right(RoadEdge e, int i)
@@ -389,12 +520,6 @@ namespace FreeVelo.World
                 for (int i = 0; i < river.X.Length; i++)
                 {
                     float x = (float)river.X[i], z = (float)river.Z[i];
-                    if (x < _terrain.MinX || z < _terrain.MinZ || x > _terrain.MaxX || z > _terrain.MaxZ)
-                    {
-                        water.Begin();
-                        continue;
-                    }
-
                     int a = Mathf.Max(0, i - 1), b = Mathf.Min(river.X.Length - 1, i + 1);
                     var forward = new Vector3((float)(river.X[b] - river.X[a]), 0, (float)(river.Z[b] - river.Z[a])).normalized;
                     var right = new Vector3(forward.z, 0, -forward.x);
@@ -791,10 +916,11 @@ namespace FreeVelo.World
                 for (int i = 0; i < rim.Length; i++)
                 {
                     int a = c + 1 + i, b = c + 1 + ((i + 1) % rim.Length);
-                    // Up-facing whatever the rim direction.
+                    // Up-facing whatever the rim direction: the same winding as the road strips (front face when
+                    // Cross(v1 − v0, v2 − v0) points up). The other way round, pads and lakes were culled as back faces.
                     var n = Vector3.Cross(_v[a] - _v[c], _v[b] - _v[c]);
-                    if (n.y > 0) _t.AddRange(new[] { c, b, a });
-                    else _t.AddRange(new[] { c, a, b });
+                    if (n.y > 0) _t.AddRange(new[] { c, a, b });
+                    else _t.AddRange(new[] { c, b, a });
                 }
             }
 

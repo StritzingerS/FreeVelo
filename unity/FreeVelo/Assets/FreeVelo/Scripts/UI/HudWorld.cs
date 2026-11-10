@@ -91,10 +91,12 @@ namespace FreeVelo.UI
                 var icon = o.TurnDegrees < -25 ? Icon.TurnLeft : o.TurnDegrees > 25 ? Icon.TurnRight : Icon.Straight;
                 var fg = chosen ? Color.white : Theme.Text;
                 Ui.DrawIcon(new Rect(b.x + 14, b.center.y - 14, 28, 28), icon, fg);
-                string name = o.IsMainLoop ? L.Get("main_loop") : o.Surface == RoadSurface.Asphalt ? L.Get("side_road") : L.Get("gravel_road");
-                var mountain = _ride.Map?.Mountain;
-                if (mountain != null && o.Edge.Edge == mountain.AccessStelvioEdge) name = "Passo dello Stelvio";
-                else if (mountain != null && o.Edge.Edge == mountain.AccessAlpeEdge) name = "Alpe d'Huez";
+                // Where the road leads: the next village, or the climb's name.
+                var map = _ride.Map;
+                var edge = map?.Edges[o.Edge.Edge];
+                string name = edge == null ? L.Get("side_road")
+                    : edge.Kind == FreeVelo.Core.World.Gen.RoadKind.Climb ? map.Mountain?.Find(edge.ClimbId)?.Data.Name ?? edge.ClimbId
+                    : map.Nodes[o.Edge.Forward ? edge.To : edge.From].Name;
                 GUI.Label(new Rect(b.x + 54, b.y + 6, b.width - 64, 24), name, Theme.With(Theme.Body, fg, 16, TextAnchor.MiddleLeft));
                 GUI.Label(new Rect(b.x + 54, b.y + 28, b.width - 64, 20), $"{o.LengthM / 1000:0.0} km {L.Get("to_next_junction")}", Theme.With(Theme.Caption, chosen ? new Color(1, 1, 1, 0.8f) : Theme.Muted, 13, TextAnchor.MiddleLeft));
                 if (GUI.Button(b, GUIContent.none, GUIStyle.none)) _ride.ChooseTurn(i);
@@ -107,7 +109,8 @@ namespace FreeVelo.UI
         /// <summary>Bottom strip in free rides: elevation of the next 3 km (or of the main loop in group rides).</summary>
         /// <summary>Name of a round shown over the elevation strip: the main loop or the round over a climb.</summary>
         private static string RouteLabel(FreeVelo.Core.World.Route route) =>
-            route.Climbs != null && route.Climbs.Count > 0 ? string.Format(L.Get("climb_loop"), route.Climbs[0].Name) : L.Get("main_loop");
+            route.Climbs != null && route.Climbs.Count > 0 ? string.Format(L.Get("climb_loop"), route.Climbs[0].Name)
+            : route.Name == FreeVelo.Core.World.Gen.WorldMap.AlmRouteName ? L.Get("alm_loop") : L.Get("main_loop");
 
         private FreeVelo.Core.World.Route _aheadRoute;
         private long _aheadFirst;

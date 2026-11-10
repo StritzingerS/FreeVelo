@@ -25,6 +25,9 @@ namespace FreeVelo.Core.World.Gen
 
         /// <summary>Edges meeting here.</summary>
         public List<int> Edges { get; } = new List<int>();
+
+        /// <summary>Village (or summit) name, for the junction signs ("" if none).</summary>
+        public string Name { get; internal set; } = "";
     }
 
     /// <summary>A road between two nodes: points every few metres with distance and elevation.</summary>
@@ -158,21 +161,25 @@ namespace FreeVelo.Core.World.Gen
     }
 
     /// <summary>
-    /// The fictional world, generated from a seed and identical everywhere (app and server): rolling terrain, a
-    /// network of roads with junctions (the 10 km main loop plus link roads, one of them gravel), a river crossed on
-    /// bridges and a few lakes. Roads follow the terrain smoothly (at most 9 % grade) and meet at junctions with the
-    /// same height. The server only needs the roads; the app adds the detailed terrain and scenery.
+    /// The fictional world, identical everywhere (app and server): two Alpine valleys making a round through the villages
+    /// (see <see cref="Valleys"/>), a river along the main valley crossed on bridges, a lake or two, the Alm road with
+    /// hairpins at an even gradient up to a high plateau, and the mountain with the Stelvio and the Alpe d'Huez. The
+    /// valley floors are flat; the slopes and peaks come from <see cref="MountainTerrain"/>. The server only needs the
+    /// roads; the app adds the detailed terrain and scenery.
     /// </summary>
     public sealed class WorldMap
     {
         public const int DefaultSeed = 1;
-        public const double MainLoopLengthM = 10_000;
         public const double Spacing = 5;
         public const double MaxGrade = 0.09;
+
+        /// <summary>The detailed home grid covers this much around the start village (the rest is streamed).</summary>
+        public const double HomeHalfSize = 350;
 
         private static readonly Lazy<WorldMap> DefaultMap = new Lazy<WorldMap>(() => Generate(DefaultSeed));
         private readonly int _seed;
         private Route? _mainLoop;
+        private ValleyFloor? _floor;
 
         private WorldMap(int seed) => _seed = seed;
 
@@ -191,19 +198,22 @@ namespace FreeVelo.Core.World.Gen
 
         public List<Bridge> Bridges { get; } = new List<Bridge>();
 
-        /// <summary>Area of the rolling home world: its roads and water (without margin).</summary>
+        /// <summary>Area of the detailed home grid: around the start village (without margin).</summary>
         public (double MinX, double MinZ, double MaxX, double MaxZ) Bounds { get; private set; }
 
-        /// <summary>The mountain with the two famous climbs (null for worlds generated without it).</summary>
+        /// <summary>The mountain with the two famous climbs.</summary>
         public Mountain? Mountain { get; private set; }
 
-        /// <summary>Area of the mountain roads (access roads, climbs, connector), without margin.</summary>
+        /// <summary>Area of all roads, without margin (the streamed terrain covers it).</summary>
         public (double MinX, double MinZ, double MaxX, double MaxZ) MountainBounds { get; private set; }
 
-        /// <summary>Main loop edges in riding order (starting at node 0).</summary>
+        /// <summary>The valley round's edges in riding order (starting at node 0, the start village).</summary>
         public List<int> MainLoopEdges { get; } = new List<int>();
 
-        /// <summary>The main loop as a looping route (group rides).</summary>
+        /// <summary>Edges of the Alm round in riding order (from Kirchbach: up, over the plateau, down, back along the valley).</summary>
+        public List<DirectedEdge> AlmLoopSteps { get; } = new List<DirectedEdge>();
+
+        /// <summary>The valley round as a looping route (group rides, free rides without turning off).</summary>
         public Route MainLoop
         {
             get
@@ -215,18 +225,71 @@ namespace FreeVelo.Core.World.Gen
             }
         }
 
-        /// <summary>Rolling hills (±30 m) without the river valley.</summary>
-        public double Hills(double x, double z) =>
-            100
-            + (28 * Noise.Fractal(x / 1500, z / 1500, _seed, 3))
-            + (5 * Noise.Fractal(x / 280, z / 280, _seed + 17, 2));
+        /// <summary>The Alm round (looping, from Kirchbach).</summary>
+        public Route AlmLoop() => BuildRoute(AlmRouteName, AlmLoopSteps, isLoop: true, 0);
 
-        /// <summary>Half width of the river valley (from the river centre to where the hills are untouched).</summary>
+        public const string AlmRouteName = "Alm";
+
+        /// <summary>Natural ground without the river channel: the valley floor and its slopes (±a few metres of meadow).</summary>
+        public double Hills(double x, double z)
+        {
+            if (_floor == null) return 650;
+            double d = _floor.Distance(x, z);
+            var (halfWidth, rise, _) = _floor.Shape(x, z);
+            double meadow = 2.5 * Noise.Fractal(x / 220, z / 220, _seed, 2) * SmoothStep((d - 40) / 200);
+            double slope = (rise * SmoothStep((d - halfWidth) / 1400)) + (25 * Noise.Fractal(x / 1500, z / 1500, _seed + 9, 3) * SmoothStep((d - halfWidth + 20) / 800));
+            return _floor.Height(x, z) + meadow + slope;
+        }
+
+        /// <summary>Distance to the nearest valley road (32 m resolution): the mountain's relief stays off the valley floors.</summary>
+        public double ValleyDistance(double x, double z) => _floor?.Distance(x, z) ?? double.MaxValue;
+
+        /// <summary>
+        /// How much of the mountain's relief belongs here: none on the valley floors, rising beyond them; weaker beside
+        /// the open, green stretch Kirchbach – Mitterbach, stronger in the narrow valley Mitterbach – Trafon.
+        /// </summary>
+        public double ReliefFactor(double x, double z)
+        {
+            if (_floor == null) return 1;
+            var (halfWidth, _, relief) = _floor.Shape(x, z);
+            return SmoothStep((_floor.Distance(x, z) - halfWidth - 30) / 800) * relief;
+        }
+
+        private (double X, double Z)[]? _plateau;
+
+        /// <summary>Distance to the plateau road (Oberalm), where the alpine pasture is.</summary>
+        public double DistanceToPlateau(double x, double z)
+        {
+            _plateau ??= Edges.Where(e => e.From == Valleys.Oberalm && e.To == Valleys.AlmEnd)
+                .SelectMany(e => Enumerable.Range(0, e.X.Length).Where(i => i % 10 == 0 || i == e.X.Length - 1).Select(i => (e.X[i], e.Z[i]))).ToArray();
+            double best = double.MaxValue;
+            foreach (var (px, pz) in _plateau) best = Math.Min(best, ((px - x) * (px - x)) + ((pz - z) * (pz - z)));
+            return Math.Sqrt(best);
+        }
+
+        /// <summary>1 on a valley floor, fading to 0 over 250 m up its sides.</summary>
+        public double ValleyFloorFactor(double x, double z)
+        {
+            if (_floor == null) return 0;
+            var (halfWidth, _, _) = _floor.Shape(x, z);
+            return 1 - SmoothStep((_floor.Distance(x, z) - halfWidth) / 250);
+        }
+
+        /// <summary>The valley along each valley road: wide and gentle, narrow between high slopes, or in between.</summary>
+        private static (double HalfWidth, double Rise, double Relief) ValleyShape(RoadEdge e)
+        {
+            bool Is(int a, int b) => (e.From == a && e.To == b) || (e.From == b && e.To == a);
+            if (Is(Valleys.Kirchbach, Valleys.Mitterbach)) return (650, 80, 0.45);
+            if (Is(Valleys.Mitterbach, Valleys.Hinterau) || Is(Valleys.Hinterau, Valleys.Trafon)) return (230, 320, 1.4);
+            return (420, 150, 1.0);
+        }
+
+        /// <summary>Half width of the river's channel area (from the river centre to where the ground is untouched).</summary>
         public const double ValleyHalfWidth = 220;
 
         /// <summary>
-        /// Natural terrain: the hills with the river's valley worked in (banks a metre above the water, rising
-        /// gently to the hills). Roads follow this; lakes and road beds are added by the detailed terrain.
+        /// Natural terrain: the valleys with the river's banks worked in (a metre above the water, rising gently).
+        /// Roads follow this; lakes and road beds are added by the detailed terrain.
         /// </summary>
         public double BaseHeight(double x, double z)
         {
@@ -292,9 +355,9 @@ namespace FreeVelo.Core.World.Gen
         }
 
         /// <summary>
-        /// The loop around the mountain starting at the foot of <paramref name="climbId"/>: up that climb, over the
-        /// connector, down the other climb and its access road, along the main loop (the shorter way) and back up the
-        /// first access road to the foot. Null if the world has no such climb.
+        /// The round over the mountain starting at the foot of <paramref name="climbId"/>: up that climb, over the
+        /// connector, down the other climb and back to the first foot the shortest way (not over the mountain). Null if
+        /// the world has no such climb.
         /// </summary>
         public Route? ClimbLoop(string climbId)
         {
@@ -302,47 +365,56 @@ namespace FreeVelo.Core.World.Gen
             var first = m?.Find(climbId);
             if (m == null || first == null) return null;
             var other = first == m.Stelvio ? m.Alpe : m.Stelvio;
-            int accessFirst = first == m.Stelvio ? m.AccessStelvioEdge : m.AccessAlpeEdge;
-            int accessOther = first == m.Stelvio ? m.AccessAlpeEdge : m.AccessStelvioEdge;
-            int junctionFirst = first == m.Stelvio ? m.JunctionStelvio : m.JunctionAlpe;
-            int junctionOther = first == m.Stelvio ? m.JunctionAlpe : m.JunctionStelvio;
-
             var steps = new List<DirectedEdge>
             {
                 new DirectedEdge(first.Edge, true),
                 new DirectedEdge(m.ConnectorEdge, first == m.Stelvio),
                 new DirectedEdge(other.Edge, false),
-                new DirectedEdge(accessOther, false),
             };
-            steps.AddRange(MainLoopBetween(junctionOther, junctionFirst));
-            steps.Add(new DirectedEdge(accessFirst, true));
+            steps.AddRange(ShortestPath(Edges[other.Edge].From, Edges[first.Edge].From, e => e.Kind == RoadKind.Climb || e.Kind == RoadKind.Connector));
             return BuildRoute(first.Data.Name, steps, isLoop: true, 0);
         }
 
-        /// <summary>Main loop edges from node <paramref name="from"/> to node <paramref name="to"/>, the shorter way round.</summary>
-        private List<DirectedEdge> MainLoopBetween(int from, int to)
+        /// <summary>The shortest way between two nodes (Dijkstra), leaving out the edges <paramref name="skip"/> says.</summary>
+        public List<DirectedEdge> ShortestPath(int from, int to, Func<RoadEdge, bool>? skip = null)
         {
-            var loop = MainLoopEdges;
-            int n = loop.Count;
-            int start = loop.FindIndex(e => Edges[e].From == from);
-            var forward = new List<DirectedEdge>();
-            double forwardLength = 0;
-            for (int k = 0, i = start; k < n && Edges[loop[i]].From != to; k++, i = (i + 1) % n)
+            var dist = Enumerable.Repeat(double.MaxValue, Nodes.Count).ToArray();
+            var via = new DirectedEdge?[Nodes.Count];
+            var done = new bool[Nodes.Count];
+            dist[from] = 0;
+            for (int round = 0; round < Nodes.Count; round++)
             {
-                forward.Add(new DirectedEdge(loop[i], true));
-                forwardLength += Edges[loop[i]].Length;
+                int u = -1;
+                for (int i = 0; i < Nodes.Count; i++)
+                {
+                    if (!done[i] && dist[i] < double.MaxValue && (u < 0 || dist[i] < dist[u])) u = i;
+                }
+
+                if (u < 0 || u == to) break;
+                done[u] = true;
+                foreach (int id in Nodes[u].Edges)
+                {
+                    var e = Edges[id];
+                    if (skip != null && skip(e)) continue;
+                    int v = e.Other(u);
+                    if (dist[u] + e.Length < dist[v])
+                    {
+                        dist[v] = dist[u] + e.Length;
+                        via[v] = new DirectedEdge(id, e.From == u);
+                    }
+                }
             }
 
-            int end = loop.FindIndex(e => Edges[e].To == from);
-            var backward = new List<DirectedEdge>();
-            double backwardLength = 0;
-            for (int k = 0, i = end; k < n && Edges[loop[i]].To != to; k++, i = (i - 1 + n) % n)
+            var path = new List<DirectedEdge>();
+            for (int n = to; n != from;)
             {
-                backward.Add(new DirectedEdge(loop[i], false));
-                backwardLength += Edges[loop[i]].Length;
+                var step = via[n] ?? throw new InvalidOperationException($"No way from node {from} to {to}");
+                path.Insert(0, step);
+                var e = Edges[step.Edge];
+                n = step.Forward ? e.From : e.To;
             }
 
-            return forwardLength <= backwardLength ? forward : backward;
+            return path;
         }
 
         private static double Grade(RoadEdge e, int i)
@@ -354,198 +426,64 @@ namespace FreeVelo.Core.World.Gen
 
         // ------------------------------------------------------------------ generation
 
-        public static WorldMap Generate(int seed) => Generate(seed, searchMountain: false);
-
-        /// <summary>
-        /// <paramref name="searchMountain"/>: place the mountain by the full search instead of trying the stored placement
-        /// first (several seconds; for tests and other seeds – the result is the same for the default world).
-        /// </summary>
-        public static WorldMap Generate(int seed, bool searchMountain)
+        public static WorldMap Generate(int seed)
         {
             var map = new WorldMap(seed);
             var random = new Random(seed);
-            var loop = MainLoopCurve(random);
-            var links = map.LinkRoads(random, loop);
-            map.Bounds = BoundsOf(new[] { loop }.Concat(links.Select(l => l.Path)));
-            map.River = map.MakeRiver(random);
-            map._riverIndex = new SegmentIndex(map.River.X, map.River.Z, 60);
+            map.Mountain = Mountain.Place(Valleys.FloorElevation[Valleys.Trafon]);
+            var (nodes, roads) = Valleys.Plan(map.Mountain);
+            map.BuildGraph(nodes, roads, map.Mountain);
 
-            // The mountain beside the home world (placement is deterministic; the home world stays the same).
-            map.Mountain = Mountain.Plan(map, loop, links.Select(l => l.Path).ToList(), links.SelectMany(l => new[] { l.S1, l.S2 }).ToList(), useHint: !searchMountain);
-            map.BuildGraph(loop, links, map.Mountain);
-            map.MountainBounds = BoundsOf(map.Edges.Where(e => e.Kind != RoadKind.Home).Select(e => (IReadOnlyList<double>)e.X).Zip(map.Edges.Where(e => e.Kind != RoadKind.Home).Select(e => (IReadOnlyList<double>)e.Z), (x, z) => (x, z)));
-            map.FindBridges();
+            var start = map.Nodes[0];
+            map.Bounds = (start.X - HomeHalfSize, start.Z - HomeHalfSize, start.X + HomeHalfSize, start.Z + HomeHalfSize);
+            map.MountainBounds = BoundsOf(map.Edges.Select(e => ((IReadOnlyList<double>)e.X, (IReadOnlyList<double>)e.Z)));
+
             map.SetElevations();
+            var (minX, minZ, maxX, maxZ) = map.MountainBounds;
+            double margin = MountainTerrain.Margin + 600;
+            map._floor = ValleyFloor.Build(map.Edges.Where(e => e.Kind == RoadKind.Valley), (minX - margin, minZ - margin, maxX + margin, maxZ + margin), ValleyShape);
+            map.River = map.MakeRiver();
+            map._riverIndex = new SegmentIndex(map.River.X, map.River.Z, 60);
+            map.FindBridges();
+            map.LiftBridges();
             map.MakeLakes(random);
             return map;
         }
 
-        /// <summary>Closed, smooth, irregular loop of 10 km, evenly sampled (last point = first point).</summary>
-        private static Polyline MainLoopCurve(Random random)
+        private void BuildGraph(List<(double X, double Z)> nodes, List<PlannedRoad> roads, Mountain mountain)
         {
-            const int harmonics = 5;
-            var amp = new double[harmonics];
-            var phase = new double[harmonics];
-            for (int k = 0; k < harmonics; k++)
+            for (int i = 0; i < nodes.Count; i++) Nodes.Add(new RoadNode(i, nodes[i].X, nodes[i].Z) { Name = Valleys.Names[i] });
+            foreach (var r in roads)
             {
-                amp[k] = (0.16 / (k + 1)) * random.NextDouble();
-                phase[k] = random.NextDouble() * Math.PI * 2;
+                AddEdge(r.From, r.To, r.Path, r.MainLoop, RoadSurface.Asphalt, r.Kind);
+                if (r.MainLoop) MainLoopEdges.Add(Edges.Count - 1);
             }
 
-            const int fine = 4000;
-            var raw = new Polyline();
-            for (int i = 0; i <= fine; i++)
+            // Alm round: Kirchbach up to Oberalm, over the plateau, down to Mitterbach, back up the valley to Kirchbach.
+            int Find(int from, int to) => Edges.First(e => e.From == from && e.To == to).Id;
+            AlmLoopSteps.Add(new DirectedEdge(Find(Valleys.Kirchbach, Valleys.Oberalm), true));
+            AlmLoopSteps.Add(new DirectedEdge(Find(Valleys.Oberalm, Valleys.AlmEnd), true));
+            AlmLoopSteps.Add(new DirectedEdge(Find(Valleys.AlmEnd, Valleys.Mitterbach), true));
+            AlmLoopSteps.Add(new DirectedEdge(Find(Valleys.Kirchbach, Valleys.Mitterbach), false));
+
+            // Mountain: the feet are Trafon and Valbrune; summits, climbs (foot → summit) and the connector.
+            var s = mountain.Stelvio;
+            var a = mountain.Alpe;
+            int Node((double X, double Z) p, string name)
             {
-                double t = 2 * Math.PI * i / fine;
-                double r = 1.0;
-                for (int k = 0; k < harmonics; k++) r += amp[k] * Math.Sin(((k + 2) * t) + phase[k]);
-                raw.Add(r * Math.Sin(t), r * Math.Cos(t));
-            }
-
-            double scale = MainLoopLengthM / raw.Length;
-            var scaled = new Polyline();
-            for (int i = 0; i < raw.Count; i++) scaled.Add(raw.X[i] * scale, raw.Z[i] * scale);
-            return scaled.Resample(Spacing);
-        }
-
-        private sealed class Link
-        {
-            public double S1;
-            public double S2;
-            public Polyline Path = new Polyline();
-            public RoadSurface Surface;
-        }
-
-        /// <summary>
-        /// Link roads across the inside of the loop and one detour outside, as smooth curves leaving the loop at
-        /// right angles. Retries until they stay clear of the loop and of each other, with junctions well apart.
-        /// </summary>
-        private List<Link> LinkRoads(Random random, Polyline loop)
-        {
-            var links = new List<Link>();
-            double cx = loop.X.Average(), cz = loop.Z.Average();
-            var plans = new[] { (Inner: true, Surface: RoadSurface.Asphalt), (Inner: true, Surface: RoadSurface.CompactedGravel), (Inner: false, Surface: RoadSurface.Asphalt) };
-            foreach (var plan in plans)
-            {
-                for (int attempt = 0; attempt < 200; attempt++)
-                {
-                    double s1 = random.NextDouble() * loop.Length;
-                    double span = plan.Inner ? 0.28 + (random.NextDouble() * 0.17) : 0.12 + (random.NextDouble() * 0.08);
-                    double s2 = (s1 + (span * loop.Length)) % loop.Length;
-                    if (links.SelectMany(l => new[] { l.S1, l.S2 }).Any(s => LoopGap(s, s1, loop.Length) < 900 || LoopGap(s, s2, loop.Length) < 900)) continue;
-
-                    var (ax, az, anx, anz) = loop.PointAndNormal(s1, cx, cz, plan.Inner);
-                    var (bx, bz, bnx, bnz) = loop.PointAndNormal(s2, cx, cz, plan.Inner);
-                    double gap = Math.Sqrt(((bx - ax) * (bx - ax)) + ((bz - az) * (bz - az)));
-                    double reach = gap * (plan.Inner ? 0.38 : 0.75);
-                    var path = Polyline.Bezier(ax, az, ax + (anx * reach), az + (anz * reach), bx + (bnx * reach), bz + (bnz * reach), bx, bz, 400).Resample(Spacing);
-                    if (!Clear(path, loop, links, plan.Inner)) continue;
-                    links.Add(new Link { S1 = s1, S2 = s2, Path = path, Surface = plan.Surface });
-                    break;
-                }
-            }
-
-            return links;
-        }
-
-        private static double LoopGap(double a, double b, double length)
-        {
-            double d = Math.Abs(a - b) % length;
-            return Math.Min(d, length - d);
-        }
-
-        private static bool Clear(Polyline path, Polyline loop, List<Link> others, bool inner)
-        {
-            double total = path.Length;
-            for (int i = 0; i < path.Count; i++)
-            {
-                double fromEnds = Math.Min(path.D[i], total - path.D[i]);
-                if (fromEnds < 60) continue;
-                if (loop.Contains(path.X[i], path.Z[i]) != inner) return false;
-                double toLoop = loop.DistanceTo(path.X[i], path.Z[i]);
-                if (toLoop < Math.Min(160, fromEnds * 0.6)) return false;
-                foreach (var other in others)
-                {
-                    if (other.Path.DistanceTo(path.X[i], path.Z[i]) < 180) return false;
-                }
-            }
-
-            return true;
-        }
-
-        private void BuildGraph(Polyline loop, List<Link> links, Mountain? mountain)
-        {
-            // Junctions along the loop, in riding order; node 0 is the start. Mountain access roads count as
-            // "links" number links.Count (Stelvio) and links.Count + 1 (Alpe d'Huez).
-            var junctions = links.SelectMany((l, i) => new[] { (S: l.S1, Link: i, End: 0), (S: l.S2, Link: i, End: 1) }).ToList();
-            if (mountain != null)
-            {
-                junctions.Add((mountain.LoopStelvio, links.Count, 0));
-                junctions.Add((mountain.LoopAlpe, links.Count + 1, 0));
-            }
-
-            junctions = junctions.OrderBy(j => j.S).ToList();
-            var nodeOf = new Dictionary<(int Link, int End), int>();
-            foreach (var j in junctions)
-            {
-                var (x, z) = loop.At(j.S);
-                var node = new RoadNode(Nodes.Count, x, z);
-                nodeOf[(j.Link, j.End)] = node.Id;
-                Nodes.Add(node);
-            }
-
-            if (Nodes.Count == 0)
-            {
-                Nodes.Add(new RoadNode(0, loop.X[0], loop.Z[0]));
-                junctions.Add((0, -1, 0));
-            }
-
-            for (int k = 0; k < junctions.Count; k++)
-            {
-                double from = junctions[k].S;
-                double to = k + 1 < junctions.Count ? junctions[k + 1].S : junctions[0].S + loop.Length;
-                var part = loop.Section(from, to);
-                AddEdge(k, (k + 1) % junctions.Count, part, mainLoop: true, RoadSurface.Asphalt);
-                MainLoopEdges.Add(Edges.Count - 1);
-            }
-
-            for (int i = 0; i < links.Count; i++)
-            {
-                // The curve starts and ends exactly on the loop points.
-                AddEdge(nodeOf[(i, 0)], nodeOf[(i, 1)], links[i].Path, mainLoop: false, links[i].Surface);
-            }
-
-            if (mountain == null) return;
-
-            // Mountain: feet, summits, access roads, climbs (foot → summit) and the connector between the summits.
-            int Node((double X, double Z) p)
-            {
-                var node = new RoadNode(Nodes.Count, p.X, p.Z);
+                var node = new RoadNode(Nodes.Count, p.X, p.Z) { Name = name };
                 Nodes.Add(node);
                 return node.Id;
             }
 
-            var s = mountain.Stelvio;
-            var a = mountain.Alpe;
-            int footS = Node(s.Foot), topS = Node(s.Point(s.Data.X.Length - 1));
-            int footA = Node(a.Foot), topA = Node(a.Point(a.Data.X.Length - 1));
-            Nodes[footS].Elevation = s.FootElevation;
-            Nodes[topS].Elevation = s.SummitElevation;
-            Nodes[footA].Elevation = a.FootElevation;
-            Nodes[topA].Elevation = a.SummitElevation;
-            mountain.JunctionStelvio = nodeOf[(links.Count, 0)];
-            mountain.JunctionAlpe = nodeOf[(links.Count + 1, 0)];
-
-            AddEdge(mountain.JunctionStelvio, footS, mountain.AccessStelvioPath, false, RoadSurface.Asphalt, RoadKind.Access);
-            mountain.AccessStelvioEdge = Edges.Count - 1;
-            AddEdge(footS, topS, ClimbPath(s), false, RoadSurface.Asphalt, RoadKind.Climb, s.Data.Id);
+            int topS = Node(s.Point(s.Data.X.Length - 1), s.Data.Name);
+            int topA = Node(a.Point(a.Data.X.Length - 1), a.Data.Name);
+            AddEdge(Valleys.Trafon, topS, ClimbPath(s), false, RoadSurface.Asphalt, RoadKind.Climb, s.Data.Id);
             s.Edge = Edges.Count - 1;
             AddEdge(topS, topA, mountain.ConnectorPath, false, RoadSurface.Asphalt, RoadKind.Connector);
             mountain.ConnectorEdge = Edges.Count - 1;
-            AddEdge(footA, topA, ClimbPath(a), false, RoadSurface.Asphalt, RoadKind.Climb, a.Data.Id);
+            AddEdge(Valleys.Valbrune, topA, ClimbPath(a), false, RoadSurface.Asphalt, RoadKind.Climb, a.Data.Id);
             a.Edge = Edges.Count - 1;
-            AddEdge(mountain.JunctionAlpe, footA, mountain.AccessAlpePath, false, RoadSurface.Asphalt, RoadKind.Access);
-            mountain.AccessAlpeEdge = Edges.Count - 1;
         }
 
         private static Polyline ClimbPath(PlacedClimb climb)
@@ -560,7 +498,7 @@ namespace FreeVelo.Core.World.Gen
             return path;
         }
 
-        private void AddEdge(int from, int to, Polyline path, bool mainLoop, RoadSurface surface, RoadKind kind = RoadKind.Home, string? climbId = null)
+        private void AddEdge(int from, int to, Polyline path, bool mainLoop, RoadSurface surface, RoadKind kind, string? climbId = null)
         {
             var x = path.X.ToArray();
             var z = path.Z.ToArray();
@@ -573,9 +511,6 @@ namespace FreeVelo.Core.World.Gen
             Nodes[from].Edges.Add(edge.Id);
             Nodes[to].Edges.Add(edge.Id);
         }
-
-        private static (double, double, double, double) BoundsOf(IEnumerable<Polyline> paths) =>
-            BoundsOf(paths.Select(p => ((IReadOnlyList<double>)p.X, (IReadOnlyList<double>)p.Z)));
 
         private static (double, double, double, double) BoundsOf(IEnumerable<(IReadOnlyList<double> X, IReadOnlyList<double> Z)> paths)
         {
@@ -591,40 +526,171 @@ namespace FreeVelo.Core.World.Gen
             return (minX, minZ, maxX, maxZ);
         }
 
+        // ------------------------------------------------------------------ elevation
+
+        /// <summary>
+        /// Road heights. Valley roads: from village to village with a gentle wave (a saddle on the road between the two
+        /// valleys). Mountain roads: an even gradient from end to end, eased over the first and last 120 m. Climbs: the
+        /// GPX elevations. Connector: level between the equal summits with a gentle rise in the middle.
+        /// </summary>
+        private void SetElevations()
+        {
+            for (int i = 0; i < Valleys.FloorElevation.Length; i++) Nodes[i].Elevation = Valleys.FloorElevation[i];
+            var m = Mountain!;
+            Nodes[Valleys.Valbrune].Elevation = m.Alpe.FootElevation;
+            Nodes[Edges[m.Stelvio.Edge].To].Elevation = m.Stelvio.SummitElevation;
+            Nodes[Edges[m.Alpe.Edge].To].Elevation = m.Alpe.SummitElevation;
+
+            // The Alm road's ends follow from its length and gradient.
+            var up = Edges.First(e => e.From == Valleys.Kirchbach && e.To == Valleys.Oberalm);
+            var down = Edges.First(e => e.From == Valleys.AlmEnd && e.To == Valleys.Mitterbach);
+            Nodes[Valleys.Oberalm].Elevation = Nodes[Valleys.Kirchbach].Elevation + (Valleys.AlmGrade * up.Length);
+            Nodes[Valleys.AlmEnd].Elevation = Nodes[Valleys.Mitterbach].Elevation + (Valleys.AlmGrade * down.Length);
+
+            foreach (var e in Edges)
+            {
+                int n = e.X.Length;
+                double a = Nodes[e.From].Elevation, b = Nodes[e.To].Elevation;
+                if (e.Kind == RoadKind.Climb)
+                {
+                    var climb = m.Find(e.ClimbId!)!;
+                    for (int i = 0; i < n; i++) e.E[i] = climb.Elevation(i);
+                    continue;
+                }
+
+                bool saddle = e.Kind == RoadKind.Valley && !e.IsMainLoop;
+                if (e.Kind == RoadKind.Pass)
+                {
+                    EvenGradient(e, a, b);
+                    continue;
+                }
+
+                for (int i = 0; i < n; i++)
+                {
+                    double f = e.D[i] / e.Length;
+                    double h;
+                    if (e.Kind == RoadKind.Valley)
+                    {
+                        // Gentle waves of a metre or two, none at the villages; the saddle road rises 55 m in the middle.
+                        double wave = 1.6 * Math.Sin(2 * Math.PI * f * Math.Max(1, Math.Round(e.Length / 1800))) * Math.Sin(Math.PI * f);
+                        h = a + ((b - a) * SmoothStep(f)) + wave + (saddle ? 55 * Math.Pow(Math.Sin(Math.PI * f), 2) : 0);
+                    }
+                    else if (e.Kind == RoadKind.Connector)
+                    {
+                        h = a + ((b - a) * f) + (12 * Math.Sin(Math.PI * f));
+                    }
+                    else
+                    {
+                        // Even gradient, eased into the level at both ends.
+                        double ease = Math.Min(1, Math.Min(e.D[i], e.Length - e.D[i]) / 120);
+                        double t = f + ((SmoothStep(f) - f) * (1 - ease));
+                        h = a + ((b - a) * t);
+                    }
+
+                    e.E[i] = h;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The same gradient all the way, easing in from level over the first 120 m and out over the last (a trapezoid
+        /// of gradient along the road, scaled to the height difference).
+        /// </summary>
+        private static void EvenGradient(RoadEdge e, double a, double b)
+        {
+            int n = e.X.Length;
+            var rise = new double[n];
+            for (int i = 1; i < n; i++)
+            {
+                double mid = (e.D[i] + e.D[i - 1]) / 2;
+                double w = Math.Min(1, Math.Min(mid, e.Length - mid) / 120);
+                rise[i] = rise[i - 1] + ((e.D[i] - e.D[i - 1]) * w);
+            }
+
+            for (int i = 0; i < n; i++) e.E[i] = a + ((b - a) * rise[i] / rise[n - 1]);
+        }
+
         // ------------------------------------------------------------------ water
 
         /// <summary>
-        /// A meandering river across the whole area. Its water level follows the low ground (a little below it) and
-        /// never rises downstream.
+        /// The river of the main valley: from a spring above Kirchbach along the valley to Trafon (170 m beside the road,
+        /// on the side away from the mountain) and on out of the valley. Its level stays 2 m below the floor and never
+        /// rises downstream.
         /// </summary>
-        private River MakeRiver(Random random)
+        private River MakeRiver()
         {
-            var (minX, minZ, maxX, maxZ) = Bounds;
-            double cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
-            double reach = (Math.Max(maxX - minX, maxZ - minZ) / 2) + 700;
-            double angle = random.NextDouble() * Math.PI;
-            double dx = Math.Cos(angle), dz = Math.Sin(angle);
-            double offset = (random.NextDouble() - 0.5) * 500;
-            double a1 = 90 + (random.NextDouble() * 60), l1 = 650 + (random.NextDouble() * 250), p1 = random.NextDouble() * 6.3;
-            double a2 = 30 + (random.NextDouble() * 30), l2 = 230 + (random.NextDouble() * 80), p2 = random.NextDouble() * 6.3;
-
-            var path = new Polyline();
-            for (double u = -reach; u <= reach; u += 10)
+            var steps = ShortestPath(Valleys.Kirchbach, Valleys.Trafon, e => !e.IsMainLoop);
+            var road = new Polyline();
+            foreach (var step in steps)
             {
-                double side = offset + (a1 * Math.Sin((u / l1) + p1)) + (a2 * Math.Sin((u / l2) + p2));
-                path.Add(cx + (dx * u) - (dz * side), cz + (dz * u) + (dx * side));
+                var e = Edges[step.Edge];
+                int n = e.X.Length;
+                for (int k = road.Count == 0 ? 0 : 1; k < n; k++)
+                {
+                    int i = step.Forward ? k : n - 1 - k;
+                    road.Add(e.X[i], e.Z[i]);
+                }
             }
 
-            path = path.Resample(10);
-            if (Hills(path.X[0], path.Z[0]) < Hills(path.X[path.Count - 1], path.Z[path.Count - 1])) path = path.Reversed();
+            // Offset to the west (the right-hand side going down the valley), smoothed.
+            var river = new Polyline();
+            var (sx, sz) = (road.X[0] - road.X[40], road.Z[0] - road.Z[40]);
+            double sl = Math.Sqrt((sx * sx) + (sz * sz));
+            var (ex, ez) = (road.X[road.Count - 1] - road.X[road.Count - 41], road.Z[road.Count - 1] - road.Z[road.Count - 41]);
+            double el = Math.Sqrt((ex * ex) + (ez * ez));
+            for (double u = 260; u > 0; u -= 20) river.Add(road.X[0] + (sx / sl * u) - (sz / sl * 170), road.Z[0] + (sz / sl * u) + (sx / sl * 170));
+            for (int i = 0; i < road.Count; i += 4)
+            {
+                var (nx, nz) = road.Normal(i);
+                // Normal() points left of the direction of travel; going down the valley, west is to the right.
+                river.Add(road.X[i] - (nx * 170), road.Z[i] - (nz * 170));
+            }
 
-            // Evenly falling water level from a bit below the ground at the source to a bit below at the mouth; the
-            // valley around it (BaseHeight) adapts the terrain to the river, not the other way round.
-            int n = path.Count;
-            double source = Hills(path.X[0], path.Z[0]) - 3, mouth = Math.Min(source - 4, Hills(path.X[n - 1], path.Z[n - 1]) - 3);
-            var level = new double[n];
-            for (int i = 0; i < n; i++) level[i] = source + ((mouth - source) * path.D[i] / path.Length);
-            return new River(path.X.ToArray(), path.Z.ToArray(), level, halfWidth: 7);
+            // Out of the valley: on in the last direction, bending gently.
+            double px = river.X[river.Count - 1], pz = river.Z[river.Count - 1];
+            double dx = ex / el, dz = ez / el;
+            for (int k = 1; k <= 150; k++)
+            {
+                double turn = 0.0025 * Math.Sin(k / 25.0);
+                (dx, dz) = ((dx * Math.Cos(turn)) - (dz * Math.Sin(turn)), (dx * Math.Sin(turn)) + (dz * Math.Cos(turn)));
+                px += dx * 20;
+                pz += dz * 20;
+                river.Add(px, pz);
+            }
+
+            // Smoothed over about 300 m: the river meanders more gently than the road and never folds on itself
+            // inside the road's tight bends (where it may cross under the road on a bridge).
+            river = river.Resample(20);
+            for (int pass = 0; pass < 3; pass++)
+            {
+                var smooth = new Polyline();
+                for (int i = 0; i < river.Count; i++)
+                {
+                    int lo = Math.Max(0, i - 7), hi = Math.Min(river.Count - 1, i + 7);
+                    double sx2 = 0, sz2 = 0;
+                    for (int k = lo; k <= hi; k++)
+                    {
+                        sx2 += river.X[k];
+                        sz2 += river.Z[k];
+                    }
+
+                    smooth.Add(sx2 / (hi - lo + 1), sz2 / (hi - lo + 1));
+                }
+
+                river = smooth;
+            }
+
+            river = river.Resample(10);
+            int count = river.Count;
+            var level = new double[count];
+            double previous = double.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                level[i] = Math.Min(previous, _floor!.Height(river.X[i], river.Z[i]) - 2);
+                previous = level[i];
+            }
+
+            return new River(river.X.ToArray(), river.Z.ToArray(), level, halfWidth: 7);
         }
 
         private void FindBridges()
@@ -644,6 +710,18 @@ namespace FreeVelo.Core.World.Gen
             }
         }
 
+        /// <summary>Valley roads rise gently onto their bridges (deck 4.5 m above the water).</summary>
+        private void LiftBridges()
+        {
+            foreach (var b in Bridges)
+            {
+                var e = Edges[b.Edge];
+                if (e.Kind == RoadKind.Climb) continue;
+                double deck = b.WaterLevel + 4.5;
+                for (int i = 0; i < e.E.Length; i++) e.E[i] = Math.Max(e.E[i], deck - (0.03 * Math.Abs(e.D[i] - b.DistanceM)));
+            }
+        }
+
         private static bool Intersect(double ax, double az, double bx, double bz, double cx, double cz, double dx, double dz, out double t, out double u)
         {
             double rX = bx - ax, rZ = bz - az, sX = dx - cx, sZ = dz - cz;
@@ -655,23 +733,41 @@ namespace FreeVelo.Core.World.Gen
             return t >= 0 && t < 1 && u >= 0 && u < 1;
         }
 
-        /// <summary>A few lakes in low ground, clear of roads and the river.</summary>
+        /// <summary>A lake or two on the floor of the second valley, beside the road and clear of everything.</summary>
         private void MakeLakes(Random random)
         {
-            var (minX, minZ, maxX, maxZ) = Bounds;
-            var candidates = new List<(double X, double Z, double H)>();
-            for (double x = minX - 300; x <= maxX + 300; x += 70)
+            // The big lake: an ellipse with a slightly irregular shore; the road goes round it.
+            var big = Valleys.BigLake;
+            var bigShape = new double[24];
+            for (int i = 0; i < bigShape.Length; i++)
             {
-                for (double z = minZ - 300; z <= maxZ + 300; z += 70) candidates.Add((x, z, BaseHeight(x, z)));
+                double a = i * Math.PI * 2 / bigShape.Length;
+                double r = 1 / Math.Sqrt(Math.Pow(Math.Cos(a) / big.RX, 2) + Math.Pow(Math.Sin(a) / big.RZ, 2));
+                bigShape[i] = r / big.RZ * (0.94 + (0.1 * Noise.Random01(i, 7, _seed + 11)));
             }
 
-            foreach (var c in candidates.OrderBy(c => c.H + (random.NextDouble() * 6)))
+            AddLake(big.X, big.Z, big.RZ, bigShape);
+
+            var candidates = new List<(double X, double Z)>();
+            foreach (var e in Edges.Where(e => e.Kind == RoadKind.Valley && e.IsMainLoop && (e.From == Valleys.Trafon || e.To == Valleys.Laerchwald || e.From == Valleys.Laerchwald)))
+            {
+                var path = new Polyline();
+                for (int i = 0; i < e.X.Length; i++) path.Add(e.X[i], e.Z[i]);
+                for (int i = 60; i < path.Count - 60; i += 40)
+                {
+                    var (nx, nz) = path.Normal(i);
+                    foreach (double side in new[] { -300.0, 300 }) candidates.Add((e.X[i] + (nx * side), e.Z[i] + (nz * side)));
+                }
+            }
+
+            foreach (var c in candidates.OrderBy(_ => random.NextDouble()))
             {
                 if (Lakes.Count >= 3) break;
-                double radius = 70 + (random.NextDouble() * 90);
+                double radius = 70 + (random.NextDouble() * 70);
                 if (DistanceToRoads(c.X, c.Z) < radius * 1.25 + 70) continue;
                 if (DistanceToRiver(c.X, c.Z) < radius * 1.25 + 90) continue;
-                if (Lakes.Any(l => Math.Sqrt(((l.X - c.X) * (l.X - c.X)) + ((l.Z - c.Z) * (l.Z - c.Z))) < l.Radius + radius + 250)) continue;
+                if (ValleyDistance(c.X, c.Z) > 380) continue; // on the flat floor
+                if (Lakes.Any(l => Math.Sqrt(((l.X - c.X) * (l.X - c.X)) + ((l.Z - c.Z) * (l.Z - c.Z))) < 2500)) continue;
 
                 var shape = new double[24];
                 for (int i = 0; i < shape.Length; i++) shape[i] = 0.82 + (0.3 * Noise.Random01(i, Lakes.Count, _seed + 5));
@@ -681,20 +777,26 @@ namespace FreeVelo.Core.World.Gen
                     for (int i = 0; i < shape.Length; i++) shape[i] = (copy[(i + shape.Length - 1) % shape.Length] + (2 * copy[i]) + copy[(i + 1) % shape.Length]) / 4;
                 }
 
-                var probe = new Lake(c.X, c.Z, radius, shape, 0);
-                double shore = double.MaxValue;
-                for (int a = 0; a < 48; a++)
-                {
-                    double angle = a * Math.PI * 2 / 48;
-                    for (double q = 1.0; q <= 1.6; q += 0.3)
-                    {
-                        double r = probe.RadiusAt(angle) * q;
-                        shore = Math.Min(shore, BaseHeight(c.X + (Math.Cos(angle) * r), c.Z + (Math.Sin(angle) * r)));
-                    }
-                }
-
-                Lakes.Add(new Lake(c.X, c.Z, radius, shape, shore - 0.6));
+                AddLake(c.X, c.Z, radius, shape);
             }
+        }
+
+        /// <summary>A lake whose water is a little below the lowest ground around it.</summary>
+        private void AddLake(double x, double z, double radius, double[] shape)
+        {
+            var probe = new Lake(x, z, radius, shape, 0);
+            double shore = double.MaxValue;
+            for (int a = 0; a < 48; a++)
+            {
+                double angle = a * Math.PI * 2 / 48;
+                for (double q = 1.0; q <= 1.6; q += 0.3)
+                {
+                    double r = probe.RadiusAt(angle) * q;
+                    shore = Math.Min(shore, BaseHeight(x + (Math.Cos(angle) * r), z + (Math.Sin(angle) * r)));
+                }
+            }
+
+            Lakes.Add(new Lake(x, z, radius, shape, shore - 0.6));
         }
 
         public double DistanceToRoads(double x, double z)
@@ -714,171 +816,6 @@ namespace FreeVelo.Core.World.Gen
             double best = double.MaxValue;
             for (int i = 0; i < River.X.Length; i++) best = Math.Min(best, ((River.X[i] - x) * (River.X[i] - x)) + ((River.Z[i] - z) * (River.Z[i] - z)));
             return Math.Sqrt(best);
-        }
-
-        // ------------------------------------------------------------------ elevation
-
-        /// <summary>
-        /// Road heights: the terrain smoothed along the road, raised to clear the river at bridges, with the same
-        /// height where roads meet and at most <see cref="MaxGrade"/>.
-        /// </summary>
-        private void SetElevations()
-        {
-            var mountainNodes = new HashSet<int>(Edges.Where(e => e.Kind != RoadKind.Home).SelectMany(e => new[] { e.From, e.To }));
-            var homeNodes = new HashSet<int>(Edges.Where(e => e.Kind == RoadKind.Home).SelectMany(e => new[] { e.From, e.To }));
-            foreach (var node in Nodes)
-            {
-                if (mountainNodes.Contains(node.Id) && !homeNodes.Contains(node.Id)) continue; // feet and summits: set by the plan
-                double sum = 0;
-                int count = 0;
-                for (int dx = -1; dx <= 1; dx++)
-                {
-                    for (int dz = -1; dz <= 1; dz++)
-                    {
-                        sum += BaseHeight(node.X + (dx * 40), node.Z + (dz * 40));
-                        count++;
-                    }
-                }
-
-                node.Elevation = sum / count;
-            }
-
-            foreach (var e in Edges)
-            {
-                if (e.Kind != RoadKind.Home)
-                {
-                    MountainElevations(e);
-                    continue;
-                }
-
-                int n = e.X.Length;
-                var raw = new double[n];
-                for (int i = 0; i < n; i++) raw[i] = BaseHeight(e.X[i], e.Z[i]);
-                var smooth = Smooth(raw, 16);
-                FitEnds(e, smooth);
-
-                foreach (var b in Bridges.Where(b => b.Edge == e.Id))
-                {
-                    double deck = b.WaterLevel + 4.5;
-                    for (int i = 0; i < n; i++) smooth[i] = Math.Max(smooth[i], deck - (0.055 * Math.Abs(e.D[i] - b.DistanceM)));
-                }
-
-                smooth = Smooth(smooth, 5);
-                FitEnds(e, smooth);
-                for (int pass = 0; pass < 4; pass++) LimitGrade(e, smooth);
-                Array.Copy(smooth, e.E, n);
-            }
-        }
-
-        /// <summary>
-        /// Climbs: the GPX elevations (shifted to the world's height). Connector: level between the equal summits with a
-        /// gentle rise in the middle. Access roads: an even gradient from the junction to the foot, eased at both ends,
-        /// lifted over the river where they cross it.
-        /// </summary>
-        private void MountainElevations(RoadEdge e)
-        {
-            int n = e.X.Length;
-            var m = Mountain!;
-            if (e.Kind == RoadKind.Climb)
-            {
-                var climb = m.Find(e.ClimbId!)!;
-                for (int i = 0; i < n; i++) e.E[i] = climb.Elevation(i);
-                return;
-            }
-
-            double a = Nodes[e.From].Elevation, b = Nodes[e.To].Elevation;
-            var h = new double[n];
-            if (e.Kind == RoadKind.Connector)
-            {
-                for (int i = 0; i < n; i++) h[i] = a + ((b - a) * e.D[i] / e.Length) + (12 * Math.Sin(Math.PI * e.D[i] / e.Length));
-            }
-            else
-            {
-                // Inside the home world's terrain grid the road follows the ground like the home roads (that ground
-                // stays as it is); from where it leaves the grid, an even gradient to the foot, eased at both ends.
-                var (minX, minZ, maxX, maxZ) = Terrain.GridRect(this);
-                double margin = 60;
-                int exit = 0;
-                for (int i = 0; i < n; i++)
-                {
-                    if (e.X[i] > minX - margin && e.X[i] < maxX + margin && e.Z[i] > minZ - margin && e.Z[i] < maxZ + margin) exit = i;
-                }
-
-                var ground = new double[n];
-                for (int i = 0; i < n; i++) ground[i] = BaseHeight(e.X[i], e.Z[i]);
-                ground = Smooth(ground, 16);
-                double shift = a - ground[0];
-                double start = ground[exit] + shift, along = e.Length - e.D[exit];
-                for (int i = 0; i < n; i++)
-                {
-                    if (i <= exit)
-                    {
-                        h[i] = ground[i] + shift;
-                        continue;
-                    }
-
-                    double f = (e.D[i] - e.D[exit]) / along;
-                    double ease = Math.Min(1, Math.Min(e.D[i] - e.D[exit], e.Length - e.D[i]) / 150);
-                    double t = f + ((SmoothStep(f) - f) * (1 - ease));
-                    h[i] = start + ((b - start) * t);
-                }
-            }
-
-            foreach (var bridge in Bridges.Where(br => br.Edge == e.Id))
-            {
-                double deck = bridge.WaterLevel + 4.5;
-                for (int i = 0; i < n; i++) h[i] = Math.Max(h[i], deck - (0.055 * Math.Abs(e.D[i] - bridge.DistanceM)));
-            }
-
-            for (int pass = 0; pass < 4; pass++) LimitGrade(e, h);
-            Array.Copy(h, e.E, n);
-        }
-
-        private void FitEnds(RoadEdge e, double[] h)
-        {
-            int n = h.Length;
-            double a = Nodes[e.From].Elevation - h[0], b = Nodes[e.To].Elevation - h[n - 1];
-            for (int i = 0; i < n; i++)
-            {
-                double f = e.D[i] / e.Length;
-                h[i] += (a * (1 - f)) + (b * f);
-            }
-        }
-
-        private static void LimitGrade(RoadEdge e, double[] h)
-        {
-            int n = h.Length;
-            for (int i = 1; i < n - 1; i++)
-            {
-                double max = (e.D[i] - e.D[i - 1]) * MaxGrade;
-                h[i] = Math.Max(h[i - 1] - max, Math.Min(h[i - 1] + max, h[i]));
-            }
-
-            for (int i = n - 2; i > 0; i--)
-            {
-                double max = (e.D[i + 1] - e.D[i]) * MaxGrade;
-                h[i] = Math.Max(h[i + 1] - max, Math.Min(h[i + 1] + max, h[i]));
-            }
-        }
-
-        private static double[] Smooth(double[] v, int radius)
-        {
-            int n = v.Length;
-            var result = new double[n];
-            for (int i = 0; i < n; i++)
-            {
-                double sum = 0, weight = 0;
-                for (int k = Math.Max(0, i - radius); k <= Math.Min(n - 1, i + radius); k++)
-                {
-                    double w = radius + 1 - Math.Abs(k - i);
-                    sum += v[k] * w;
-                    weight += w;
-                }
-
-                result[i] = sum / weight;
-            }
-
-            return result;
         }
     }
 

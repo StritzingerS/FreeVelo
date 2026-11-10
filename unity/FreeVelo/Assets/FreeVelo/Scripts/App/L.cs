@@ -281,7 +281,8 @@ namespace FreeVelo.App
 
             // World
             ["world_name"] = ("Hill country", "Hügelland"),
-            ["main_loop"] = ("Main loop", "Hauptrunde"),
+            ["main_loop"] = ("Valley round", "Talrunde"),
+            ["alm_loop"] = ("Alm round", "Almrunde"),
             ["side_road"] = ("Side road", "Nebenstraße"),
             ["gravel_road"] = ("Gravel road", "Schotterweg"),
             ["junction"] = ("Junction", "Kreuzung"),

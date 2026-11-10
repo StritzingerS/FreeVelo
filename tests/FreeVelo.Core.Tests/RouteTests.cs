@@ -104,17 +104,19 @@ public class RouteTests
         // Stelvio: 5 m points, hairpins turn up to 90° at a single point. Riding in 0.5 m steps the heading
         // must never jump (the bike would snap to the next segment's direction).
         var route = BuiltInRoutes.Get(BuiltInRoutes.StelvioId);
-        double maxStep = 0;
+        double maxStep = 0, at = 0;
         double last = route.Sample(0).HeadingRad;
         for (double d = 0.5; d < route.LengthM; d += 0.5)
         {
             double h = route.Sample(d).HeadingRad;
             double dh = Math.Abs(Math.IEEERemainder(h - last, 2 * Math.PI)) * 180 / Math.PI;
+            if (dh > maxStep) at = d;
             maxStep = Math.Max(maxStep, dh);
             last = h;
         }
 
-        Assert.True(maxStep < 10, $"heading jumped {maxStep:0.0}°");
+        var p = route.Sample(at);
+        Assert.True(maxStep < 10, $"heading jumped {maxStep:0.0}° at {at:0} m ({p.X:0}, {p.Z:0})");
     }
 
     /// <summary>Largest angle (degrees) between where the bike points and where it actually moves.</summary>

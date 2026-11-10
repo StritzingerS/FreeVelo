@@ -84,10 +84,10 @@ namespace FreeVelo.UI
         /// <summary>Not in a ride: join with a code, create one, or pick an open ride.</summary>
         private int _newRoute;
 
-        /// <summary>Routes a group ride can take: the main loop or round the mountain from either climb.</summary>
-        private static readonly string[] RouteIds = { BuiltInRoutes.DefaultId, BuiltInRoutes.StelvioId, BuiltInRoutes.AlpeId };
+        /// <summary>Routes a group ride can take: the valley round, the Alm round or round the mountain from either climb.</summary>
+        private static readonly string[] RouteIds = { BuiltInRoutes.DefaultId, BuiltInRoutes.AlmId, BuiltInRoutes.StelvioId, BuiltInRoutes.AlpeId };
 
-        private static string RouteName(string id) => id == BuiltInRoutes.StelvioId ? "Stelvio" : id == BuiltInRoutes.AlpeId ? "Alpe d'Huez" : L.Get("main_loop");
+        private static string RouteName(string id) => id == BuiltInRoutes.StelvioId ? "Stelvio" : id == BuiltInRoutes.AlpeId ? "Alpe d'Huez" : id == BuiltInRoutes.AlmId ? L.Get("alm_loop") : L.Get("main_loop");
 
         private void DrawGroupStart(Rect c)
         {

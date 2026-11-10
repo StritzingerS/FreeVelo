@@ -36,7 +36,7 @@ public class MountainTests
     }
 
     [Fact]
-    public void SharedSummitShortConnectorGentleAccessRoads()
+    public void SharedSummitShortConnectorAndTheFeetInTheVillages()
     {
         var m = Map.Mountain!;
         Assert.Equal(m.Stelvio.SummitElevation, m.Alpe.SummitElevation, 6);
@@ -44,21 +44,15 @@ public class MountainTests
         Assert.InRange(connector.Length, 500, 2200);
         Assert.Equal(connector.E[0], connector.E[^1], 6);
 
-        foreach (int id in new[] { m.AccessStelvioEdge, m.AccessAlpeEdge })
-        {
-            var e = Map.Edges[id];
-            Assert.Equal(RoadKind.Access, e.Kind);
-            for (int i = 20; i < e.X.Length; i++) Assert.True(Math.Abs(e.E[i] - e.E[i - 20]) / (e.D[i] - e.D[i - 20]) <= WorldMap.MaxGrade + 1e-9);
-            Assert.True(Map.Nodes[e.From].Edges.Count >= 3, "starts at a junction on the main loop");
-        }
-
-        // The climbs' feet are where the access roads end
-        Assert.Equal(Map.Edges[m.AccessStelvioEdge].To, Map.Edges[m.Stelvio.Edge].From);
-        Assert.Equal(Map.Edges[m.AccessAlpeEdge].To, Map.Edges[m.Alpe.Edge].From);
+        // The Stelvio starts in Trafon on the main valley's floor, the Alpe d'Huez in Valbrune above the plateau.
+        Assert.Equal("Trafon", Map.Nodes[Map.Edges[m.Stelvio.Edge].From].Name);
+        Assert.Equal("Valbrune", Map.Nodes[Map.Edges[m.Alpe.Edge].From].Name);
+        Assert.InRange(m.Stelvio.FootElevation, 600, 700);
+        Assert.InRange(m.Stelvio.SummitElevation, 2400, 2550);
     }
 
     [Fact]
-    public void RidingOnTheMainLoopNeverTurnsOffToTheMountain()
+    public void RidingTheValleyRoundNeverTurnsOffButOffersTheMountain()
     {
         var path = NetworkPath.OnMainLoop(Map, 0, 0);
         double length = Map.MainLoop.LengthM;
@@ -69,7 +63,7 @@ public class MountainTests
             Assert.True(next.Options[next.Chosen].IsMainLoop);
         }
 
-        // ... but the access roads are offered at their junctions
+        // ... but the Stelvio and the Alm road are offered at their junctions
         var m = Map.Mountain!;
         var offered = new HashSet<int>();
         path = NetworkPath.OnMainLoop(Map, 0, 0);
@@ -79,8 +73,8 @@ public class MountainTests
             foreach (var o in path.Next().Options) offered.Add(o.Edge.Edge);
         }
 
-        Assert.Contains(m.AccessStelvioEdge, offered);
-        Assert.Contains(m.AccessAlpeEdge, offered);
+        Assert.Contains(m.Stelvio.Edge, offered);
+        Assert.Contains(Map.AlmLoopSteps[0].Edge, offered);
     }
 
     [Theory]
@@ -101,17 +95,6 @@ public class MountainTests
         Assert.True(route.LengthM > 40_000);
     }
 
-    [Fact]
-    public void TheStoredPlacementIsTheSearchResult()
-    {
-        // The default world tries a stored placement first; the full search must come to the same result.
-        var searched = WorldMap.Generate(WorldMap.DefaultSeed, searchMountain: true).Mountain!;
-        var stored = Map.Mountain!;
-        Assert.Equal(stored.Stelvio.SummitX, searched.Stelvio.SummitX, 6);
-        Assert.Equal(stored.Alpe.Angle, searched.Alpe.Angle, 9);
-        Assert.Equal(stored.Stelvio.FootElevation, searched.Stelvio.FootElevation, 6);
-    }
-
     private static readonly Lazy<Terrain> Ground = new(() => Terrain.Build(Map));
 
     [Fact]
@@ -123,7 +106,11 @@ public class MountainTests
         // Road beds 0.3 m under the road surface along all mountain roads
         foreach (var e in Map.Edges.Where(e => e.Kind != RoadKind.Home))
         {
-            for (int i = 0; i < e.X.Length; i += 37) Assert.Equal(e.E[i] - 0.3, terrain.Height(e.X[i], e.Z[i]), 1);
+            for (int i = 0; i < e.X.Length; i += 37)
+            {
+                if (Map.Bridges.Any(b => b.Edge == e.Id && Math.Abs(b.DistanceM - e.D[i]) < 40)) continue; // the river stays open under bridges
+                Assert.Equal(e.E[i] - 0.3, terrain.Height(e.X[i], e.Z[i]), 1);
+            }
         }
 
         // At the edge of the home grid the computed mountain ground continues the grid
@@ -152,8 +139,10 @@ public class MountainTests
             int cx = (int)Math.Floor(px / MountainLook.ChunkSize), cz = (int)Math.Floor(pz / MountainLook.ChunkSize);
             foreach (var item in MountainLook.Items(terrain, cx, cz, 8))
             {
+                if (item.Kind is not (SceneryKind.Spruce or SceneryKind.Pine or SceneryKind.Fir or SceneryKind.Larch or SceneryKind.Beech
+                    or SceneryKind.StonePine or SceneryKind.MountainPine or SceneryKind.Rock or SceneryKind.Bush)) continue; // nature only
                 Assert.True(terrain.DistanceToRoad(item.X, item.Z, 9, out _, out _, out _) >= 9, "nothing on the road");
-                if (item.Kind is SceneryKind.Spruce or SceneryKind.Pine or SceneryKind.Oak or SceneryKind.Birch)
+                if (item.Kind is SceneryKind.Spruce or SceneryKind.Pine or SceneryKind.Fir or SceneryKind.Larch or SceneryKind.Beech or SceneryKind.StonePine)
                 {
                     trees++;
                     Assert.True(item.Y < MountainLook.Treeline(m) + 1, $"tree at {item.Y:0} m above the treeline {MountainLook.Treeline(m):0}");

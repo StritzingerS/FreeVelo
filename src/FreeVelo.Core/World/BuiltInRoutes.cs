@@ -9,13 +9,17 @@ namespace FreeVelo.Core.World
     /// </summary>
     public static class BuiltInRoutes
     {
-        /// <summary>The 10 km rolling loop of solo rides; used when a group ride names no route.</summary>
-        public const string DefaultId = "loop-10k";
+        /// <summary>The valley round (flat, through the villages); used when a group ride names no route.</summary>
+        public const string DefaultId = "valley";
+
+        /// <summary>The Alm round: up the Alm road with its hairpins, over the plateau, down and back along the valley.</summary>
+        public const string AlmId = "alm";
 
         private static readonly Dictionary<string, Func<Route>> Factories = new Dictionary<string, Func<Route>>
         {
-            // The main loop of the generated world (road network with junctions, river, lakes).
+            // The valley round of the world (two valleys, river, lakes, villages).
             [DefaultId] = () => Gen.WorldMap.Default.MainLoop,
+            [AlmId] = () => Gen.WorldMap.Default.AlmLoop(),
 
             // Round the mountain from the foot of each famous climb (up, over the top, down the other side, back).
             [StelvioId] = () => Gen.WorldMap.Default.ClimbLoop(Gen.ClimbData.Stelvio)!,

@@ -17,6 +17,51 @@ namespace FreeVelo.Core.World.Gen
         Reed,
         House,
         Barn,
+
+        // The Alps (see SceneryModelsAlpine.cs)
+        Larch,
+        Fir,
+        Beech,
+        Maple,
+        Linden,
+        Alder,
+        Willow,
+        Apple,
+        StonePine,
+        MountainPine,
+        AlpineHouse,
+        Farmhouse,
+        Church,
+        Inn,
+        Shop,
+        HayHut,
+        AlpineHut,
+        Shrine,
+        Maypole,
+        Fence,
+        VillageSign,
+
+        // Around the houses
+        PathStone,
+        Yard,
+        GardenFence,
+        FlowerBed,
+        Bench,
+        BeerTable,
+
+        // Trades on the outskirts
+        Workshop,
+        Sawmill,
+        FireStation,
+        LogPile,
+        LumberStack,
+        Car,
+
+        /// <summary>Junction signpost (variant = number of boards − 1); the app writes the names.</summary>
+        DirectionSign,
+
+        /// <summary>A 5 m piece of a narrow lane (village side lane: asphalt; farm track: gravel).</summary>
+        Lane,
     }
 
     /// <summary>A model in two levels of detail, one mesh per material, in local space (origin on the ground, front +Z).</summary>
@@ -46,7 +91,7 @@ namespace FreeVelo.Core.World.Gen
     /// Procedural models of the world: spruce, pine, oak, birch and poplar trees, bushes, rocks, reeds, houses and
     /// barns – a few variants each, low-poly but with organic, irregular shapes. Deterministic and cached.
     /// </summary>
-    public static class SceneryModels
+    public static partial class SceneryModels
     {
         public const int Variants = 3;
 
@@ -79,7 +124,8 @@ namespace FreeVelo.Core.World.Gen
             SceneryKind.Poplar => 2.2,
             SceneryKind.Bush => 1.5,
             SceneryKind.Rock => 1.6,
-            _ => 1.2,
+            SceneryKind.Reed => 1.2,
+            _ => AlpineRadius(kind),
         };
 
         private static SceneryModel Build(SceneryKind kind, int v)
@@ -99,6 +145,7 @@ namespace FreeVelo.Core.World.Gen
                 case SceneryKind.Reed: Reed(near, v, random); break;
                 case SceneryKind.House: House(near, far, v); break;
                 case SceneryKind.Barn: Barn(near, far, v); break;
+                default: BuildAlpine(kind, near, far, v, random); break;
             }
 
             return new SceneryModel(near.Done(), far.Done());

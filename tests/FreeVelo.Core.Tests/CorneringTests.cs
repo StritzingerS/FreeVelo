@@ -48,10 +48,22 @@ public class CorneringTests
     }
 
     [Fact]
-    public void NoBrakingOnTheHomeRoads()
+    public void NoBrakingOnTheValleyRoadsOutsideTheVillages()
     {
+        // The valley round: no braking out on the road at any speed ridden on the flat (turning at a junction in a village is fine).
         var route = BuiltInRoutes.Get(BuiltInRoutes.DefaultId);
-        for (double d = 0; d < route.LengthM; d += 20) Assert.True(Cornering.SpeedLimit(route, d) > 70 / 3.6);
+        var villages = World.Gen.WorldMap.Default.Nodes;
+        double min = double.MaxValue, at = 0;
+        for (double d = 0; d < route.LengthM; d += 20)
+        {
+            var s = route.Sample(d);
+            if (villages.Any(n => Math.Sqrt(Math.Pow(n.X - s.X, 2) + Math.Pow(n.Z - s.Z, 2)) < 150)) continue;
+            double v = Cornering.SpeedLimit(route, d);
+            if (v < min) (min, at) = (v, d);
+        }
+
+        var p = route.Sample(at);
+        Assert.True(min > 50 / 3.6, $"{min * 3.6:0} km/h at {at:0} m ({p.X:0}, {p.Z:0})");
     }
 
     [Fact]

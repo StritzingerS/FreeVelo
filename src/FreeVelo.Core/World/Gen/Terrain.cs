@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace FreeVelo.Core.World.Gen
@@ -31,11 +32,15 @@ namespace FreeVelo.Core.World.Gen
             Nx = (int)Math.Round((rect.MaxX - rect.MinX) / cell) + 1;
             Nz = (int)Math.Round((rect.MaxZ - rect.MinZ) / cell) + 1;
             foreach (var e in map.Edges) _roads.Add(new SegmentIndex(e.X, e.Z, 40));
+            Corners = JunctionCorners.Build(map);
             if (map.River != null) _river = new SegmentIndex(map.River.X, map.River.Z, 40);
             _heights = new float[Nx * Nz];
         }
 
         public WorldMap Map => _map;
+
+        /// <summary>The rounded corners between roads at the junctions (the ground is lowered under them).</summary>
+        public List<JunctionCorner> Corners { get; }
 
         /// <summary>
         /// The home world's detailed grid: its roads and water plus <see cref="Margin"/>, rounded out to whole chunks
@@ -51,6 +56,9 @@ namespace FreeVelo.Core.World.Gen
 
         /// <summary>The mountain's shape (null for worlds without a mountain). Outside the home grid, heights come from it.</summary>
         public MountainTerrain? Mountain { get; private set; }
+
+        /// <summary>Villages, farms and huts (set once laid out, see <see cref="Gen.Landscape.Generate"/>); nature keeps off them.</summary>
+        public Landscape? Landscape { get; set; }
 
         public double MinX { get; }
 
@@ -85,7 +93,7 @@ namespace FreeVelo.Core.World.Gen
         // ------------------------------------------------------------------ prepared worlds
 
         /// <summary>Bump when the terrain generation changes (old saved worlds are then regenerated).</summary>
-        public const int FormatVersion = 1;
+        public const int FormatVersion = 3;
         private const uint Magic = 0x4C565646; // "FVVL"
 
         /// <summary>
@@ -180,7 +188,100 @@ namespace FreeVelo.Core.World.Gen
         }
 
         /// <summary>Grid height at a grid point.</summary>
-        public float At(int x, int z) => _heights[(Math.Max(0, Math.Min(Nz - 1, z)) * Nx) + Math.Max(0, Math.Min(Nx - 1, x))];
+        public float At(int x, int z) => (_padded ?? _heights)[(Math.Max(0, Math.Min(Nz - 1, z)) * Nx) + Math.Max(0, Math.Min(Nx - 1, x))];
+
+        // ------------------------------------------------------------------ building pads
+
+        /// <summary>A level pad under a building: footprint (half sizes, rotation) and its height.</summary>
+        public readonly struct Pad
+        {
+            public Pad(double x, double z, double halfX, double halfZ, double rotationDeg, double height)
+            {
+                X = x; Z = z; HalfX = halfX; HalfZ = halfZ; Height = height;
+                Sin = Math.Sin(rotationDeg * Math.PI / 180);
+                Cos = Math.Cos(rotationDeg * Math.PI / 180);
+            }
+
+            public double X { get; }
+            public double Z { get; }
+            public double HalfX { get; }
+            public double HalfZ { get; }
+            public double Height { get; }
+            public double Sin { get; }
+            public double Cos { get; }
+
+            /// <summary>Weight 1 on the pad (and 1.5 m round it), easing to 0 over <see cref="PadBlend"/> metres.</summary>
+            public double Weight(double x, double z)
+            {
+                double dx = x - X, dz = z - Z;
+                double u = (dx * Cos) - (dz * Sin), v = (dx * Sin) + (dz * Cos); // into the building's frame
+                double ou = Math.Max(0, Math.Abs(u) - HalfX - 1.5), ov = Math.Max(0, Math.Abs(v) - HalfZ - 1.5);
+                double d = Math.Sqrt((ou * ou) + (ov * ov));
+                return d >= PadBlend ? 0 : 1 - SmoothStep(d / PadBlend);
+            }
+        }
+
+        /// <summary>How far round a building pad the ground eases back into the slope.</summary>
+        public const double PadBlend = 8;
+
+        private Pad[] _pads = new Pad[0];
+        private float[]? _padded; // the home grid with the pads (the saved grid stays without them)
+
+        /// <summary>
+        /// Levels the ground under buildings (the landscape sets them once it has placed its buildings): cut into the
+        /// slope uphill, filled downhill, easing back over a few metres; the road beds stay as they are.
+        /// </summary>
+        public void SetPads(IReadOnlyList<Pad> pads)
+        {
+            _pads = pads.ToArray();
+            var padded = (float[])_heights.Clone();
+            foreach (var pad in _pads)
+            {
+                double reach = Math.Sqrt((pad.HalfX * pad.HalfX) + (pad.HalfZ * pad.HalfZ)) + 1.5 + PadBlend;
+                int x0 = (int)Math.Floor((pad.X - reach - MinX) / Cell), x1 = (int)Math.Ceiling((pad.X + reach - MinX) / Cell);
+                int z0 = (int)Math.Floor((pad.Z - reach - MinZ) / Cell), z1 = (int)Math.Ceiling((pad.Z + reach - MinZ) / Cell);
+                for (int gz = Math.Max(0, z0); gz <= Math.Min(Nz - 1, z1); gz++)
+                {
+                    for (int gx = Math.Max(0, x0); gx <= Math.Min(Nx - 1, x1); gx++)
+                    {
+                        double x = MinX + (gx * Cell), z = MinZ + (gz * Cell);
+                        double w = pad.Weight(x, z);
+                        if (w <= 0 || OnRoadBed(x, z)) continue;
+                        int i = (gz * Nx) + gx;
+                        padded[i] = (float)(padded[i] + ((pad.Height - padded[i]) * w));
+                    }
+                }
+            }
+
+            _padded = _pads.Length > 0 ? padded : null;
+        }
+
+        private double ApplyPads(double x, double z, double h)
+        {
+            if (_pads.Length == 0) return h;
+            bool checkedRoad = false;
+            foreach (var pad in _pads)
+            {
+                if (Math.Abs(pad.X - x) > 40 || Math.Abs(pad.Z - z) > 40) continue;
+                double w = pad.Weight(x, z);
+                if (w <= 0) continue;
+                if (!checkedRoad)
+                {
+                    if (OnRoadBed(x, z)) return h;
+                    checkedRoad = true;
+                }
+
+                h += (pad.Height - h) * w;
+            }
+
+            return h;
+        }
+
+        private bool OnRoadBed(double x, double z)
+        {
+            double d = DistanceToRoad(x, z, 6.5, out var road, out _, out _);
+            return road != null && d <= (road.Width / 2) + 1.3;
+        }
 
         /// <summary>True inside the detailed home grid (outside it the mountain's ground is computed on demand).</summary>
         public bool InGrid(double x, double z) => x >= MinX && x <= MaxX && z >= MinZ && z <= MaxZ;
@@ -188,7 +289,7 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>Ground height anywhere: the home grid (bilinear between grid points), or the mountain's ground.</summary>
         public double Height(double x, double z)
         {
-            if (!InGrid(x, z)) return Compute(x, z);
+            if (!InGrid(x, z)) return ApplyPads(x, z, Compute(x, z));
 
             double gx = (x - MinX) / Cell, gz = (z - MinZ) / Cell;
             int ix = (int)Math.Floor(gx), iz = (int)Math.Floor(gz);
@@ -196,6 +297,12 @@ namespace FreeVelo.Core.World.Gen
             double a = At(ix, iz), b = At(ix + 1, iz), c = At(ix, iz + 1), d = At(ix + 1, iz + 1);
             return ((a + ((b - a) * fx)) * (1 - fz)) + ((c + ((d - c) * fx)) * fz);
         }
+
+        /// <summary>
+        /// The ground as the app draws it close by (4 m mesh, kept under the roads next to it): what things placed on
+        /// the ground have to stand on.
+        /// </summary>
+        public double DrawnHeight(double x, double z) => Math.Min(Height(x, z), RoadCap(x, z, Cell));
 
         /// <summary>Slope (rise per metre) at a point.</summary>
         public double Slope(double x, double z)
@@ -241,11 +348,38 @@ namespace FreeVelo.Core.World.Gen
 
             double own = DistanceToRoad(x, z, 8, out var road, out _, out _);
             if (road != null && own <= (road.Width / 2) + 1.3) return double.PositiveInfinity;
+
+            // Detailed meshes (4 and 8 m): a triangle reaching over a road has its other corner on the road's bed (0.3 m under the surface), at most
+            // reachCells away. With this corner `beyond` metres outside the road's edge, the triangle stays under the
+            // surface (+0.05) at the edge if this corner is at most 0.35·reach/(reach − beyond) − 0.3 above the road
+            // there, less what the road climbs over that length. Close to the road that keeps the ground just below
+            // it; a few metres away a level plot a bit above the road keeps its ground (no pit before the houses).
             double cap = double.PositiveInfinity;
+            if (cellM > 8)
+            {
+                // Distant meshes are not carved under the roads: keep them below the lowest road within reach.
+                for (int i = 0; i < _roads.Count; i++)
+                {
+                    var e = _map.Edges[i];
+                    cap = Math.Min(cap, _roads[i].LowestWithin(x, z, (e.Width / 2) + reachCells, e.E) - 0.6);
+                }
+
+                return cap;
+            }
+
             for (int i = 0; i < _roads.Count; i++)
             {
                 var e = _map.Edges[i];
-                cap = Math.Min(cap, _roads[i].LowestWithin(x, z, (e.Width / 2) + reachCells, e.E) - 0.6);
+                double half = e.Width / 2;
+                double d = _roads[i].Nearest(x, z, half + reachCells, out int seg, out double f);
+                double beyond = d - half;
+                if (beyond >= reachCells || seg < 0 || seg >= e.E.Length - 1) continue;
+                if (beyond <= 1.3) continue; // on this road's bed: it carries the corner
+                double h = e.E[seg] + ((e.E[seg + 1] - e.E[seg]) * f);
+                double length = Math.Max(0.1, e.D[seg + 1] - e.D[seg]);
+                double grade = Math.Abs(e.E[seg + 1] - e.E[seg]) / length;
+                double allowance = (0.35 * reachCells / Math.Max(0.05, reachCells - beyond)) - 0.3 - (grade * reachCells);
+                cap = Math.Min(cap, h + allowance);
             }
 
             return cap;
@@ -312,7 +446,32 @@ namespace FreeVelo.Core.World.Gen
             {
                 double flat = (road.Width / 2) + 1.3;
                 double bed = roadHeight - 0.3;
+                // Where roads meet or split, the ground stays below every road surface there, not only the nearest.
+                if (roadDistance <= flat + BedBlend)
+                {
+                    for (int i = 0; i < _roads.Count; i++)
+                    {
+                        var other = _map.Edges[i];
+                        if (other == road) continue;
+                        bed = Math.Min(bed, _roads[i].LowestWithin(x, z, (other.Width / 2) + 1.3, other.E) - 0.3);
+                    }
+                }
+
                 h = roadDistance <= flat ? bed : bed + ((h - bed) * SmoothStep((roadDistance - flat) / BedBlend));
+            }
+
+            // Under the rounded junction corners, like under the roads (but a road's own bed stays as it is).
+            bool onRoadBed = road != null && roadDistance <= (road.Width / 2) + 1.3;
+            if (!nearRiver && !onRoadBed)
+            {
+                foreach (var c in Corners)
+                {
+                    if (x < c.MinX - BedBlend || x > c.MaxX + BedBlend || z < c.MinZ - BedBlend || z > c.MaxZ + BedBlend) continue;
+                    double d = c.Distance(x, z);
+                    if (d >= 1.3 + BedBlend) continue;
+                    double bed = c.CY - 0.3;
+                    h = d <= 1.3 ? Math.Min(h, bed) : Math.Min(h, bed + ((h - bed) * SmoothStep((d - 1.3) / BedBlend)));
+                }
             }
 
             return h;
