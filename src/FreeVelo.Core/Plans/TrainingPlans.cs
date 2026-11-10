@@ -147,6 +147,9 @@ namespace FreeVelo.Core.Plans
         public const string LongEndurance = "endurance-90";
         public const string RampTest = "ftp-ramp";
         public const int MinSessions = 3;
+
+        /// <summary>Endurance rides in recovery weeks: 10 % easier, below ~62 % FTP.</summary>
+        public const int RecoveryWeekPercent = -10;
         public const int MaxSessions = 5;
 
         public static readonly IReadOnlyList<PlanTemplate> All = new[]
@@ -155,14 +158,14 @@ namespace FreeVelo.Core.Plans
                 new LocalizedText("Aerobic base: endurance rides with tempo and sweet spot.", "Aerobe Grundlage: Ausdauerfahrten mit Tempo und Sweet Spot."),
                 8, 4, 12, new[] { "tempo-2x20", "sweetspot-3x15" }, false),
             new PlanTemplate("ftp-build", new LocalizedText("FTP Build", "FTP-Aufbau"),
-                new LocalizedText("Raise your FTP: sweet spot, threshold and over-unders, FTP test at the end.", "FTP steigern: Sweet Spot, Schwelle und Over-Unders, FTP-Test am Ende."),
-                8, 4, 12, new[] { "sweetspot-3x15", "threshold-2x20", "over-unders-3x10" }, true),
+                new LocalizedText("Raise your FTP: sweet spot, threshold, crisscross and over-unders, FTP test at the end.", "FTP steigern: Sweet Spot, Schwelle, Crisscross und Over-Unders, FTP-Test am Ende."),
+                8, 4, 12, new[] { "sweetspot-3x15", "threshold-2x20", "sweetspot-crisscross", "over-unders-3x10", "sweetspot-2x20" }, true),
             new PlanTemplate("vo2max", new LocalizedText("VO2max Block", "VO2max-Block"),
                 new LocalizedText("Short, hard intervals for top-end power, FTP test at the end.", "Kurze, harte Intervalle für die Spitzenleistung, FTP-Test am Ende."),
-                6, 4, 8, new[] { "vo2max-4x4", "vo2max-5x5", "40-20s" }, true),
+                6, 4, 8, new[] { "vo2max-4x4", "vo2max-5x5", "40-20s", "micro-bursts" }, true),
             new PlanTemplate("maintenance", new LocalizedText("Maintenance", "Erhaltung"),
-                new LocalizedText("Keep your fitness with little time: one sweet spot session, sprints and endurance.", "Form halten mit wenig Zeit: Sweet Spot, Sprints und Grundlage."),
-                4, 4, 12, new[] { "sweetspot-3x15", "sprints-8x15" }, false),
+                new LocalizedText("Keep your fitness with little time: sweet spot, sprints or micro-bursts, and endurance.", "Form halten mit wenig Zeit: Sweet Spot, Sprints oder Micro-Bursts und Grundlage."),
+                4, 4, 12, new[] { "sweetspot-3x15", "sprints-8x15", "sweetspot-crisscross", "micro-bursts" }, false),
         };
 
         public static PlanTemplate? Find(string id) => All.FirstOrDefault(t => t.Id == id);
@@ -228,10 +231,12 @@ namespace FreeVelo.Core.Plans
                         workout = Recovery;
                     }
 
+                    int adjust = 0;
                     if (recoveryWeek)
                     {
-                        // About −40 % volume: hard sessions become short endurance, endurance becomes recovery.
-                        if (kind == SessionKind.Key) (kind, workout) = (SessionKind.Endurance, Endurance);
+                        // About −40 % volume: hard sessions become short endurance, endurance becomes recovery. Easy
+                        // weeks stay below ~62 % FTP (Allen & Coggan): the endurance rides 10 % easier (68 → ~61 %).
+                        if (kind == SessionKind.Key) (kind, workout, adjust) = (SessionKind.Endurance, Endurance, RecoveryWeekPercent);
                         else (kind, workout) = (SessionKind.Recovery, Recovery);
                     }
 
@@ -240,7 +245,7 @@ namespace FreeVelo.Core.Plans
 
                     var date = monday.AddDays(((int)days[i] + 6) % 7);
                     if (date < notBefore) continue;
-                    result.Add(new PlannedSession { Date = date, workoutId = workout, Kind = kind, week = week });
+                    result.Add(new PlannedSession { Date = date, workoutId = workout, Kind = kind, week = week, adjustPercent = adjust });
                 }
             }
 

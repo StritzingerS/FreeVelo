@@ -150,4 +150,30 @@ public class PlanTests
         Assert.Equal(plan.sessions[3].workoutId, back.sessions[3].workoutId);
         Assert.Equal(5, back.weekdays.Length);
     }
+
+    [Fact]
+    public void RecoveryWeeksStayBelow62PercentAndNewWorkoutsAreUsed()
+    {
+        var days = new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
+        var plan = PlanTemplates.Create(PlanTemplates.Find("ftp-build")!, 8, days, new DateTime(2026, 11, 9));
+        foreach (var s in plan.sessions.Where(s => s.week == 3))
+        {
+            var w = BuiltInWorkouts.Find(s.workoutId)!;
+            double maxPercent = w.Flatten().Max(seg => seg.Block is SteadyBlock b ? b.Target.Value : 0) * s.Intensity;
+            Assert.True(maxPercent <= 62, $"{s.workoutId}: {maxPercent:0} %");
+        }
+
+        // All key workouts of the templates exist and stay under 2 hours (long indoor sessions are skipped).
+        foreach (var t in PlanTemplates.All)
+        {
+            foreach (string id in t.KeyWorkouts)
+            {
+                var w = BuiltInWorkouts.Find(id);
+                Assert.NotNull(w);
+                Assert.True(w!.TotalDurationS <= 2 * 3600, id);
+            }
+        }
+
+        Assert.Contains(plan.sessions, s => s.workoutId == "sweetspot-crisscross");
+    }
 }

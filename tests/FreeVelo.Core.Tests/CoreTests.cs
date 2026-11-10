@@ -88,7 +88,7 @@ public class WorkoutModelTests
     public void RepeatInfoIsSet()
     {
         var segments = BuiltInWorkouts.Vo2Max4x4().Flatten();
-        var intervals = segments.Where(s => s.Block is SteadyBlock b && b.Target.Value == 110).ToList();
+        var intervals = segments.Where(s => s.Block is SteadyBlock b && b.Target.Value == 113).ToList();
 
         Assert.Equal(4, intervals.Count);
         Assert.Equal("1/4", intervals[0].Repeat.ToString());
