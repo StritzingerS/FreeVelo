@@ -78,7 +78,12 @@ namespace FreeVelo.Core.World.Gen
             roads.Add(new PlannedRoad(Mitterbach, Laerchwald, Curve(p[Mitterbach], (500, -1550), (-150, -1300), (-800, -1750), (-1500, -1700), (-2200, -2150), (-2800, -2050), p[Laerchwald]), RoadKind.Valley));
 
             // Alm road up: north out of Kirchbach, then six long traverses with hairpins, then to Oberalm.
-            var stack = Switchbacks((250, 2700), (1, 0), (0, 1), traverse: 1250, rise: 170, count: 6, radius: 16);
+            // Each traverse and hairpin a little different, like real ones (lengths, angles, bows, radii).
+            var stack = Switchbacks((250, 2700), (1, 0), (0, 1),
+                traverses: new[] { 1400.0, 1300, 1250, 1350, 1150, 1150 },
+                rises: new[] { 210.0, 150, 250, 130, 220, 170 },
+                bows: new[] { 30.0, -18, 40, -20, 15, -28 },
+                radii: new[] { 14.0, 21, 12, 18, 15 });
             var top = stack[stack.Count - 1];
             nodes[Oberalm] = (top.X + 60, top.Z + 220);
             var up = new List<(double X, double Z)> { p[Kirchbach], (265, 2520) };
@@ -142,38 +147,45 @@ namespace FreeVelo.Core.World.Gen
         }
 
         /// <summary>
-        /// Hairpins up a slope: <paramref name="count"/> traverses of <paramref name="traverse"/> m, each gaining
-        /// <paramref name="rise"/> m uphill (<paramref name="up"/>), alternating along <paramref name="along"/>, joined by
-        /// half circles of <paramref name="radius"/> m. Dense points (2 m).
+        /// Hairpins up a slope: traverse k is <c>traverses[k]</c> m long, gains <c>rises[k]</c> m uphill (<paramref name="up"/>),
+        /// and bows sideways by <c>bows[k]</c> m (so neighbouring traverses are not parallel); they alternate along
+        /// <paramref name="along"/> and are joined by half circles of <c>radii[k]</c> m. Dense points (2 m).
         /// </summary>
         public static List<(double X, double Z)> Switchbacks((double X, double Z) start, (double X, double Z) along, (double X, double Z) up,
-            double traverse, double rise, int count, double radius)
+            double[] traverses, double[] rises, double[] bows, double[] radii)
         {
             var pts = new List<(double X, double Z)>();
             var p = start;
-            var dir = along;
+            int count = traverses.Length;
             for (int k = 0; k < count; k++)
             {
-                var q = (X: p.X + (dir.X * traverse) + (up.X * rise), Z: p.Z + (dir.Z * traverse) + (up.Z * rise));
-                int steps = (int)(traverse / 2);
+                double sign = k % 2 == 0 ? 1 : -1;
+                var dir = (X: along.X * sign, Z: along.Z * sign);
+                var q = (X: p.X + (dir.X * traverses[k]) + (up.X * rises[k]), Z: p.Z + (dir.Z * traverses[k]) + (up.Z * rises[k]));
+                int steps = (int)(traverses[k] / 2);
                 for (int i = 0; i <= steps; i++)
                 {
                     double f = i / (double)steps;
-                    // A slight bow, so the traverses are not ruler-straight.
-                    double bow = 22 * Math.Sin(Math.PI * f) * (k % 2 == 0 ? 1 : -1);
+                    double bow = bows[k] * Math.Sin(Math.PI * f);
                     pts.Add((p.X + ((q.X - p.X) * f) + (up.X * bow), p.Z + ((q.Z - p.Z) * f) + (up.Z * bow)));
                 }
 
                 if (k == count - 1) break;
-                var c = (X: q.X + (up.X * radius), Z: q.Z + (up.Z * radius));
+
+                // Half circle round to the next traverse, turning about the direction the road arrives in.
+                double cx = q.X - p.X, cz = q.Z - p.Z, cl = Math.Sqrt((cx * cx) + (cz * cz));
+                var d = (X: cx / cl, Z: cz / cl);
+                var u = (X: -d.Z, Z: d.X);
+                if ((u.X * up.X) + (u.Z * up.Z) < 0) u = (-u.X, -u.Z);
+                double r = radii[k];
+                var c = (X: q.X + (u.X * r), Z: q.Z + (u.Z * r));
                 for (int i = 1; i < 24; i++)
                 {
                     double t = Math.PI * i / 24;
-                    pts.Add((c.X - (up.X * radius * Math.Cos(t)) + (dir.X * radius * Math.Sin(t)), c.Z - (up.Z * radius * Math.Cos(t)) + (dir.Z * radius * Math.Sin(t))));
+                    pts.Add((c.X - (u.X * r * Math.Cos(t)) + (d.X * r * Math.Sin(t)), c.Z - (u.Z * r * Math.Cos(t)) + (d.Z * r * Math.Sin(t))));
                 }
 
-                p = (q.X + (up.X * 2 * radius), q.Z + (up.Z * 2 * radius));
-                dir = (-dir.X, -dir.Z);
+                p = (q.X + (u.X * 2 * r), q.Z + (u.Z * 2 * r));
             }
 
             return pts;
