@@ -284,11 +284,25 @@ namespace FreeVelo.World
                 }
             }
 
-            // Junctions: an asphalt pad covers where the roads overlap.
+            // Junctions: a pad between the road ends (their convex hull), so the edges run straight on round the
+            // outside instead of bulging into the meadow.
             foreach (var node in Map.Nodes)
             {
                 var c = new Vector3((float)node.X, (float)node.Elevation + 0.06f, (float)node.Z);
-                road.Disc(c, 6.2f, 24);
+                var corners = new List<Vector3>();
+                foreach (int id in node.Edges)
+                {
+                    var e = Map.Edges[id];
+                    bool start = e.From == node.Id;
+                    foreach (float s in new[] { 0f, 2f })
+                    {
+                        foreach (int side in new[] { -1, 1 }) corners.Add(EdgeSide(e, start, s, side));
+                    }
+                }
+
+                var hull = ConvexHull(corners);
+                for (int k = 0; k < hull.Length; k++) hull[k].y = c.y;
+                if (hull.Length >= 3) road.Fan(c, hull);
             }
 
             CreateMesh("Roads", road.ToMesh("Roads"), asphalt, false);
@@ -350,18 +364,23 @@ namespace FreeVelo.World
                     var pa = EdgeSide(a.Edge, a.Start, sa + reach, sideA);
                     var pb = EdgeSide(b.Edge, b.Start, sb + reach, sideB);
 
+                    // Outline: along road A's edge (tucked 0.3 m under its asphalt, so no crack shows) out to the curve,
+                    // the curve across to road B, and back along B's edge.
                     const int segments = 14;
-                    var rim = new Vector3[segments + 1];
+                    var rim = new List<Vector3>();
+                    for (float s = sa; s < sa + reach; s += 1f) rim.Add(EdgeSide(a.Edge, a.Start, s, sideA, 0.3f) + (Vector3.up * 0.004f));
                     for (int j = 0; j <= segments; j++)
                     {
                         float t = j / (float)segments;
                         var q = ((1 - t) * (1 - t) * pa) + (2 * t * (1 - t) * x) + (t * t * pb);
                         q.y = Mathf.Max(Mathf.Lerp(pa.y, pb.y, t), (float)_terrain.Height(q.x, q.z) + 0.06f) + 0.004f;
-                        rim[j] = q;
+                        rim.Add(q);
                     }
 
+                    for (float s = sb + reach - 1f; s > sb; s -= 1f) rim.Add(EdgeSide(b.Edge, b.Start, s, sideB, 0.3f) + (Vector3.up * 0.004f));
+
                     bool asphalt = a.Edge.Surface == RoadSurface.Asphalt || b.Edge.Surface == RoadSurface.Asphalt;
-                    (asphalt ? paved : gravel).Fan(x + (Vector3.up * 0.004f), rim);
+                    (asphalt ? paved : gravel).Fan(x + (Vector3.up * 0.004f), rim.ToArray());
                     Remember(a.Edge, a.Start, sideA, sa + reach);
                     Remember(b.Edge, b.Start, sideB, sb + reach);
                 }
@@ -374,12 +393,35 @@ namespace FreeVelo.World
             _cornerReach[key] = _cornerReach.TryGetValue(key, out float old) ? Mathf.Max(old, reach) : reach;
         }
 
+        /// <summary>Convex hull (x/z) of a few points, counter-clockwise (monotone chain).</summary>
+        private static Vector3[] ConvexHull(List<Vector3> points)
+        {
+            var p = points.OrderBy(v => v.x).ThenBy(v => v.z).ToList();
+            if (p.Count < 3) return p.ToArray();
+            float Cross(Vector3 o, Vector3 a, Vector3 b) => ((a.x - o.x) * (b.z - o.z)) - ((a.z - o.z) * (b.x - o.x));
+            var hull = new List<Vector3>();
+            for (int pass = 0; pass < 2; pass++)
+            {
+                int start = hull.Count;
+                foreach (var v in p)
+                {
+                    while (hull.Count >= start + 2 && Cross(hull[hull.Count - 2], hull[hull.Count - 1], v) <= 0) hull.RemoveAt(hull.Count - 1);
+                    hull.Add(v);
+                }
+
+                hull.RemoveAt(hull.Count - 1);
+                p.Reverse();
+            }
+
+            return hull.ToArray();
+        }
+
         /// <summary>A point on one edge of a road, <paramref name="s"/> metres from the junction end.</summary>
-        private static Vector3 EdgeSide(RoadEdge e, bool start, float s, int side)
+        private static Vector3 EdgeSide(RoadEdge e, bool start, float s, int side, float inset = 0)
         {
             var (c, forward) = OnEdge(e, start ? s : (float)e.Length - s);
             var right = new Vector3(forward.z, 0, -forward.x);
-            return c + (right * (side * (float)e.Width / 2));
+            return c + (right * (side * (((float)e.Width / 2) - inset)));
         }
 
         /// <summary>The side of road <paramref name="e"/> that faces road <paramref name="o"/>.</summary>
