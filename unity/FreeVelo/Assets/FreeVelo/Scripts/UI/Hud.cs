@@ -993,7 +993,7 @@ namespace FreeVelo.UI
             else DrawRideStrip();
             if (!_ride.IsGroupRide) DrawJunctionCard(workout);
             DrawClimbTimer();
-            if (_ride.GearsActive) DrawGearControl(rightBusy: workout && !_ride.WorkoutComplete);
+            if (_ride.GearsActive) DrawGearControl(rowHeight: workout ? 112 : 96);
             if (_ride.IsGroupRide && _group != null) DrawGroupOverlay();
 
             // Cue
@@ -1136,7 +1136,7 @@ namespace FreeVelo.UI
             }
 
             // Workout profile (bottom)
-            var graph = new Rect(24, _h - 136, _w - 48, 112);
+            var graph = new Rect(24, _h - 136, BottomRowWidth, 112);
             Ui.Card(graph, Theme.Alpha(Theme.Background, 0.85f));
             WorkoutProfile(new Rect(graph.x + 16, graph.y + 30, graph.width - 32, graph.height - 42), engine.Workout, false, engine.ElapsedS);
             GUI.Label(new Rect(graph.x + 18, graph.y + 6, 300, 22), $"{Ui.Clock(engine.ElapsedS)} / {Ui.Clock(engine.TotalDurationS)}", Theme.Caption);

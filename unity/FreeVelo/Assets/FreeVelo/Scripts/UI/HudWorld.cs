@@ -157,7 +157,7 @@ namespace FreeVelo.UI
             // Free ride: only on climbs. Rounds (main loop, climb rounds): the round overview when not climbing.
             if (!climbing && !route.IsLoop) return;
 
-            var card = new Rect(24, _h - 120, _w - 48, 96);
+            var card = new Rect(24, _h - 120, BottomRowWidth, 96);
             Ui.Card(card, Theme.Alpha(Theme.Background, 0.85f));
             var graph = new Rect(card.x + 16, card.y + 30, card.width - 32, card.height - 40);
             if (climbing)

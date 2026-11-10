@@ -13,20 +13,25 @@ namespace FreeVelo.UI
     {
         private const float BackupCardH = 150;
 
+        private const float GearPillW = 232;
+
+        /// <summary>Width of the bottom graph (elevation strip / workout): it leaves room for the gear pill next to it.</summary>
+        private float BottomRowWidth => _ride.GearsActive ? _w - 48 - GearPillW - 12 : _w - 48;
+
         /// <summary>
-        /// Ride screen: easier (−) / gear / harder (+) as a compact pill above the elevation strip – bottom right, or
-        /// bottom left while the workout card takes the right side.
+        /// Ride screen: easier (−) / gear / harder (+) as a pill at the bottom right, in one row with the graph
+        /// (same height, <paramref name="rowHeight"/>).
         /// </summary>
-        private void DrawGearControl(bool rightBusy)
+        private void DrawGearControl(float rowHeight)
         {
             var gears = _ride.Gears;
-            const float w = 232, h = 72;
-            var card = new Rect(rightBusy ? 24 : _w - 24 - w, _h - 136 - 14 - h, w, h);
-            Ui.Card(card, Theme.Alpha(Theme.Background, 0.88f));
-            if (Ui.IconButton(new Rect(card.x + 8, card.y + 8, 56, 56), Icon.Minus, ButtonKind.Secondary, gears.Gear > 0)) _ride.Shift(-1);
-            GUI.Label(new Rect(card.x + 64, card.y + 8, w - 128, 18), L.Get("gear").ToUpperInvariant(), Theme.With(Theme.Overline, anchor: TextAnchor.MiddleCenter));
-            GUI.Label(new Rect(card.x + 64, card.y + 24, w - 128, 40), $"{gears.Gear + 1}", Theme.With(Theme.H1, size: 30, anchor: TextAnchor.MiddleCenter));
-            if (Ui.IconButton(new Rect(card.xMax - 64, card.y + 8, 56, 56), Icon.Plus, ButtonKind.Secondary, gears.Gear < gears.Count - 1)) _ride.Shift(+1);
+            var card = new Rect(_w - 24 - GearPillW, _h - 24 - rowHeight, GearPillW, rowHeight);
+            Ui.Card(card, Theme.Alpha(Theme.Background, 0.85f));
+            float by = card.center.y - 28;
+            if (Ui.IconButton(new Rect(card.x + 12, by, 56, 56), Icon.Minus, ButtonKind.Secondary, gears.Gear > 0)) _ride.Shift(-1);
+            GUI.Label(new Rect(card.x + 68, by - 2, GearPillW - 136, 18), L.Get("gear").ToUpperInvariant(), Theme.With(Theme.Overline, anchor: TextAnchor.MiddleCenter));
+            GUI.Label(new Rect(card.x + 68, by + 16, GearPillW - 136, 40), $"{gears.Gear + 1}", Theme.With(Theme.H1, size: 30, anchor: TextAnchor.MiddleCenter));
+            if (Ui.IconButton(new Rect(card.xMax - 68, by, 56, 56), Icon.Plus, ButtonKind.Secondary, gears.Gear < gears.Count - 1)) _ride.Shift(+1);
         }
 
         /// <summary>Settings: virtual gears on/off (the controller itself is on the devices page).</summary>
