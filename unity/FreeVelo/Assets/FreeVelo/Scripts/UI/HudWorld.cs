@@ -203,8 +203,10 @@ namespace FreeVelo.UI
             // Samples every 5 m tied to the road (not to the screen); worked out again only when the rider has moved
             // on by one sample or the way ahead changed, so the outline scrolls smoothly.
             const double step = 5;
-            long first = (long)System.Math.Floor(from / step) - 1;
-            int count = (int)((to - from) / step) + 4;
+            // 30 m beyond both ends: the colour of each column uses the gradient over ±10 m, so the edge columns
+            // need road beyond the window (else they read too flat and showed the next easier colour).
+            long first = (long)System.Math.Floor(from / step) - 6;
+            int count = (int)((to - from) / step) + 14;
             if (_aheadRoute != route || _aheadFirst != first || _aheadSamples == null || _aheadSamples.Length != count)
             {
                 _aheadSamples = ProfileSamples(route, first * step, step, count, end);
