@@ -43,6 +43,12 @@ namespace FreeVelo.Core.World.Gen
                 case SceneryKind.FlowerBed: FlowerBed(near, random); return true;
                 case SceneryKind.Bench: Bench(near); return true;
                 case SceneryKind.BeerTable: BeerTable(near, v); return true;
+                case SceneryKind.Workshop: Workshop(near, far, v); return true;
+                case SceneryKind.Sawmill: Sawmill(near, far, v, random); return true;
+                case SceneryKind.FireStation: FireStation(near, far); return true;
+                case SceneryKind.LogPile: LogPile(near, far, v, random); return true;
+                case SceneryKind.LumberStack: LumberStack(near, far, v); return true;
+                case SceneryKind.Car: Car(near, v); return true;
                 default: return false;
             }
         }
@@ -69,6 +75,12 @@ namespace FreeVelo.Core.World.Gen
             SceneryKind.VillageSign => 1,
             SceneryKind.Yard => 4,
             SceneryKind.BeerTable => 1.5,
+            SceneryKind.Sawmill => 19,
+            SceneryKind.Workshop => 10,
+            SceneryKind.FireStation => 10,
+            SceneryKind.LogPile => 4,
+            SceneryKind.LumberStack => 3,
+            SceneryKind.Car => 2.5,
             SceneryKind.PathStone or SceneryKind.GardenFence or SceneryKind.FlowerBed or SceneryKind.Bench => 0.5,
             _ => 1.2,
         };
@@ -825,6 +837,173 @@ namespace FreeVelo.Core.World.Gen
             iron.Tube(P(-0.2f, 0.08f, 0.2f), P(0.2f, 0.08f, 0.2f), 0.01f, 0.01f, 4, false);
             for (int i = 0; i < 5; i++) wood.Box(P(0, 0.465f, -0.15f + (i * 0.085f)), Abs(facing * new Vector3(0.44f, 0.022f, 0.07f)), Rot.Identity);
             for (int i = 0; i < 4; i++) wood.Box(P(0, 0.58f + (i * 0.09f), -0.2f - (i * 0.012f)), Abs(facing * new Vector3(0.44f, 0.065f, 0.02f)), Rot.Identity);
+        }
+
+        /// <summary>A simple gable roof over a w × d box (ridge along Z), for sheds and workshops.</summary>
+        private static void GableRoof(Parts p, float w, float d, float wallTop, float pitch, float over, WorldMaterial roof, WorldMaterial gableMaterial, float x0 = 0, float z0 = 0)
+        {
+            float tan = (float)Math.Tan(pitch * Math.PI / 180), ridge = wallTop + ((w / 2) * tan);
+            var gable = p.Of(gableMaterial).Mesh;
+            for (int side = -1; side <= 1; side += 2)
+            {
+                int start = gable.Vertices.Count;
+                Add(gable, new Vector3(x0 - (w / 2), wallTop, z0 + (side * d / 2)));
+                Add(gable, new Vector3(x0 + (w / 2), wallTop, z0 + (side * d / 2)));
+                Add(gable, new Vector3(x0, ridge, z0 + (side * d / 2)));
+                TriOut(gable, start, start + 1, start + 2, new Vector3(0, 0, side));
+            }
+
+            float run = (w / 2) + over, slope = run / (float)Math.Cos(pitch * Math.PI / 180), eaveY = wallTop - (over * tan);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                var rot = Rot.AboutZ(-side * pitch);
+                p.Of(roof).Box(new Vector3(x0 + (side * run / 2), (eaveY + ridge) / 2, z0) + (rot * new Vector3(0, 0.12f, 0)), new Vector3(slope, 0.24f, d + (2 * over)), rot);
+            }
+        }
+
+        /// <summary>Car workshop: a low hall with two big roller doors to the road, a side office and the sign.</summary>
+        private static void Workshop(Parts near, Parts far, int v)
+        {
+            float w = 16f, d = 13f, wallTop = 5.2f;
+            var wall = v == 1 ? WorldMaterial.WallCream : WorldMaterial.WallWhite;
+            foreach (var (p, detailed) in new[] { (near, true), (far, false) })
+            {
+                p.Of(WorldMaterial.Plinth).Box(new Vector3(0, -0.9f, 0), new Vector3(w + 0.3f, 2.8f, d + 0.3f), Rot.Identity);
+                p.Of(wall).Box(new Vector3(0, (0.5f + wallTop) / 2, 0), new Vector3(w, wallTop - 0.5f, d), Rot.Identity);
+                GableRoof(p, w, d, wallTop, 16f, 0.8f, WorldMaterial.RoofGrey, wall);
+                if (!detailed) continue;
+                for (int s = -1; s <= 1; s += 2)
+                {
+                    p.Of(WorldMaterial.RollerDoor).Box(new Vector3(s * 3.6f, 2.3f, (d / 2) + 0.05f), new Vector3(4.2f, 3.6f, 0.1f), Rot.Identity);
+                    for (int k = 0; k < 8; k++) p.Of(WorldMaterial.Plinth).Box(new Vector3(s * 3.6f, 0.9f + (k * 0.42f), (d / 2) + 0.11f), new Vector3(4.2f, 0.04f, 0.04f), Rot.Identity);
+                }
+
+                p.Of(WorldMaterial.SignBlue).Box(new Vector3(0, 4.55f, (d / 2) + 0.08f), new Vector3(8.5f, 0.9f, 0.08f), Rot.Identity);
+                p.Of(WorldMaterial.WallWhite).Box(new Vector3(-1.5f, 4.55f, (d / 2) + 0.13f), new Vector3(4.2f, 0.25f, 0.03f), Rot.Identity);
+                p.Of(WorldMaterial.FireRed).Box(new Vector3(2.4f, 4.55f, (d / 2) + 0.13f), new Vector3(1.0f, 0.5f, 0.03f), Rot.Identity);
+                // Office on the side with a window and door
+                p.Of(wall).Box(new Vector3((w / 2) + 2.5f, 1.8f, (d / 2) - 3), new Vector3(5f, 3.2f, 6f), Rot.Identity);
+                p.Of(WorldMaterial.RoofGrey).Box(new Vector3((w / 2) + 2.5f, 3.5f, (d / 2) - 3), new Vector3(5.6f, 0.2f, 6.6f), Rot.Identity);
+                Window(p, new Vector3((w / 2) + 2.5f, 1.9f, (d / 2) + 0.03f), 2.2f, 1.3f, Rot.Identity, cross: false);
+                p.Of(WorldMaterial.Door).Box(new Vector3((w / 2) + 4.6f, 1.4f, (d / 2) + 0.03f), new Vector3(0.9f, 2.0f, 0.06f), Rot.Identity);
+                // Tyres stacked by the wall
+                for (int k = 0; k < 4; k++) p.Of(WorldMaterial.Tyre).Torus(new Vector3(-(w / 2) - 0.8f, 0.15f + (k * 0.22f), 2), Vector3.UnitY, 0.32f, 0.12f, 0.11f, 12, 5);
+            }
+        }
+
+        /// <summary>
+        /// Sawmill: a long open shed on posts (the saw line under it), a closed end with the office, logs and timber
+        /// round it and sawdust on the ground.
+        /// </summary>
+        private static void Sawmill(Parts near, Parts far, int v, Random random)
+        {
+            float w = 12f, d = 30f, top = 5.5f;
+            foreach (var (p, detailed) in new[] { (near, true), (far, false) })
+            {
+                p.Of(WorldMaterial.Concrete).Box(new Vector3(0, 0.1f, 0), new Vector3(w + 1, 0.4f, d + 1), Rot.Identity);
+                GableRoof(p, w, d, top, 20f, 1.0f, v == 1 ? WorldMaterial.Shingle : WorldMaterial.RoofGrey, WorldMaterial.WoodDark);
+                // Closed back third: boards
+                p.Of(WorldMaterial.WoodDark).Box(new Vector3(0, (0.3f + top) / 2, -(d / 2) + 5), new Vector3(w, top - 0.3f, 10f), Rot.Identity);
+                if (!detailed) continue;
+                var post = p.Of(WorldMaterial.WoodDark);
+                for (float z = -(d / 2) + 10; z <= (d / 2) + 0.01f; z += 5)
+                {
+                    for (int s = -1; s <= 1; s += 2) post.Box(new Vector3(s * ((w / 2) - 0.15f), (0.3f + top) / 2, z), new Vector3(0.3f, top - 0.3f, 0.3f), Rot.Identity);
+                }
+
+                // The saw line: a long carriage track with a log on it and the saw frame
+                p.Of(WorldMaterial.Iron).Box(new Vector3(0, 0.55f, 4), new Vector3(1.6f, 0.5f, 18f), Rot.Identity);
+                p.Of(WorldMaterial.Bark).Tube(new Vector3(0, 1.2f, -2), new Vector3(0, 1.2f, 8), 0.45f, 0.4f, 9);
+                p.Of(WorldMaterial.FireRed).Box(new Vector3(0, 2.2f, 10), new Vector3(2.6f, 3.4f, 0.8f), Rot.Identity);
+                p.Of(WorldMaterial.Sawdust).Ellipsoid(new Vector3(2.5f, 0.3f, 11), new Vector3(1.8f, 0.8f, 1.6f), Rot.Identity, 8, 4, upperHalf: true);
+                // Office window and door in the closed part
+                Window(p, new Vector3((w / 2) + 0.05f, 2.2f, -(d / 2) + 4), 1.2f, 1.0f, Rot.AboutY(90), cross: true);
+                p.Of(WorldMaterial.Door).Box(new Vector3((w / 2) + 0.05f, 1.4f, -(d / 2) + 7.5f), new Vector3(0.06f, 2.1f, 1.0f), Rot.Identity);
+            }
+        }
+
+        /// <summary>Feuerwehrhaus: white hall with red doors, the hose-drying tower with its little roof.</summary>
+        private static void FireStation(Parts near, Parts far)
+        {
+            float w = 14f, d = 13f, wallTop = 5.5f;
+            foreach (var (p, detailed) in new[] { (near, true), (far, false) })
+            {
+                p.Of(WorldMaterial.Plinth).Box(new Vector3(0, -0.9f, 0), new Vector3(w + 0.3f, 2.8f, d + 0.3f), Rot.Identity);
+                p.Of(WorldMaterial.WallWhite).Box(new Vector3(0, (0.5f + wallTop) / 2, 0), new Vector3(w, wallTop - 0.5f, d), Rot.Identity);
+                GableRoof(p, w, d, wallTop, 22f, 1.0f, WorldMaterial.RoofBrown, WorldMaterial.WoodDark);
+                // Hose tower at the back corner
+                float tx = -(w / 2) + 2, tz = -(d / 2) + 2, th = 16f;
+                p.Of(WorldMaterial.WallWhite).Box(new Vector3(tx, th / 2, tz), new Vector3(3.6f, th, 3.6f), Rot.Identity);
+                p.Of(WorldMaterial.RoofBrown).Tube(new Vector3(tx, th, tz), new Vector3(tx, th + 2.4f, tz), 2.8f, 0.05f, 4);
+                if (!detailed) continue;
+                for (int s = -1; s <= 1; s += 2)
+                {
+                    p.Of(WorldMaterial.FireRed).Box(new Vector3(s * 3.4f, 2.4f, (d / 2) + 0.05f), new Vector3(4.0f, 3.8f, 0.1f), Rot.Identity);
+                    for (int k = 0; k < 3; k++) Window(p, new Vector3(s * (2.3f + (k * 1.1f)) * 0.95f, 3.7f, (d / 2) + 0.12f), 0.6f, 0.4f, Rot.Identity, cross: false);
+                }
+
+                p.Of(WorldMaterial.FireRed).Box(new Vector3(0, 4.85f, (d / 2) + 0.08f), new Vector3(6.0f, 0.55f, 0.06f), Rot.Identity);
+                for (int f = 0; f < 4; f++)
+                {
+                    var face = Rot.AboutY(f * 90);
+                    Window(p, new Vector3(tx, th - 2, tz) + (face * new Vector3(0, 0, 1.83f)), 0.7f, 1.2f, face, cross: false);
+                }
+            }
+        }
+
+        /// <summary>A pile of logs (end grain towards the viewer), on two squared timbers.</summary>
+        private static void LogPile(Parts near, Parts far, int v, Random random)
+        {
+            float length = 6f + v;
+            var bark = near.Of(WorldMaterial.Bark);
+            var ends = near.Of(WorldMaterial.Sawdust);
+            for (int s = -1; s <= 1; s += 2) near.Of(WorldMaterial.WoodDark).Box(new Vector3(s * 2f, 0.12f, 0), new Vector3(0.25f, 0.25f, 2.8f), Rot.Identity);
+            int[] perRow = { 5, 4, 3 };
+            for (int row = 0; row < perRow.Length; row++)
+            {
+                for (int i = 0; i < perRow[row]; i++)
+                {
+                    float r = 0.24f + ((float)random.NextDouble() * 0.06f);
+                    float z = (i - ((perRow[row] - 1) / 2f)) * 0.56f;
+                    float y = 0.25f + r + (row * 0.48f);
+                    float shift = (float)(random.NextDouble() - 0.5) * 0.4f;
+                    bark.Tube(new Vector3(-(length / 2) + shift, y, z), new Vector3((length / 2) + shift, y, z), r, r * 0.92f, 8, false);
+                    ends.Disc(new Vector3((length / 2) + shift, y, z), Vector3.UnitX, 0, r * 0.95f, 0.02f, 8);
+                    ends.Disc(new Vector3(-(length / 2) + shift, y, z), Vector3.UnitX, 0, r * 0.95f, 0.02f, 8);
+                }
+            }
+
+            far.Of(WorldMaterial.Bark).Box(new Vector3(0, 0.75f, 0), new Vector3(length, 1.4f, 2.6f), Rot.Identity);
+        }
+
+        /// <summary>Sawn timber: boards stacked in layers with spacer laths between.</summary>
+        private static void LumberStack(Parts near, Parts far, int v)
+        {
+            float length = 4.5f, width = 1.4f;
+            int layers = 6 + (v * 2);
+            for (int k = 0; k < layers; k++)
+            {
+                float y = 0.2f + (k * 0.12f);
+                near.Of(WorldMaterial.WoodLight).Box(new Vector3(0, y, 0), new Vector3(length, 0.07f, width), Rot.Identity);
+                for (int s = -1; s <= 1; s++) near.Of(WorldMaterial.WoodDark).Box(new Vector3(s * 1.8f, y + 0.055f, 0), new Vector3(0.06f, 0.04f, width), Rot.Identity);
+            }
+
+            near.Of(WorldMaterial.Concrete).Box(new Vector3(0, 0.08f, 0), new Vector3(length, 0.16f, width * 0.6f), Rot.Identity);
+            far.Of(WorldMaterial.WoodLight).Box(new Vector3(0, 0.2f + (layers * 0.06f), 0), new Vector3(length, layers * 0.12f, width), Rot.Identity);
+        }
+
+        /// <summary>A small car: body, cabin with windows, wheels (front = +Z).</summary>
+        private static void Car(Parts near, int v)
+        {
+            var paint = v == 0 ? WorldMaterial.CarRed : v == 1 ? WorldMaterial.CarBlue : WorldMaterial.CarSilver;
+            near.Of(paint).Box(new Vector3(0, 0.6f, 0), new Vector3(1.75f, 0.6f, 4.1f), Rot.Identity);
+            near.Of(paint).Box(new Vector3(0, 1.1f, -0.25f), new Vector3(1.6f, 0.5f, 2.2f), Rot.Identity);
+            near.Of(WorldMaterial.Glass).Box(new Vector3(0, 1.12f, -0.25f), new Vector3(1.62f, 0.38f, 2.0f), Rot.Identity);
+            near.Of(WorldMaterial.Glass).Box(new Vector3(0, 1.12f, 0.88f), new Vector3(1.5f, 0.36f, 0.06f), Rot.AboutX(-35));
+            for (int sx = -1; sx <= 1; sx += 2)
+            {
+                for (int sz = -1; sz <= 1; sz += 2) near.Of(WorldMaterial.Tyre).Tube(new Vector3(sx * 0.8f, 0.32f, sz * 1.3f), new Vector3(sx * 0.98f, 0.32f, sz * 1.3f), 0.32f, 0.32f, 10);
+            }
         }
 
         private static void VillageSign(Parts near)

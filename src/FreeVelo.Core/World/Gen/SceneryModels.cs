@@ -48,6 +48,14 @@ namespace FreeVelo.Core.World.Gen
         FlowerBed,
         Bench,
         BeerTable,
+
+        // Trades on the outskirts
+        Workshop,
+        Sawmill,
+        FireStation,
+        LogPile,
+        LumberStack,
+        Car,
     }
 
     /// <summary>A model in two levels of detail, one mesh per material, in local space (origin on the ground, front +Z).</summary>

@@ -69,6 +69,14 @@ namespace FreeVelo.Core.World.Gen
         Gravel,
         Soil,
         Flowers,
+        RollerDoor,
+        FireRed,
+        CarRed,
+        CarBlue,
+        CarSilver,
+        Tyre,
+        Glass,
+        Sawdust,
     }
 
     public static class WorldMaterials
@@ -137,6 +145,14 @@ namespace FreeVelo.Core.World.Gen
             [WorldMaterial.Gravel] = (new Vector3(0.66f, 0.63f, 0.57f), 0.05f),
             [WorldMaterial.Soil] = (new Vector3(0.33f, 0.24f, 0.17f), 0f),
             [WorldMaterial.Flowers] = (new Vector3(0.93f, 0.78f, 0.25f), 0f),
+            [WorldMaterial.RollerDoor] = (new Vector3(0.72f, 0.73f, 0.74f), 0.3f),
+            [WorldMaterial.FireRed] = (new Vector3(0.72f, 0.08f, 0.08f), 0.3f),
+            [WorldMaterial.CarRed] = (new Vector3(0.62f, 0.07f, 0.06f), 0.7f),
+            [WorldMaterial.CarBlue] = (new Vector3(0.10f, 0.20f, 0.42f), 0.7f),
+            [WorldMaterial.CarSilver] = (new Vector3(0.70f, 0.71f, 0.72f), 0.7f),
+            [WorldMaterial.Tyre] = (new Vector3(0.07f, 0.07f, 0.07f), 0.1f),
+            [WorldMaterial.Glass] = (new Vector3(0.18f, 0.24f, 0.30f), 0.9f),
+            [WorldMaterial.Sawdust] = (new Vector3(0.80f, 0.66f, 0.45f), 0f),
         };
     }
 }

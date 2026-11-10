@@ -246,6 +246,12 @@ namespace FreeVelo.Core.World.Gen
                 }
             }
 
+            // Trades on the outskirts: the fire station in every village with a church, a car workshop in the bigger
+            // ones, sawmills by the river in the wood villages.
+            if (plan.Church) Outskirts(village, plan, roads, SceneryKind.FireStation, nearRiver: false);
+            if (plan.Radius >= 380) Outskirts(village, plan, roads, SceneryKind.Workshop, nearRiver: false);
+            if (village.Name is "Lärchwald" or "Hinterau" or "Kirchbach") Outskirts(village, plan, roads, SceneryKind.Sawmill, nearRiver: true);
+
             // No forest in the village: block the land along its streets.
             foreach (var e in roads)
             {
@@ -287,6 +293,71 @@ namespace FreeVelo.Core.World.Gen
             }
         }
 
+        /// <summary>
+        /// A trade building on the village edge (60–100 % of its radius along one of its roads), facing the road, with
+        /// what belongs to it: a gravel yard and cars at the workshop, logs and timber at the sawmill, a yard in front of
+        /// the fire station. <paramref name="nearRiver"/>: try spots near the river first (sawmills).
+        /// </summary>
+        private void Outskirts(Village village, Plan plan, List<RoadEdge> roads, SceneryKind kind, bool nearRiver)
+        {
+            var (w, d) = Size(kind, 0);
+            for (int pass = nearRiver ? 0 : 1; pass < 2; pass++)
+            {
+                foreach (var e in roads.OrderBy(_ => _random.NextDouble()))
+                {
+                    bool outward = e.From == village.Node;
+                    for (double s = plan.Radius * 0.6; s <= plan.Radius && s < e.Length - 40; s += 14)
+                    {
+                        var a = Along(e, outward ? s : e.Length - s);
+                        foreach (int side in _random.NextDouble() < 0.5 ? new[] { 1, -1 } : new[] { -1, 1 })
+                        {
+                            double setback = (e.Width / 2) + 7 + (d / 2);
+                            double x = a.X + (a.NX * side * setback), z = a.Z + (a.NZ * side * setback);
+                            if (pass == 0 && _terrain.DistanceToRiver(x, z, 260, out _) > 250) continue;
+                            double rot = Facing(-a.NX * side, -a.NZ * side);
+                            if (!Free(x, z, SceneryModels.Radius(kind) + 2, roadClear: (d / 2) + 5)) continue;
+                            if (!FootprintClear(kind, 0, x, z, rot)) continue;
+                            Place(kind, x, z, rot, _random.Next(2));
+                            Trade(kind, x, z, -a.NX * side, -a.NZ * side, a.TX, a.TZ, rot, w, d);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>What belongs around a trade building (local frame: towards the road, along it).</summary>
+        private void Trade(SceneryKind kind, double x, double z, double tx, double tz, double ax, double az, double rot, double w, double d)
+        {
+            (double X, double Z) P(double u, double v) => (x + (ax * u) + (tx * v), z + (az * u) + (tz * v));
+            void Put(SceneryKind k, double u, double v, double r, int variant)
+            {
+                var (px, pz) = P(u, v);
+                if (!FenceClear((px, pz)) || _terrain.DistanceToRiver(px, pz, 15, out _) < 12) return;
+                Items.Add(new SceneryItem { Kind = k, Variant = variant, X = (float)px, Y = (float)(_terrain.Height(px, pz) - 0.05), Z = (float)pz, RotationDeg = (float)r, Scale = 1 });
+                _footprints.Add((px, pz, SceneryModels.Radius(k)));
+                BlockCircle(px, pz, SceneryModels.Radius(k) + 1);
+            }
+
+            switch (kind)
+            {
+                case SceneryKind.Workshop:
+                    for (double u = -(w / 2) + 3.5; u <= (w / 2) - 3.5 + 0.01; u += 7) Put(SceneryKind.Yard, u, (d / 2) + 3, rot, 0);
+                    Put(SceneryKind.Car, -3.6, (d / 2) + 3.2, rot + 180 + (_random.NextDouble() * 20), _random.Next(3));
+                    if (_random.NextDouble() < 0.7) Put(SceneryKind.Car, (w / 2) + 3, (d / 2) + 2.5, rot + 90 + (_random.NextDouble() * 15), _random.Next(3));
+                    break;
+                case SceneryKind.FireStation:
+                    for (double u = -(w / 2) + 3.5; u <= (w / 2) - 3.5 + 0.01; u += 7) Put(SceneryKind.Yard, u, (d / 2) + 3, rot, 0);
+                    break;
+                case SceneryKind.Sawmill:
+                    // Logs waiting on one side, sawn timber drying on the other.
+                    for (int k = 0; k < 3; k++) Put(SceneryKind.LogPile, -(w / 2) - 6, -8 + (k * 5.5), rot + 90, k % 3);
+                    for (int k = 0; k < 3; k++) Put(SceneryKind.LumberStack, (w / 2) + 4.5, -6 + (k * 4.2), rot + 90, k % 3);
+                    Put(SceneryKind.Car, (w / 2) + 4, (d / 2) + 1, rot + 200, _random.Next(3));
+                    break;
+            }
+        }
+
         /// <summary>Width (along the road) and depth (towards it) of a building as modelled.</summary>
         private static (double W, double D) Size(SceneryKind kind, int variant) => kind switch
         {
@@ -295,6 +366,9 @@ namespace FreeVelo.Core.World.Gen
             SceneryKind.Shop => (10.5, 12),
             SceneryKind.Farmhouse => (12.5, 27 + (2 * variant)),
             SceneryKind.AlpineHut => (8, 10),
+            SceneryKind.Workshop => (16, 13),
+            SceneryKind.FireStation => (14, 13),
+            SceneryKind.Sawmill => (12, 30),
             _ => (8, 8),
         };
 
@@ -429,6 +503,9 @@ namespace FreeVelo.Core.World.Gen
             return kind switch
             {
                 SceneryKind.Church => (12.8, -23.6, 17.6, 0),
+                SceneryKind.Workshop => ((w / 2) + 1.2, -(d / 2) - 1.2, (d / 2) + 1.2, 5.2), // the office on the right
+                SceneryKind.Sawmill => ((w / 2) + 1.4, -(d / 2) - 1.4, (d / 2) + 1.4, 0),
+                SceneryKind.FireStation => ((w / 2) + 1.4, -(d / 2) - 1.4, (d / 2) + 1.4, 0),
                 SceneryKind.Farmhouse => ((w / 2) + 1.4, -(d / 2) - 1.6, (d / 2) + 1.6, 4.4), // the ramp on the right
                 SceneryKind.Inn => ((w / 2) + 1.6, -(d / 2) - 1.6, (d / 2) + 3.2, 0),     // terrace in front
                 _ => ((w / 2) + 1.5, -(d / 2) - 1.6, (d / 2) + 1.6, 0),

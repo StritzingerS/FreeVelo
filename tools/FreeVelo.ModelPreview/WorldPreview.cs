@@ -168,7 +168,10 @@ public static class WorldPreview
                     var offset = new Vector3(x, 0, 0);
                     var normals = mesh.ComputeNormals(IsFoliage(material) ? 85f : 35f);
                     var (color, smooth) = WorldMaterials.All[material];
-                    meshes.Add(new SceneMesh { Positions = mesh.Vertices.Select(p => p + offset).ToArray(), Normals = normals, Triangles = mesh.Triangles.ToArray(), Albedo = color, Smoothness = smooth });
+                    // FRONT=1: turned round, so the cameras (south of the models) see their fronts.
+                    var turn = Environment.GetEnvironmentVariable("FRONT") == "1" ? Rot.AboutY(180) : Rot.Identity;
+                    normals = normals.Select(n => turn * n).ToArray();
+                    meshes.Add(new SceneMesh { Positions = mesh.Vertices.Select(p => (turn * p) + offset).ToArray(), Normals = normals, Triangles = mesh.Triangles.ToArray(), Albedo = color, Smoothness = smooth });
                 }
 
                 x += spacing;
@@ -260,7 +263,46 @@ public static class WorldPreview
         Console.WriteLine($"world + landscape in {sw.ElapsedMilliseconds} ms: {landscape.Villages.Count} villages, {landscape.Items.Count} items, {landscape.Fields.Count} fields, {landscape.Pastures.Count} pastures");
         foreach (var g in landscape.Items.GroupBy(i => i.Kind)) Console.Write($" {g.Key} {g.Count()}");
         Console.WriteLine();
+        foreach (var t in landscape.Items.Where(i => i.Kind is SceneryKind.Workshop or SceneryKind.Sawmill or SceneryKind.FireStation))
+        {
+            var v0 = landscape.Villages.OrderBy(v => Math.Pow(v.X - t.X, 2) + Math.Pow(v.Z - t.Z, 2)).First();
+            Console.WriteLine($"  {t.Kind} near {v0.Name} at ({t.X:0},{t.Z:0})");
+        }
+
         var wanted = names == "all" ? landscape.Villages.Select(v => v.Name).ToList() : names.Split(',').ToList();
+        // "trade:Kind" = a view of the first such building, from the road side, close up.
+        if (wanted[0].StartsWith("trade:"))
+        {
+            var kinds = wanted.Select(w => Enum.Parse<SceneryKind>(w.Substring(6))).ToList();
+            const int sw2 = 2, ww = 960, hh = 540;
+            var shots = new List<byte[]>();
+            foreach (var kind in kinds)
+            {
+                foreach (var t in landscape.Items.Where(i => i.Kind == kind).Take(2))
+                {
+                    double r = t.RotationDeg * Math.PI / 180;
+                    var front = new Vector3((float)Math.Sin(r), 0, (float)Math.Cos(r));
+                    var side = new Vector3(front.Z, 0, -front.X);
+                    var at = new Vector3(t.X, t.Y, t.Z);
+                    var cam = new Camera { Name = kind.ToString(), Position = at + (front * 34) + (side * 18) + new Vector3(0, 14, 0), Target = at + new Vector3(0, 3, 0), FieldOfView = 55 };
+                    var meshes = SceneMeshes(map, terrain, layout, cam.Position, 600);
+                    shots.Add(Renderer.ToImage(new Renderer(meshes, shadowCenter: at, shadowRadius: 120).Render(cam, ww * sw2, hh * sw2), ww * sw2, hh * sw2, sw2, out _, out _));
+                }
+            }
+
+            int rows2 = (shots.Count + 1) / 2;
+            var sheet2 = new byte[2 * ww * rows2 * hh * 3];
+            for (int t = 0; t < shots.Count; t++)
+            {
+                int ox = (t % 2) * ww, oy = (t / 2) * hh;
+                for (int y = 0; y < hh; y++) Buffer.BlockCopy(shots[t], y * ww * 3, sheet2, (((oy + y) * 2 * ww) + ox) * 3, ww * 3);
+            }
+
+            Renderer.WritePng(output, sheet2, 2 * ww, rows2 * hh);
+            Console.WriteLine($"-> {output}");
+            return;
+        }
+
         const int ss = 2, w = 960, h = 540;
         var tiles = new List<byte[]>();
         foreach (var name in wanted)

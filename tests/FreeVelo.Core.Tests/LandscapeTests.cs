@@ -26,6 +26,9 @@ public class LandscapeTests
         Assert.NotEmpty(l.Fields);
         Assert.NotEmpty(l.Pastures);
         Assert.Contains(l.Items, i => i.Kind == SceneryKind.BeerTable); // the inns' Gastgarten
+        Assert.True(l.Items.Count(i => i.Kind == SceneryKind.FireStation) >= 4, "a fire station in the church villages");
+        Assert.True(l.Items.Count(i => i.Kind == SceneryKind.Workshop) >= 2, "car workshops");
+        Assert.True(l.Items.Count(i => i.Kind == SceneryKind.Sawmill) >= 2, "sawmills");
     }
 
     [Fact]
@@ -42,7 +45,8 @@ public class LandscapeTests
     {
         var terrain = Ground.Value;
         var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
-        foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.AlpineHouse or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.Church or SceneryKind.Farmhouse))
+        foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.AlpineHouse or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.Church or SceneryKind.Farmhouse
+            or SceneryKind.Workshop or SceneryKind.Sawmill or SceneryKind.FireStation))
         {
             Assert.True(terrain.DistanceToRoad(i.X, i.Z, 8, out _, out _, out _) >= 8, $"{i.Kind} at ({i.X:0},{i.Z:0}) on a road");
             // The whole outline – walls, balconies, the church's graveyard wall and tower – stays off every road.
