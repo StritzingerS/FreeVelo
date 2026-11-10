@@ -20,6 +20,16 @@ namespace FreeVelo.UI
         private static readonly string[] PlanTests = { "ftp-20min", "ftp-ramp", "ftp-2x8" };
         private int _planTest;
         private readonly HashSet<DayOfWeek> _planDays = new HashSet<DayOfWeek> { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
+
+        /// <summary>The training days were set for a template yet (they follow its recommendation until the rider picks).</summary>
+        private bool _planDaysSet;
+
+        private void UseRecommendedDays(PlanTemplate t)
+        {
+            _planDays.Clear();
+            foreach (var d in PlanTemplates.SuggestedDays(t.RecommendedDays)) _planDays.Add(d);
+            _planDaysSet = true;
+        }
         private bool _editingDays;
         private bool _confirmStopPlan;
 
@@ -67,11 +77,12 @@ namespace FreeVelo.UI
         {
             var view = new Rect(c.x - 8, c.y, c.width + 16, c.height);
             var chosen = PlanTemplates.Find(_planTemplate) ?? PlanTemplates.All[0];
+            if (!_planDaysSet) UseRecommendedDays(chosen);
             // A test at the start when the last FTP test is too old (or there was none), at the end in build blocks.
             var lastTest = TrainingLoad.LastFtpTest(HistoryStore.Data.ftpHistory);
             bool startTest = PlanTemplates.NeedsStartTest(lastTest, DateTime.Now);
             bool showTests = chosen.EndsWithTest || startTest;
-            float setupH = showTests ? 310 : 170;
+            float setupH = showTests ? 350 : 210;
             float contentH = 2 * 130 + 16 + 24 + setupH + 24;
             Ui.BeginScroll(3100, view, contentH);
             float x0 = 8, w = c.width;
@@ -92,9 +103,11 @@ namespace FreeVelo.UI
                 if (selected) Ui.Outline(r, Theme.Accent, 2, Theme.Radius);
                 GUI.Label(new Rect(r.x + 20, r.y + 16, r.width - 40, 28), t.Name.Get(AppSettings.Language), Theme.With(Theme.H3, size: 19));
                 GUI.Label(new Rect(r.x + 20, r.y + 46, r.width - 40, 48), t.Description.Get(AppSettings.Language), Theme.With(Theme.Caption, wrap: true));
-                GUI.Label(new Rect(r.x + 20, r.yMax - 32, r.width - 40, 20), $"{t.MinWeeks}–{t.MaxWeeks} {L.Get("weeks")}", Theme.With(Theme.Caption, Theme.Muted));
+                GUI.Label(new Rect(r.x + 20, r.yMax - 32, r.width - 40, 20),
+                    $"{t.MinWeeks}–{t.MaxWeeks} {L.Get("weeks")} · {string.Format(L.Get("days_per_week"), t.RecommendedDays)}", Theme.With(Theme.Caption, Theme.Muted));
                 if (GUI.Button(r, GUIContent.none, GUIStyle.none))
                 {
+                    if (_planTemplate != t.Id) UseRecommendedDays(t);
                     _planTemplate = t.Id;
                     _planWeeks = Mathf.Clamp(_planWeeks, t.MinWeeks, t.MaxWeeks);
                 }
@@ -110,24 +123,33 @@ namespace FreeVelo.UI
 
             int n = _planDays.Count;
             bool valid = n >= PlanTemplates.MinSessions && n <= PlanTemplates.MaxSessions;
+
+            // How many days this plan works best with, and why (a warning when the chosen days are outside the range).
+            string range = template.MinRecommendedDays == template.MaxRecommendedDays ? "" : $" ({template.MinRecommendedDays}–{template.MaxRecommendedDays})";
+            bool recommended = template.IsRecommendedDays(n);
+            string advice = string.Format(L.Get(recommended ? "plan_days_recommended" : "plan_days_off"), template.RecommendedDays, range)
+                + " " + template.DaysReason.Get(AppSettings.Language);
+            GUI.Label(new Rect(setup.x + 24, setup.y + 104, setup.width - 48, 40), advice,
+                Theme.With(Theme.Caption, recommended ? Theme.Muted : Theme.Warning, wrap: true));
+
             if (showTests)
             {
                 // Which FTP test the plan uses (start and/or end), with a recommendation for each.
-                GUI.Label(new Rect(setup.x + 24, setup.y + 112, 400, 20), L.Get("plan_test").ToUpperInvariant(), Theme.Overline);
-                _planTest = Ui.Segmented(new Rect(setup.x + 24, setup.y + 136, Mathf.Min(460, setup.width - 48), 44),
+                GUI.Label(new Rect(setup.x + 24, setup.y + 152, 400, 20), L.Get("plan_test").ToUpperInvariant(), Theme.Overline);
+                _planTest = Ui.Segmented(new Rect(setup.x + 24, setup.y + 176, Mathf.Min(460, setup.width - 48), 44),
                     new[] { L.Get("test_20min"), L.Get("test_ramp"), L.Get("test_2x8") }, _planTest);
                 string hint = _planTest == 0 ? "test_hint_20min" : _planTest == 1 ? "test_hint_ramp" : "test_hint_2x8";
-                GUI.Label(new Rect(setup.x + 24, setup.y + 186, setup.width - 48, 40), L.Get(hint), Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+                GUI.Label(new Rect(setup.x + 24, setup.y + 226, setup.width - 48, 40), L.Get(hint), Theme.With(Theme.Caption, Theme.Muted, wrap: true));
                 if (startTest)
                 {
                     string why = lastTest.HasValue
                         ? string.Format(L.Get("plan_start_test_old"), (int)((DateTime.Now - lastTest.Value).TotalDays / 7))
                         : L.Get("plan_start_test_none");
-                    GUI.Label(new Rect(setup.x + 24, setup.y + 226, setup.width - 48, 22), why, Theme.With(Theme.Caption, Theme.Accent));
+                    GUI.Label(new Rect(setup.x + 24, setup.y + 266, setup.width - 48, 22), why, Theme.With(Theme.Caption, Theme.Accent));
                 }
             }
 
-            float summaryY = showTests ? setup.yMax - 64 : setup.y + 110;
+            float summaryY = showTests ? setup.yMax - 64 : setup.y + 150;
             GUI.Label(new Rect(setup.x + 24, summaryY, setup.width - 260, 44),
                 valid ? string.Format(L.Get("plan_summary"), _planWeeks, n) : L.Get("plan_days_hint"),
                 Theme.With(Theme.Caption, valid ? Theme.Muted : Theme.Warning, wrap: true));

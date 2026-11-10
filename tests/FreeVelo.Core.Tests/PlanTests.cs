@@ -263,4 +263,39 @@ public class PlanTests
         PlanAdapter.ChangeWeekdays(plan, new[] { DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Sunday }, today);
         Assert.Equal(SessionKind.Test, plan.sessions.Where(s => s.Status == SessionStatus.Planned).OrderBy(s => s.date).First().Kind);
     }
+
+    [Fact]
+    public void EachPlanRecommendsItsNumberOfTrainingDays()
+    {
+        foreach (var t in PlanTemplates.All)
+        {
+            Assert.InRange(t.MinRecommendedDays, PlanTemplates.MinSessions, PlanTemplates.MaxSessions);
+            Assert.InRange(t.MaxRecommendedDays, t.MinRecommendedDays, PlanTemplates.MaxSessions);
+            Assert.True(t.IsRecommendedDays(t.RecommendedDays), t.Id);
+            Assert.False(string.IsNullOrWhiteSpace(t.DaysReason.Get("de")));
+            Assert.False(string.IsNullOrWhiteSpace(t.DaysReason.Get("en")));
+        }
+
+        // Volume for the base, two hard sessions plus endurance for FTP, few days for VO2max and maintenance.
+        Assert.Equal(5, PlanTemplates.Find("base")!.RecommendedDays);
+        Assert.Equal(4, PlanTemplates.Find("ftp-build")!.RecommendedDays);
+        Assert.Equal(3, PlanTemplates.Find("vo2max")!.RecommendedDays);
+        Assert.Equal(3, PlanTemplates.Find("maintenance")!.RecommendedDays);
+        Assert.False(PlanTemplates.Find("maintenance")!.IsRecommendedDays(5));
+    }
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void SuggestedDaysKeepTheKeySessionsApartAndMondayFree(int days)
+    {
+        var suggested = PlanTemplates.Sorted(PlanTemplates.SuggestedDays(days));
+        Assert.Equal(days, suggested.Count);
+        Assert.DoesNotContain(DayOfWeek.Monday, suggested);
+        var pattern = PlanTemplates.WeekPattern(days);
+        var keyDays = suggested.Where((d, i) => pattern[i] == SessionKind.Key).Select(d => ((int)d + 6) % 7).ToList();
+        Assert.Equal(2, keyDays.Count);
+        Assert.True(keyDays[1] - keyDays[0] >= 2, "at least one day between the key sessions");
+    }
 }
