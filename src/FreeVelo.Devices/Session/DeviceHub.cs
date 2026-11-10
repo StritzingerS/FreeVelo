@@ -541,6 +541,7 @@ namespace FreeVelo.Devices.Session
             double dt = _lastTickMs == 0 ? 0 : Math.Min(2.0, (now - _lastTickMs) / 1000.0);
             _lastTickMs = now;
             UpdateLive(now);
+            RecordPower(now);
             TickControllers(now);
 
             string? trainer = TrainerAddress;
@@ -584,7 +585,11 @@ namespace FreeVelo.Devices.Session
                 _lowCadenceSinceMs = -1;
             }
 
-            bool protect = _lowCadenceSinceMs >= 0 && now - _lowCadenceSinceMs >= LowCadenceDelayMs;
+            // A trainer sometimes reports half or a third of the real cadence for a while (seen on KICKR and Neo
+            // logs) while the power stays exactly on target. A rider really pedalling at 30–40 rpm in ERG makes the
+            // power pulse with every stroke or fall below the target – only then is the cadence believed.
+            bool powerShowsIt = PowerPulsing(now) || (_ergSent > 0 && Live.PowerW.HasValue && Live.PowerW.Value < _ergSent * LowCadencePowerFactor);
+            bool protect = _lowCadenceSinceMs >= 0 && now - _lowCadenceSinceMs >= LowCadenceDelayMs && (LowCadenceProtectionActive || powerShowsIt);
             if (protect != LowCadenceProtectionActive)
             {
                 LowCadenceProtectionActive = protect;
@@ -611,6 +616,38 @@ namespace FreeVelo.Devices.Session
                     : TacxFec.SetTargetPower(rounded);
                 if (Send(trainer, CommandCharacteristic, command, null)) _ergSent = rounded;
             }
+        }
+
+        /// <summary>Power below this share of the ERG target counts as "really struggling" (with low cadence).</summary>
+        private const double LowCadencePowerFactor = 0.85;
+
+        /// <summary>Power swinging by more than this share within <see cref="PowerWindowMs"/> counts as pulsing.</summary>
+        private const double PulsingSpread = 0.15;
+        private const long PowerWindowMs = 4000;
+        private readonly Queue<(long Ms, int W)> _powerWindow = new Queue<(long, int)>();
+
+        private void RecordPower(long now)
+        {
+            int? w = Live.TrainerPowerW ?? Live.PowerW;
+            if (w.HasValue) _powerWindow.Enqueue((now, w.Value));
+            while (_powerWindow.Count > 0 && now - _powerWindow.Peek().Ms > PowerWindowMs) _powerWindow.Dequeue();
+        }
+
+        /// <summary>The power swings a lot (real low cadence under high torque) rather than staying steady.</summary>
+        private bool PowerPulsing(long now)
+        {
+            if (_powerWindow.Count < 6) return false;
+            int min = int.MaxValue, max = 0;
+            long sum = 0;
+            foreach (var (_, w) in _powerWindow)
+            {
+                min = Math.Min(min, w);
+                max = Math.Max(max, w);
+                sum += w;
+            }
+
+            double mean = sum / (double)_powerWindow.Count;
+            return mean > 0 && (max - min) / mean > PulsingSpread;
         }
 
         /// <summary>Over the target by this much (W, or fraction of the target if larger) counts as "too fast".</summary>

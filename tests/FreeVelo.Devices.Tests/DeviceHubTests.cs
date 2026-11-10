@@ -199,6 +199,43 @@ public class DeviceHubTests
     }
 
     [Fact]
+    public void CadenceGlitchWithSteadyPowerKeepsErg()
+    {
+        // As in the FIT file of 2026-11-08: power steady at the 240 W target, the trainer reports 50 → 35 rpm.
+        ConnectFtmsTrainer();
+        _hub.SetErgTarget(240);
+        for (int i = 0; i < 12; i++)
+        {
+            _hub.OnData("KICKR", IndoorBike, Ibd(238 + (i % 3), 93));
+            Advance(250);
+        }
+
+        for (int i = 0; i < 120; i++)
+        {
+            _hub.OnData("KICKR", IndoorBike, Ibd(236 + (i % 5), i < 60 ? 50 : 35));
+            Advance(250);
+        }
+
+        Assert.False(_hub.LowCadenceProtectionActive);
+        Assert.Equal(240, _hub.SentErgTargetW);
+    }
+
+    [Fact]
+    public void RealLowCadenceMakesThePowerPulse()
+    {
+        ConnectFtmsTrainer();
+        _hub.SetErgTarget(240);
+        for (int i = 0; i < 40; i++)
+        {
+            // ~35 rpm under high torque: the power swings with every stroke.
+            _hub.OnData("KICKR", IndoorBike, Ibd(i % 2 == 0 ? 280 : 200, 35));
+            Advance(250);
+        }
+
+        Assert.True(_hub.LowCadenceProtectionActive);
+    }
+
+    [Fact]
     public void LowCadenceProtectionCanBeDisabled()
     {
         ConnectFtmsTrainer();
