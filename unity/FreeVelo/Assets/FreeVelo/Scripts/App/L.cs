@@ -270,7 +270,9 @@ namespace FreeVelo.App
             ["next_500m"] = ("Next 500 m", "Nächste 500 m"),
             ["network_info"] = ("{0:0} km of roads · {1} junctions", "{0:0} km Straßen · {1} Kreuzungen"),
             ["world_failed"] = ("The world could not be built – riding works, but without landscape.", "Die Welt konnte nicht erstellt werden – Fahren geht, aber ohne Landschaft."),
-            ["loading_world"] = ("Building the world …", "Welt wird erstellt …"),
+            ["loading_world_load"] = ("Loading the world …", "Welt wird geladen …"),
+            ["loading_world_generate"] = ("Building the world … (only once)", "Welt wird erstellt … (einmalig)"),
+            ["loading_world_scenery"] = ("Building the landscape …", "Landschaft wird aufgebaut …"),
 
             // Group rides
             ["group"] = ("Group", "Gruppe"),
