@@ -333,7 +333,7 @@ public class FtpTestTests
     public void TwentyMinuteTest()
     {
         var test = FtpTests.Create(FtpTestKind.TwentyMinute);
-        var effort = test.Flatten().Single(s => s.Block is FreeRideBlock f && f.IsMaxEffort);
+        var effort = test.Flatten().Last(s => s.Block is FreeRideBlock f && f.IsMaxEffort); // the 20 minutes (after the 5-min blow-out)
         var watts = Enumerable.Repeat(150.0, test.TotalDurationS).ToList();
         for (int i = effort.StartS; i < effort.EndS; i++) watts[i] = 280;
 
@@ -383,5 +383,23 @@ public class PowerZoneEditingTests
         Assert.Equal(4, parsed.ZoneFor(215, 400).Number); // absolute watts: independent of FTP
         Assert.Equal(68, FreeVelo.Core.Training.PowerZoneModel.Coggan().TypicalPercent(1, 250) + 3);
         Assert.Equal(50, FreeVelo.Core.Training.PowerZoneModel.Coggan().TypicalPercent(0, 250));
+    }
+
+    [Fact]
+    public void TwentyMinuteTestFollowsTheBookAndCountsOnlyThe20Minutes()
+    {
+        var w = FtpTests.Create(FtpTestKind.TwentyMinute);
+        var segments = w.Flatten();
+        // Fast pedalling at 100 rpm, a 5-min and a 20-min all-out effort
+        Assert.Equal(3, segments.Count(s => s.Block is SteadyBlock b && b.Cadence.HasValue && b.Cadence.Value.Min >= 100));
+        var efforts = segments.Where(s => s.Block is FreeRideBlock f && f.IsMaxEffort).ToList();
+        Assert.Equal(new[] { 300, 1200 }, efforts.Select(e => e.DurationS));
+
+        // 5 min at 330 W, 20 min at 280 W → FTP = 95 % of 280 = 266 (the 5 minutes don't count)
+        var watts = new double[w.TotalDurationS];
+        for (int i = 0; i < watts.Length; i++) watts[i] = 150;
+        for (int i = efforts[0].StartS; i < efforts[0].EndS; i++) watts[i] = 330;
+        for (int i = efforts[1].StartS; i < efforts[1].EndS; i++) watts[i] = 280;
+        Assert.Equal(266, FtpTests.EstimateFtp(FtpTestKind.TwentyMinute, watts, w));
     }
 }
