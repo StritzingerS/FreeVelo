@@ -446,6 +446,15 @@ namespace FreeVelo.Core.World.Gen
             double gap = roadEdge - front;
             if (gap < 2) return;
 
+            // The front yard (path, forecourt) is levelled with the house, up to a metre before the street.
+            int own = _pads.FindLastIndex(p => Math.Abs(p.X - x) < 0.01 && Math.Abs(p.Z - z) < 0.01);
+            double yardEnd = roadEdge - 1;
+            if (own >= 0 && yardEnd > d / 2)
+            {
+                var (yx, yz) = P(0, ((d / 2) + yardEnd) / 2);
+                _pads.Add(new Terrain.Pad(yx, yz, w / 2, (yardEnd - (d / 2)) / 2, rotationDeg, _pads[own].Height));
+            }
+
             void Item(SceneryKind k, double u, double v, double rot, int var)
             {
                 var (px, pz) = P(u, v);

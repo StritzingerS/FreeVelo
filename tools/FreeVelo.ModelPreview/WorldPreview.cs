@@ -409,7 +409,7 @@ public static class WorldPreview
         var map = WorldMap.Default;
         var terrain = Terrain.Build(map);
         var layout = SceneryLayout.Generate(terrain, new DateTime(2026, 11, 10));
-        var e = map.Edges[map.MainLoopEdges[0]];
+        var e = map.Edges[Environment.GetEnvironmentVariable("START_EDGE") is string se ? int.Parse(se) : map.MainLoopEdges[0]];
         int node = e.From;
         var n = map.Nodes[node];
         double fx = e.X[2] - e.X[0], fz = e.Z[2] - e.Z[0], fl = Math.Sqrt((fx * fx) + (fz * fz));
@@ -426,6 +426,22 @@ public static class WorldPreview
             var offset = new Vector3((float)(Math.Sin(a) * -3.6), 1.5f, (float)(Math.Cos(a) * -3.6));
             var cam = new Camera { Name = $"orbit {k * 45}", Position = rider + offset, Target = rider + new Vector3(0, 1.05f, 0), FieldOfView = 60 };
             tiles.Add(Renderer.ToImage(renderer.Render(cam, w * ss, h * ss), w * ss, h * ss, ss, out _, out _));
+        }
+
+        if (Environment.GetEnvironmentVariable("RIDECAM") is string rc)
+        {
+            // Riding camera at a distance along the edge: 4.6 m behind the rider, 1.9 m up.
+            double at = double.Parse(rc, System.Globalization.CultureInfo.InvariantCulture);
+            var (px, py, pz, dfx, dfz) = JunctionCorners.At(e, at);
+            var f2 = new Vector3((float)dfx, 0, (float)dfz);
+            var r2 = new Vector3(f2.Z, 0, -f2.X);
+            var pos = new Vector3((float)px, (float)py + 0.05f, (float)pz) + (r2 * 1.5f);
+            var ms = SceneMeshes(map, terrain, layout, pos, 600);
+            var rr = new Renderer(ms, shadowCenter: pos, shadowRadius: 150);
+            var cam = new Camera { Name = "ride", Position = pos - (f2 * 4.6f) + new Vector3(0, 1.9f, 0), Target = pos + (f2 * 20) + new Vector3(0, 1.05f, 0), FieldOfView = 60 };
+            Renderer.WritePng(output, Renderer.ToImage(rr.Render(cam, 1280 * ss, 720 * ss), 1280 * ss, 720 * ss, ss, out _, out _), 1280, 720);
+            Console.WriteLine($"ride view -> {output}");
+            return;
         }
 
         if (Environment.GetEnvironmentVariable("TOPCAM") == "1")
