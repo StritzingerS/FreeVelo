@@ -19,7 +19,7 @@ namespace FreeVelo.App
         private RideController _ride;
         private GroupRideService _group;
         private WorldBuilder _world;
-        private System.Threading.Tasks.Task<(FreeVelo.Core.World.Gen.Terrain Terrain, SceneryLayout Layout)> _worldTask;
+        private System.Threading.Tasks.Task<(FreeVelo.Core.World.Gen.Terrain Terrain, SceneryLayout Layout, System.Collections.Generic.List<WorldBuilder.FarTileData> Far)> _worldTask;
         private RiderAvatar _avatar;
         private Camera _camera;
         private float _lean;
@@ -83,7 +83,10 @@ namespace FreeVelo.App
             {
                 var terrain = LoadPreparedWorld(map, prepared, cache) ?? FreeVelo.Core.World.Gen.Terrain.Build(map);
                 if (prepared == null) SavePreparedWorld(terrain, cache);
-                return (terrain, SceneryLayout.Generate(terrain));
+                // Scenery and the mountain's far tiles in parallel, both off the main thread.
+                var far = System.Threading.Tasks.Task.Run(() => WorldBuilder.ComputeFarTiles(terrain));
+                var layout = SceneryLayout.Generate(terrain);
+                return (terrain, layout, far.Result);
             });
             _ride.Initialize(_ble, path.Route);
             _ride.Map = map;
@@ -224,7 +227,7 @@ namespace FreeVelo.App
                 return;
             }
 
-            _world.Build(_ride.Map, task.Result.Terrain, task.Result.Layout);
+            _world.Build(_ride.Map, task.Result.Terrain, task.Result.Layout, task.Result.Far);
         }
 
         private void LateUpdate()

@@ -46,21 +46,38 @@ namespace FreeVelo.World
         /// <summary>Loading is over: built or failed.</summary>
         public bool IsLoaded => IsBuilt || Failed;
 
-        public void Build(WorldMap map, Terrain terrain, SceneryLayout layout)
+        /// <summary>
+        /// Builds the scene. <paramref name="far"/>: the mountain's far tiles computed in the background
+        /// (<see cref="ComputeFarTiles"/>); null computes them here.
+        /// </summary>
+        public void Build(WorldMap map, Terrain terrain, SceneryLayout layout, List<FarTileData> far = null)
         {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var times = new System.Text.StringBuilder("World build (ms):");
+            void Step(string name)
+            {
+                times.Append($" {name} {clock.ElapsedMilliseconds}");
+                clock.Restart();
+            }
+
             if (_root != null) Destroy(_root);
             _root = new GameObject("World");
             Map = map;
             _terrain = terrain;
 
             BuildTerrain();
+            Step("terrain");
             BuildRoads();
             BuildBridges();
             BuildWater();
+            Step("roads+water");
             BuildFields(layout);
             BuildScenery(layout);
+            Step("scenery");
             BuildMountains();
-            BuildMountain();
+            BuildMountain(far);
+            Step("mountain");
+            Debug.Log(times.ToString());
         }
 
         /// <summary>Ground height (same grid as the terrain mesh).</summary>
