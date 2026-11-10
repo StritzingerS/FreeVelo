@@ -212,8 +212,16 @@ namespace FreeVelo.World
                 mesh.font = font;
                 if (_signTextMaterial == null)
                 {
-                    _signTextMaterial = new Material(font.material);
-                    _signTextMaterial.SetInt("unity_GUIZTestMode", (int)CompareFunction.LessEqual);
+                    // The font's own shader (GUI/Text) draws on top of everything, so the name showed through the
+                    // board from behind, mirrored. Sprites/Default tests depth like any surface: letters behind the
+                    // board stay hidden. Its colour comes from the vertices (black), the shapes from the atlas' alpha.
+                    var depthTested = Shader.Find("Sprites/Default");
+                    _signTextMaterial = depthTested != null ? new Material(depthTested) { mainTexture = font.material.mainTexture } : new Material(font.material);
+                    _signTextMaterial.renderQueue = 3000;
+                    Font.textureRebuilt += rebuilt =>
+                    {
+                        if (rebuilt == font && _signTextMaterial != null) _signTextMaterial.mainTexture = font.material.mainTexture;
+                    };
                 }
 
                 text.GetComponent<MeshRenderer>().sharedMaterial = _signTextMaterial;

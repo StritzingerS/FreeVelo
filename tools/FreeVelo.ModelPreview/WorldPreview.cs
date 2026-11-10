@@ -428,6 +428,13 @@ public static class WorldPreview
             tiles.Add(Renderer.ToImage(renderer.Render(cam, w * ss, h * ss), w * ss, h * ss, ss, out _, out _));
         }
 
+        if (Environment.GetEnvironmentVariable("TOPCAM") == "1")
+        {
+            tiles.RemoveAt(7);
+            var top = new Camera { Name = "top", Position = rider + new Vector3(0.01f, 90, 0.01f), Target = rider, FieldOfView = 50 };
+            tiles.Add(Renderer.ToImage(renderer.Render(top, w * ss, h * ss), w * ss, h * ss, ss, out _, out _));
+        }
+
         int cols = 2, rows = 4;
         var sheet = new byte[cols * w * rows * h * 3];
         for (int t = 0; t < tiles.Count; t++)

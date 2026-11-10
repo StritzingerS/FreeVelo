@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace FreeVelo.Core.World.Gen
@@ -187,7 +188,100 @@ namespace FreeVelo.Core.World.Gen
         }
 
         /// <summary>Grid height at a grid point.</summary>
-        public float At(int x, int z) => _heights[(Math.Max(0, Math.Min(Nz - 1, z)) * Nx) + Math.Max(0, Math.Min(Nx - 1, x))];
+        public float At(int x, int z) => (_padded ?? _heights)[(Math.Max(0, Math.Min(Nz - 1, z)) * Nx) + Math.Max(0, Math.Min(Nx - 1, x))];
+
+        // ------------------------------------------------------------------ building pads
+
+        /// <summary>A level pad under a building: footprint (half sizes, rotation) and its height.</summary>
+        public readonly struct Pad
+        {
+            public Pad(double x, double z, double halfX, double halfZ, double rotationDeg, double height)
+            {
+                X = x; Z = z; HalfX = halfX; HalfZ = halfZ; Height = height;
+                Sin = Math.Sin(rotationDeg * Math.PI / 180);
+                Cos = Math.Cos(rotationDeg * Math.PI / 180);
+            }
+
+            public double X { get; }
+            public double Z { get; }
+            public double HalfX { get; }
+            public double HalfZ { get; }
+            public double Height { get; }
+            public double Sin { get; }
+            public double Cos { get; }
+
+            /// <summary>Weight 1 on the pad (and 1.5 m round it), easing to 0 over <see cref="PadBlend"/> metres.</summary>
+            public double Weight(double x, double z)
+            {
+                double dx = x - X, dz = z - Z;
+                double u = (dx * Cos) - (dz * Sin), v = (dx * Sin) + (dz * Cos); // into the building's frame
+                double ou = Math.Max(0, Math.Abs(u) - HalfX - 1.5), ov = Math.Max(0, Math.Abs(v) - HalfZ - 1.5);
+                double d = Math.Sqrt((ou * ou) + (ov * ov));
+                return d >= PadBlend ? 0 : 1 - SmoothStep(d / PadBlend);
+            }
+        }
+
+        /// <summary>How far round a building pad the ground eases back into the slope.</summary>
+        public const double PadBlend = 8;
+
+        private Pad[] _pads = new Pad[0];
+        private float[]? _padded; // the home grid with the pads (the saved grid stays without them)
+
+        /// <summary>
+        /// Levels the ground under buildings (the landscape sets them once it has placed its buildings): cut into the
+        /// slope uphill, filled downhill, easing back over a few metres; the road beds stay as they are.
+        /// </summary>
+        public void SetPads(IReadOnlyList<Pad> pads)
+        {
+            _pads = pads.ToArray();
+            var padded = (float[])_heights.Clone();
+            foreach (var pad in _pads)
+            {
+                double reach = Math.Sqrt((pad.HalfX * pad.HalfX) + (pad.HalfZ * pad.HalfZ)) + 1.5 + PadBlend;
+                int x0 = (int)Math.Floor((pad.X - reach - MinX) / Cell), x1 = (int)Math.Ceiling((pad.X + reach - MinX) / Cell);
+                int z0 = (int)Math.Floor((pad.Z - reach - MinZ) / Cell), z1 = (int)Math.Ceiling((pad.Z + reach - MinZ) / Cell);
+                for (int gz = Math.Max(0, z0); gz <= Math.Min(Nz - 1, z1); gz++)
+                {
+                    for (int gx = Math.Max(0, x0); gx <= Math.Min(Nx - 1, x1); gx++)
+                    {
+                        double x = MinX + (gx * Cell), z = MinZ + (gz * Cell);
+                        double w = pad.Weight(x, z);
+                        if (w <= 0 || OnRoadBed(x, z)) continue;
+                        int i = (gz * Nx) + gx;
+                        padded[i] = (float)(padded[i] + ((pad.Height - padded[i]) * w));
+                    }
+                }
+            }
+
+            _padded = _pads.Length > 0 ? padded : null;
+        }
+
+        private double ApplyPads(double x, double z, double h)
+        {
+            if (_pads.Length == 0) return h;
+            bool checkedRoad = false;
+            foreach (var pad in _pads)
+            {
+                if (Math.Abs(pad.X - x) > 40 || Math.Abs(pad.Z - z) > 40) continue;
+                double w = pad.Weight(x, z);
+                if (w <= 0) continue;
+                if (!checkedRoad)
+                {
+                    if (OnRoadBed(x, z)) return h;
+                    checkedRoad = true;
+                }
+
+                h += (pad.Height - h) * w;
+            }
+
+            return h;
+        }
+
+        private bool OnRoadBed(double x, double z)
+        {
+            double d = DistanceToRoad(x, z, 6.5, out var road, out _, out _);
+            return road != null && d <= (road.Width / 2) + 1.3;
+        }
 
         /// <summary>True inside the detailed home grid (outside it the mountain's ground is computed on demand).</summary>
         public bool InGrid(double x, double z) => x >= MinX && x <= MaxX && z >= MinZ && z <= MaxZ;
@@ -195,7 +289,7 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>Ground height anywhere: the home grid (bilinear between grid points), or the mountain's ground.</summary>
         public double Height(double x, double z)
         {
-            if (!InGrid(x, z)) return Compute(x, z);
+            if (!InGrid(x, z)) return ApplyPads(x, z, Compute(x, z));
 
             double gx = (x - MinX) / Cell, gz = (z - MinZ) / Cell;
             int ix = (int)Math.Floor(gx), iz = (int)Math.Floor(gz);

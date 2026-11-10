@@ -102,6 +102,28 @@ public class LandscapeTests
     }
 
     [Fact]
+    public void BuildingsStandOnLevelGround()
+    {
+        var terrain = Terrain.Build(WorldMap.Default); // own copy: the pads change the ground
+        var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
+        int checkedBuildings = 0;
+        foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.AlpineHouse or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.Farmhouse))
+        {
+            // Across the middle of the footprint the ground is within a few centimetres of the building's floor.
+            foreach (var (x, z) in new[] { (0.0, 0.0), (3.0, 0.0), (-3.0, 0.0), (0.0, 3.0), (0.0, -3.0) })
+            {
+                double r = i.RotationDeg * Math.PI / 180;
+                double g = terrain.Height(i.X + (x * Math.Cos(r)) + (z * Math.Sin(r)), i.Z - (x * Math.Sin(r)) + (z * Math.Cos(r)));
+                Assert.True(Math.Abs(g - i.Y) < 0.15, $"{i.Kind} at ({i.X:0},{i.Z:0}): ground {g - i.Y:+0.00;-0.00} m from its floor");
+            }
+
+            checkedBuildings++;
+        }
+
+        Assert.True(checkedBuildings > 100);
+    }
+
+    [Fact]
     public void TheMaypoleOnlyStandsInMay()
     {
         var terrain = Ground.Value;

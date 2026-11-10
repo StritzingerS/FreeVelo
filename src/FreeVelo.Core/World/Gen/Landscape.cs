@@ -99,6 +99,7 @@ namespace FreeVelo.Core.World.Gen
             l.PlaceSignposts();
             l.PlaceFields();
             l.PlaceHayHuts();
+            l.LevelBuildingPlots();
             l.SeatFlatPlates();
             foreach (var item in l.Items) l.Index(item);
             return l;
@@ -1010,23 +1011,60 @@ namespace FreeVelo.Core.World.Gen
             Items.Add(item);
             _footprints.Add((x, z, r));
             if (block) BlockCircle(x, z, r + 3);
+            if (IsBuilding(kind))
+            {
+                var (pw, pd) = PadSize(kind, variant);
+                _pads.Add(new Terrain.Pad(x, z, pw / 2, pd / 2, rotationDeg, item.Y));
+            }
         }
 
-        /// <summary>Buildings stand on the lowest ground under them (their plinth reaches into the slope).</summary>
+        private static bool IsBuilding(SceneryKind kind) => kind is SceneryKind.AlpineHouse or SceneryKind.Farmhouse or SceneryKind.Church
+            or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.HayHut or SceneryKind.AlpineHut or SceneryKind.Shrine
+            or SceneryKind.Workshop or SceneryKind.Sawmill or SceneryKind.FireStation;
+
+        /// <summary>The ground levelled for a building: its footprint (the church with its tower and graveyard wall).</summary>
+        private static (double W, double D) PadSize(SceneryKind kind, int variant) => kind switch
+        {
+            SceneryKind.Church or SceneryKind.HayHut or SceneryKind.Shrine => (SceneryModels.Radius(kind) * 1.4, SceneryModels.Radius(kind) * 1.4),
+            _ => Size(kind, variant),
+        };
+
+        private readonly List<Terrain.Pad> _pads = new List<Terrain.Pad>();
+
+        /// <summary>
+        /// Buildings stand on level ground at the average height under them: the terrain is cut uphill and filled
+        /// downhill (<see cref="LevelBuildingPlots"/>), so they are neither half sunk nor on stilts.
+        /// </summary>
         private double GroundUnder(double x, double z, SceneryKind kind)
         {
-            double r = SceneryModels.Radius(kind) * 0.6;
-            bool building = kind is SceneryKind.AlpineHouse or SceneryKind.Farmhouse or SceneryKind.Church or SceneryKind.Inn
-                or SceneryKind.Shop or SceneryKind.HayHut or SceneryKind.AlpineHut or SceneryKind.Shrine;
-            if (!building) return _terrain.Height(x, z) - 0.3;
-            double h = _terrain.Height(x, z);
+            if (!IsBuilding(kind)) return _terrain.Height(x, z) - 0.3;
+            double r = SceneryModels.Radius(kind) * 0.6, sum = _terrain.Height(x, z);
             for (int k = 0; k < 8; k++)
             {
                 double a = k * Math.PI / 4;
-                h = Math.Min(h, _terrain.Height(x + (Math.Cos(a) * r), z + (Math.Sin(a) * r)));
+                sum += _terrain.Height(x + (Math.Cos(a) * r), z + (Math.Sin(a) * r));
             }
 
-            return h;
+            return sum / 9;
+        }
+
+        /// <summary>
+        /// Levels the ground under every building, then moves everything else placed nearby (fences, benches, beds,
+        /// signs …) by as much as the ground under it moved.
+        /// </summary>
+        private void LevelBuildingPlots()
+        {
+            var before = Items.Select(i => _terrain.Height(i.X, i.Z)).ToArray();
+            _terrain.SetPads(_pads);
+            for (int k = 0; k < Items.Count; k++)
+            {
+                var item = Items[k];
+                if (IsBuilding(item.Kind)) continue;
+                double shift = _terrain.Height(item.X, item.Z) - before[k];
+                if (Math.Abs(shift) < 0.001) continue;
+                item.Y += (float)shift;
+                Items[k] = item;
+            }
         }
 
         private void AddPasture(FieldPatch pasture)

@@ -96,12 +96,22 @@ namespace FreeVelo.Core.World.Gen
                     var rz = new List<double>();
                     void Add((double X, double Y, double Z) p) { rx.Add(p.X); ry.Add(p.Y); rz.Add(p.Z); }
                     for (double s = sa; s < sa + reach; s += 1) Add(Side(a.Edge, a.Start, s, sideA, 0.3)); // tucked under the asphalt
-                    const int segments = 14;
+                    // A circular arc touching both road edges (centre on the bisector): the grass between the roads
+                    // ends in a round nose instead of a sharp tip.
+                    double ua = Math.Sqrt(Sq(pa.X - x.X) + Sq(pa.Z - x.Z)), ub = Math.Sqrt(Sq(pb.X - x.X) + Sq(pb.Z - x.Z));
+                    double bx = ((pa.X - x.X) / ua) + ((pb.X - x.X) / ub), bz = ((pa.Z - x.Z) / ua) + ((pb.Z - x.Z) / ub), bl = Math.Sqrt((bx * bx) + (bz * bz));
+                    double centre = Radius / Math.Sin(Math.Max(0.05, theta / 2));
+                    double ox = x.X + (bx / bl * centre), oz = x.Z + (bz / bl * centre);
+                    double a0 = Math.Atan2(pa.Z - oz, pa.X - ox), a1 = Math.Atan2(pb.Z - oz, pb.X - ox);
+                    double sweep = a1 - a0;
+                    while (sweep > Math.PI) sweep -= 2 * Math.PI;
+                    while (sweep < -Math.PI) sweep += 2 * Math.PI;
+                    double ra = Math.Sqrt(Sq(pa.X - ox) + Sq(pa.Z - oz)), rb = Math.Sqrt(Sq(pb.X - ox) + Sq(pb.Z - oz));
+                    const int segments = 16;
                     for (int j = 0; j <= segments; j++)
                     {
-                        double t = j / (double)segments;
-                        double u = 1 - t;
-                        Add(((u * u * pa.X) + (2 * t * u * x.X) + (t * t * pb.X), pa.Y + ((pb.Y - pa.Y) * t), (u * u * pa.Z) + (2 * t * u * x.Z) + (t * t * pb.Z)));
+                        double t = j / (double)segments, ang = a0 + (sweep * t), r = ra + ((rb - ra) * t);
+                        Add((ox + (Math.Cos(ang) * r), pa.Y + ((pb.Y - pa.Y) * t), oz + (Math.Sin(ang) * r)));
                     }
 
                     for (double s = sb + reach - 1; s > sb; s -= 1) Add(Side(b.Edge, b.Start, s, sideB, 0.3));
