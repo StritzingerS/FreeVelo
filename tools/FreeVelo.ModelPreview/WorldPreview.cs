@@ -21,6 +21,18 @@ public static class WorldPreview
             Console.WriteLine($"  edge {e.Id}: {e.From}->{e.To} {e.Length:0} m {(e.IsMainLoop ? "loop" : "link")} {e.Surface} elev {e.E.Min():0}-{e.E.Max():0} max grade {maxGrade * 100:0.0}%");
         }
 
+        foreach (var n in map.Nodes) Console.WriteLine($"  node {n.Id}: ({n.X:0},{n.Z:0}) elev {n.Elevation:0}");
+        if (Environment.GetEnvironmentVariable("PTS") is string pts)
+        {
+            foreach (var id in pts.Split(','))
+            {
+                var e = map.Edges[int.Parse(id)];
+                Console.WriteLine($"  edge {e.Id} points:");
+                for (int i = 0; i < e.X.Length; i += 40) Console.WriteLine($"    d {e.D[i]:0} ({e.X[i]:0},{e.Z[i]:0}) e {e.E[i]:0}");
+            }
+        }
+
+        Console.WriteLine($"  home bounds {map.Bounds}, mountain bounds {map.MountainBounds}, grid {Terrain.GridRect(map)}");
         foreach (var l in map.Lakes) Console.WriteLine($"  lake at ({l.X:0},{l.Z:0}) r {l.Radius:0} level {l.Level:0.0}");
         foreach (var b in map.Bridges) Console.WriteLine($"  bridge edge {b.Edge} at {b.DistanceM:0} m, water {b.WaterLevel:0.0}, road {Sample(map.Edges[b.Edge], b.DistanceM):0.0}");
         var loop = map.MainLoop;
@@ -28,6 +40,15 @@ public static class WorldPreview
 
         var (minX, minZ, maxX, maxZ) = map.Bounds;
         double margin = 500;
+        MountainTerrain? mt = null;
+        if (Environment.GetEnvironmentVariable("FULL") == "1")
+        {
+            // Whole world: home, mountain and everything outside the home grid
+            var mb = map.MountainBounds;
+            minX = Math.Min(minX, mb.MinX); minZ = Math.Min(minZ, mb.MinZ); maxX = Math.Max(maxX, mb.MaxX); maxZ = Math.Max(maxZ, mb.MaxZ);
+            mt = MountainTerrain.Build(map, Terrain.GridRect(map));
+        }
+
         minX -= margin; minZ -= margin; maxX += margin; maxZ += margin;
         const int size = 1000;
         double scale = size / Math.Max(maxX - minX, maxZ - minZ);
@@ -37,9 +58,9 @@ public static class WorldPreview
             for (int px = 0; px < size; px++)
             {
                 double x = minX + (px / scale), z = maxZ - (py / scale);
-                double h = map.BaseHeight(x, z);
-                double hx = map.BaseHeight(x + 5, z) - h;
-                double shade = Math.Clamp(0.55 + ((h - 100) / 70) - (hx * 0.6), 0.15, 1);
+                double h = mt != null ? mt.Coarse(x, z) : map.BaseHeight(x, z);
+                double hx = (mt != null ? mt.Coarse(x + 5, z) : map.BaseHeight(x + 5, z)) - h;
+                double shade = mt != null ? Math.Clamp(0.35 + ((h - 100) / 2400) - (hx * 0.15), 0.1, 1) : Math.Clamp(0.55 + ((h - 100) / 70) - (hx * 0.6), 0.15, 1);
                 var c = (R: 0.45 * shade, G: 0.7 * shade, B: 0.35 * shade);
                 foreach (var l in map.Lakes)
                 {
