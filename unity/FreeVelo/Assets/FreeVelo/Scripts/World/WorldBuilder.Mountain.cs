@@ -166,7 +166,8 @@ namespace FreeVelo.World
             foreach (var place in landscape.Signs)
             {
                 var sign = SignRoot($"Sign {place.Name}", place.Item);
-                SignText(sign.transform, place.Name, new Vector3(0, 1.75f, 0.1f), 0.045f, font);
+                SignText(sign.transform, place.Name, new Vector3(0, 1.75f, 0.047f), 0.045f, font, front: true);
+                SignText(sign.transform, place.Name, new Vector3(0, 1.75f, -0.047f), 0.045f, font, front: false); // the back (end of the village)
             }
 
             foreach (var (item, boards) in landscape.Signposts)
@@ -177,7 +178,7 @@ namespace FreeVelo.World
                     var (arrow, name) = boards[i];
                     string line = arrow == "→" ? name + " →" : arrow + " " + name;
                     float size = 0.026f * Mathf.Min(1, 15f / Mathf.Max(1, line.Length));
-                    SignText(post.transform, line, new Vector3(0.75f, 2.4f - (i * 0.42f), 0.09f), size, font);
+                    SignText(post.transform, line, new Vector3(0.75f, 2.4f - (i * 0.42f), 0.08f), size, font, front: true);
                 }
             }
         }
@@ -190,12 +191,15 @@ namespace FreeVelo.World
             return go;
         }
 
-        private static void SignText(Transform parent, string value, Vector3 at, float characterSize, Font font)
+        /// <summary>The font's material, but hidden behind the board like any other surface (the default draws on top).</summary>
+        private static Material _signTextMaterial;
+
+        private static void SignText(Transform parent, string value, Vector3 at, float characterSize, Font font, bool front)
         {
             var text = new GameObject("Text");
             text.transform.SetParent(parent, false);
             text.transform.localPosition = at;
-            text.transform.localRotation = Quaternion.Euler(0, 180, 0); // a TextMesh reads from its −Z side
+            text.transform.localRotation = Quaternion.Euler(0, front ? 180 : 0, 0); // a TextMesh reads from its −Z side
             var mesh = text.AddComponent<TextMesh>();
             mesh.text = value;
             mesh.anchor = TextAnchor.MiddleCenter;
@@ -206,7 +210,13 @@ namespace FreeVelo.World
             if (font != null)
             {
                 mesh.font = font;
-                text.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+                if (_signTextMaterial == null)
+                {
+                    _signTextMaterial = new Material(font.material);
+                    _signTextMaterial.SetInt("unity_GUIZTestMode", (int)CompareFunction.LessEqual);
+                }
+
+                text.GetComponent<MeshRenderer>().sharedMaterial = _signTextMaterial;
             }
         }
 

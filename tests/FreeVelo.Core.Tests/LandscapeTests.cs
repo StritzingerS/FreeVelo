@@ -65,6 +65,43 @@ public class LandscapeTests
     }
 
     [Fact]
+    public void JunctionCornersArePavedAboveTheGround()
+    {
+        var terrain = Ground.Value;
+        Assert.True(terrain.Corners.Count >= 8, $"{terrain.Corners.Count} junction corners");
+        foreach (var c in terrain.Corners)
+        {
+            for (double x = c.MinX; x <= c.MaxX; x += 1)
+            {
+                for (double z = c.MinZ; z <= c.MaxZ; z += 1)
+                {
+                    if (c.Distance(x, z) > 0) continue;
+                    Assert.True(terrain.Height(x, z) <= c.CY - 0.2, $"ground above the corner at ({x:0},{z:0})");
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void YardsAndPathsDoNotFloat()
+    {
+        var terrain = Ground.Value;
+        var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
+        foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.Yard or SceneryKind.PathStone))
+        {
+            // The plate's base reaches 0.68 m below its seat: no ground under it may be lower than that.
+            var (hx, hz) = i.Kind == SceneryKind.Yard ? (3.5, 3.0) : (0.75, 2.0);
+            double r = i.RotationDeg * Math.PI / 180;
+            foreach (var (u, v) in new[] { (-hx, -hz), (hx, -hz), (-hx, hz), (hx, hz) })
+            {
+                double g = terrain.Height(i.X + (u * Math.Cos(r)) + (v * Math.Sin(r)), i.Z - (u * Math.Sin(r)) + (v * Math.Cos(r)));
+                Assert.True(g >= i.Y - 0.01, $"{i.Kind} at ({i.X:0},{i.Z:0}) floats");
+                Assert.True(g - i.Y <= 0.5, $"{i.Kind} at ({i.X:0},{i.Z:0}) buried");
+            }
+        }
+    }
+
+    [Fact]
     public void TheMaypoleOnlyStandsInMay()
     {
         var terrain = Ground.Value;

@@ -99,6 +99,7 @@ namespace FreeVelo.Core.World.Gen
             l.PlaceSignposts();
             l.PlaceFields();
             l.PlaceHayHuts();
+            l.SeatFlatPlates();
             foreach (var item in l.Items) l.Index(item);
             return l;
         }
@@ -666,6 +667,37 @@ namespace FreeVelo.Core.World.Gen
         {
             double angle = Math.Atan2(ax, az);
             BlockPatch(new FieldPatch(c.X, c.Z, halfU, halfV, angle, WorldMaterial.Meadow), 1);
+        }
+
+        /// <summary>
+        /// Yards and path stones are flat plates with a deep base: each sits on the lowest ground under it, so the uphill
+        /// part sinks into the meadow instead of the downhill end floating; where the ground is too steep, it is left out.
+        /// </summary>
+        private void SeatFlatPlates()
+        {
+            for (int k = Items.Count - 1; k >= 0; k--)
+            {
+                var item = Items[k];
+                if (item.Kind is not (SceneryKind.Yard or SceneryKind.PathStone)) continue;
+                var (hx, hz) = item.Kind == SceneryKind.Yard ? (3.5, 3.0) : (0.75, 2.0);
+                double r = item.RotationDeg * Math.PI / 180, sin = Math.Sin(r), cos = Math.Cos(r);
+                double low = double.MaxValue, high = double.MinValue;
+                foreach (var (u, v) in new[] { (-hx, -hz), (hx, -hz), (-hx, hz), (hx, hz), (0.0, 0.0) })
+                {
+                    double g = _terrain.Height(item.X + (u * cos) + (v * sin), item.Z - (u * sin) + (v * cos));
+                    low = Math.Min(low, g);
+                    high = Math.Max(high, g);
+                }
+
+                if (high - low > 0.45)
+                {
+                    Items.RemoveAt(k);
+                    continue;
+                }
+
+                item.Y = (float)low;
+                Items[k] = item;
+            }
         }
 
         // ------------------------------------------------------------------ signposts

@@ -38,8 +38,8 @@ namespace FreeVelo.Core.World.Gen
                 case SceneryKind.Fence: Fence(near); return true;
                 case SceneryKind.VillageSign: VillageSign(near); return true;
                 case SceneryKind.DirectionSign: DirectionSign(near, v); return true;
-                case SceneryKind.PathStone: near.Of(WorldMaterial.Stone).Box(new Vector3(0, 0.04f, 0), new Vector3(1.5f, 0.2f, 4.0f), Rot.Identity); return true;
-                case SceneryKind.Yard: near.Of(WorldMaterial.Gravel).Box(new Vector3(0, 0.03f, 0), new Vector3(7f, 0.2f, 6f), Rot.Identity); return true;
+                case SceneryKind.PathStone: near.Of(WorldMaterial.Stone).Box(new Vector3(0, -0.3f, 0), new Vector3(1.5f, 0.76f, 4.0f), Rot.Identity); return true;
+                case SceneryKind.Yard: near.Of(WorldMaterial.Gravel).Box(new Vector3(0, -0.3f, 0), new Vector3(7f, 0.76f, 6f), Rot.Identity); return true;
                 case SceneryKind.GardenFence: GardenFence(near); return true;
                 case SceneryKind.FlowerBed: FlowerBed(near, random); return true;
                 case SceneryKind.Bench: Bench(near); return true;
@@ -1262,10 +1262,16 @@ namespace FreeVelo.Core.World.Gen
             var post = near.Of(WorldMaterial.Iron);
             post.Box(new Vector3(-0.9f, 1.05f, 0), new Vector3(0.07f, 2.1f, 0.07f), Rot.Identity);
             post.Box(new Vector3(0.9f, 1.05f, 0), new Vector3(0.07f, 2.1f, 0.07f), Rot.Identity);
-            // Austrian style: white board, blue border (the app writes the name in dark letters)
-            near.Of(WorldMaterial.WallWhite).Box(new Vector3(0, 1.75f, 0.07f), new Vector3(2.2f, 0.62f, 0.04f), Rot.Identity);
-            near.Of(WorldMaterial.SignBlue).Box(new Vector3(0, 1.75f, 0.05f), new Vector3(2.34f, 0.76f, 0.04f), Rot.Identity);
-            near.Of(WorldMaterial.CarSilver).Box(new Vector3(0, 1.75f, 0.03f), new Vector3(2.42f, 0.84f, 0.03f), Rot.Identity);
+            // Austrian style, both sides: white board with a blue border (the app writes the name in black). The back,
+            // seen when leaving the village, is the end-of-village sign: the name with a red diagonal stripe.
+            near.Of(WorldMaterial.CarSilver).Box(new Vector3(0, 1.75f, 0), new Vector3(2.42f, 0.84f, 0.03f), Rot.Identity);
+            foreach (float s in new[] { -1f, 1f })
+            {
+                near.Of(WorldMaterial.SignBlue).Box(new Vector3(0, 1.75f, s * 0.025f), new Vector3(2.34f, 0.76f, 0.02f), Rot.Identity);
+                near.Of(WorldMaterial.WallWhite).Box(new Vector3(0, 1.75f, s * 0.035f), new Vector3(2.2f, 0.62f, 0.02f), Rot.Identity);
+            }
+
+            near.Of(WorldMaterial.FireRed).Box(new Vector3(0, 1.75f, -0.052f), new Vector3(2.2f, 0.07f, 0.006f), Rot.AboutZ(14));
         }
     }
 }

@@ -31,11 +31,15 @@ namespace FreeVelo.Core.World.Gen
             Nx = (int)Math.Round((rect.MaxX - rect.MinX) / cell) + 1;
             Nz = (int)Math.Round((rect.MaxZ - rect.MinZ) / cell) + 1;
             foreach (var e in map.Edges) _roads.Add(new SegmentIndex(e.X, e.Z, 40));
+            Corners = JunctionCorners.Build(map);
             if (map.River != null) _river = new SegmentIndex(map.River.X, map.River.Z, 40);
             _heights = new float[Nx * Nz];
         }
 
         public WorldMap Map => _map;
+
+        /// <summary>The rounded corners between roads at the junctions (the ground is lowered under them).</summary>
+        public List<JunctionCorner> Corners { get; }
 
         /// <summary>
         /// The home world's detailed grid: its roads and water plus <see cref="Margin"/>, rounded out to whole chunks
@@ -88,7 +92,7 @@ namespace FreeVelo.Core.World.Gen
         // ------------------------------------------------------------------ prepared worlds
 
         /// <summary>Bump when the terrain generation changes (old saved worlds are then regenerated).</summary>
-        public const int FormatVersion = 2;
+        public const int FormatVersion = 3;
         private const uint Magic = 0x4C565646; // "FVVL"
 
         /// <summary>
@@ -327,6 +331,20 @@ namespace FreeVelo.Core.World.Gen
                 }
 
                 h = roadDistance <= flat ? bed : bed + ((h - bed) * SmoothStep((roadDistance - flat) / BedBlend));
+            }
+
+            // Under the rounded junction corners, like under the roads (but a road's own bed stays as it is).
+            bool onRoadBed = road != null && roadDistance <= (road.Width / 2) + 1.3;
+            if (!nearRiver && !onRoadBed)
+            {
+                foreach (var c in Corners)
+                {
+                    if (x < c.MinX - BedBlend || x > c.MaxX + BedBlend || z < c.MinZ - BedBlend || z > c.MaxZ + BedBlend) continue;
+                    double d = c.Distance(x, z);
+                    if (d >= 1.3 + BedBlend) continue;
+                    double bed = c.CY - 0.3;
+                    h = d <= 1.3 ? Math.Min(h, bed) : Math.Min(h, bed + ((h - bed) * SmoothStep((d - 1.3) / BedBlend)));
+                }
             }
 
             return h;

@@ -330,60 +330,21 @@ namespace FreeVelo.World
         /// </summary>
         private void BuildJunctionCorners(Strips paved, Strips gravel)
         {
-            const float radius = 9f;
-            foreach (var node in Map.Nodes)
+            // The shapes come from the core (the terrain is lowered under them there too).
+            foreach (var corner in _terrain.Corners)
             {
-                if (node.Edges.Count < 3) continue;
-                var ends = node.Edges.Select(id =>
+                var rim = new Vector3[corner.X.Length];
+                for (int j = 0; j < rim.Length; j++)
                 {
-                    var e = Map.Edges[id];
-                    bool start = e.From == node.Id;
-                    var (p, _) = OnEdge(e, start ? 15f : (float)e.Length - 15f);
-                    return (Edge: e, Start: start, Angle: Mathf.Atan2(p.z - (float)node.Z, p.x - (float)node.X));
-                }).OrderBy(t => t.Angle).ToList();
-
-                for (int k = 0; k < ends.Count; k++)
-                {
-                    var a = ends[k];
-                    var b = ends[(k + 1) % ends.Count];
-                    float gap = b.Angle - a.Angle;
-                    if (gap <= 0) gap += Mathf.PI * 2;
-                    if (gap > 150 * Mathf.Deg2Rad) continue; // nearly straight on: nothing to round
-
-                    int sideA = FacingSide(a.Edge, a.Start, b.Edge, b.Start);
-                    int sideB = FacingSide(b.Edge, b.Start, a.Edge, a.Start);
-                    float sa = Crossing(a.Edge, a.Start, sideA, b.Edge, b.Start);
-                    float sb = Crossing(b.Edge, b.Start, sideB, a.Edge, a.Start);
-                    if (sa < 0 || sb < 0) continue;
-
-                    var x = EdgeSide(a.Edge, a.Start, sa, sideA);
-                    var dirA = (EdgeSide(a.Edge, a.Start, sa + 5, sideA) - x).normalized;
-                    var dirB = (EdgeSide(b.Edge, b.Start, sb + 5, sideB) - EdgeSide(b.Edge, b.Start, sb, sideB)).normalized;
-                    float theta = Vector3.Angle(new Vector3(dirA.x, 0, dirA.z), new Vector3(dirB.x, 0, dirB.z)) * Mathf.Deg2Rad;
-                    float reach = Mathf.Clamp(radius / Mathf.Tan(Mathf.Max(0.05f, theta / 2)), 2f, 30f);
-                    var pa = EdgeSide(a.Edge, a.Start, sa + reach, sideA);
-                    var pb = EdgeSide(b.Edge, b.Start, sb + reach, sideB);
-
-                    // Outline: along road A's edge (tucked 0.3 m under its asphalt, so no crack shows) out to the curve,
-                    // the curve across to road B, and back along B's edge.
-                    const int segments = 14;
-                    var rim = new List<Vector3>();
-                    for (float s = sa; s < sa + reach; s += 1f) rim.Add(EdgeSide(a.Edge, a.Start, s, sideA, 0.3f) + (Vector3.up * 0.004f));
-                    for (int j = 0; j <= segments; j++)
-                    {
-                        float t = j / (float)segments;
-                        var q = ((1 - t) * (1 - t) * pa) + (2 * t * (1 - t) * x) + (t * t * pb);
-                        q.y = Mathf.Max(Mathf.Lerp(pa.y, pb.y, t), (float)_terrain.Height(q.x, q.z) + 0.06f) + 0.004f;
-                        rim.Add(q);
-                    }
-
-                    for (float s = sb + reach - 1f; s > sb; s -= 1f) rim.Add(EdgeSide(b.Edge, b.Start, s, sideB, 0.3f) + (Vector3.up * 0.004f));
-
-                    bool asphalt = a.Edge.Surface == RoadSurface.Asphalt || b.Edge.Surface == RoadSurface.Asphalt;
-                    (asphalt ? paved : gravel).Fan(x + (Vector3.up * 0.004f), rim.ToArray());
-                    Remember(a.Edge, a.Start, sideA, sa + reach);
-                    Remember(b.Edge, b.Start, sideB, sb + reach);
+                    float x = (float)corner.X[j], z = (float)corner.Z[j];
+                    float y = Mathf.Max((float)corner.Y[j] + 0.05f, (float)_terrain.Height(x, z) + 0.06f) + 0.004f;
+                    rim[j] = new Vector3(x, y, z);
                 }
+
+                var centre = new Vector3((float)corner.CX, (float)corner.CY + 0.054f, (float)corner.CZ);
+                (corner.Asphalt ? paved : gravel).Fan(centre, rim);
+                Remember(Map.Edges[corner.EdgeA], corner.StartA, corner.SideA, (float)corner.ReachA);
+                Remember(Map.Edges[corner.EdgeB], corner.StartB, corner.SideB, (float)corner.ReachB);
             }
         }
 
@@ -424,41 +385,7 @@ namespace FreeVelo.World
             return c + (right * (side * (((float)e.Width / 2) - inset)));
         }
 
-        /// <summary>The side of road <paramref name="e"/> that faces road <paramref name="o"/>.</summary>
-        private static int FacingSide(RoadEdge e, bool start, RoadEdge o, bool oStart)
-        {
-            var (target, _) = OnEdge(o, oStart ? 12f : (float)o.Length - 12f);
-            return (EdgeSide(e, start, 12, 1) - target).sqrMagnitude < (EdgeSide(e, start, 12, -1) - target).sqrMagnitude ? 1 : -1;
-        }
-
-        /// <summary>How far from the junction an edge of road <paramref name="e"/> leaves road <paramref name="o"/>'s asphalt (−1: not within 80 m).</summary>
-        private static float Crossing(RoadEdge e, bool start, int side, RoadEdge o, bool oStart)
-        {
-            float half = (float)o.Width / 2;
-            for (float s = 0; s < 80; s += 0.5f)
-            {
-                var p = EdgeSide(e, start, s, side);
-                if (DistanceNearEnd(o, oStart, p) >= half) return s;
-            }
-
             return -1;
-        }
-
-        private static float DistanceNearEnd(RoadEdge o, bool start, Vector3 p)
-        {
-            float best = float.MaxValue;
-            for (int k = 0; k < o.X.Length - 1; k++)
-            {
-                double along = start ? o.D[k] : o.Length - o.D[k + 1];
-                if (along > 140) continue;
-                float ax = (float)o.X[k], az = (float)o.Z[k], bx = (float)o.X[k + 1], bz = (float)o.Z[k + 1];
-                float abx = bx - ax, abz = bz - az, len2 = (abx * abx) + (abz * abz);
-                float f = len2 > 0 ? Mathf.Clamp01((((p.x - ax) * abx) + ((p.z - az) * abz)) / len2) : 0;
-                float dx = ax + (abx * f) - p.x, dz = az + (abz * f) - p.z;
-                best = Mathf.Min(best, (dx * dx) + (dz * dz));
-            }
-
-            return Mathf.Sqrt(best);
         }
 
         /// <summary>How far from a junction roads can still overlap (shallow splits run side by side for a while).</summary>
