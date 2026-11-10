@@ -317,7 +317,14 @@ namespace FreeVelo.UI
         /// change). Heights are interpolated from samples tied to the road, so the outline glides smoothly when it scrolls.
         /// </summary>
         private static void ProfileColumns(Rect r, double from, double to, double[] e, double start, double step, double min, double span,
-            double rider, System.Func<double, float> alphaAt)
+            double rider, System.Func<double, float> alphaAt) =>
+            ProfileColumns(r, from, to, e, start, step, min, span, rider, d => Color.Lerp(Theme.Background, Theme.Info, alphaAt(d)), null);
+
+        /// <summary>
+        /// Same with a colour per distance; the ridden part orange, or (<paramref name="dimRidden"/>) its own colour dimmed.
+        /// </summary>
+        private static void ProfileColumns(Rect r, double from, double to, double[] e, double start, double step, double min, double span,
+            double rider, System.Func<double, Color> colorAt, float? dimRidden)
         {
             int cols = Mathf.Max(1, Mathf.FloorToInt(r.width / ProfileColumnW));
             float cw = r.width / cols;
@@ -330,9 +337,9 @@ namespace FreeVelo.UI
                 double d = from + ((to - from) * (c + 0.5) / cols);
                 float h = 8 + (float)((SampleAt(e, start, step, d) - min) / span) * (r.height - 8);
                 float x0 = r.x + (c * cw), x1 = x0 + cw;
-                var ahead = Color.Lerp(bg, Theme.Info, alphaAt(d));
+                var ahead = colorAt(d);
                 float split = Mathf.Clamp(px, x0, x1);
-                if (split > x0) Ui.Rect(new Rect(x0, r.yMax - h, split - x0, h), done, 0);
+                if (split > x0) Ui.Rect(new Rect(x0, r.yMax - h, split - x0, h), dimRidden.HasValue ? Color.Lerp(bg, ahead, dimRidden.Value) : done, 0);
                 if (split < x1) Ui.Rect(new Rect(split, r.yMax - h, x1 - split, h), ahead, 0);
             }
         }
@@ -340,8 +347,8 @@ namespace FreeVelo.UI
         /// <summary>Height range a whole-round profile shows at least, so small hills don't look like mountains.</summary>
         private const double MinRoundSpanM = 100;
 
-        /// <summary>Same for the "next 3 km" profile.</summary>
-        private const double MinAheadSpanM = 60;
+        /// <summary>Same for the climb view (next 500 m).</summary>
+        private const double MinAheadSpanM = 40;
 
         /// <summary>Metres up and down between two distances (sampled every 10 m).</summary>
         private static (double Up, double Down) Climbing(FreeVelo.Core.World.Route route, double from, double to)

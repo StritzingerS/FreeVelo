@@ -139,16 +139,35 @@ namespace FreeVelo.UI
         private static void StripCorner(Rect card, string text) =>
             GUI.Label(new Rect(card.xMax - 418, card.y + 6, 400, 22), text, Theme.With(Theme.Caption, Theme.Text, anchor: TextAnchor.MiddleRight));
 
+        /// <summary>Climb view window: a little behind, 500 m ahead.</summary>
+        private const double ClimbBehindM = 50, ClimbAheadM = 500;
+
         private void DrawRideStrip()
         {
             var route = _ride.Route;
             if (route == null) return;
+            double d = _ride.DistanceM;
+            // Free ride: the way ahead including the default turns beyond the next junction.
+            var ahead = !route.IsLoop && _ride.Path != null && _ride.Route == _ride.Path.Route ? _ride.Path.Preview(d + ClimbAheadM + 100) : route;
+            double to = route.IsLoop ? d + ClimbAheadM : System.Math.Min(d + ClimbAheadM, ahead.LengthM);
+            var (up, _) = Climbing(ahead, d, to);
+            double avg = to > d ? (ahead.Sample(to).Y - ahead.Sample(d).Y) / (to - d) * 100 : 0;
+            bool climbing = _ride.ActiveClimb != null || avg >= 3;
+
+            // Free ride: only on climbs. Rounds (main loop, climb rounds): the round overview when not climbing.
+            if (!climbing && !route.IsLoop) return;
+
             var card = new Rect(24, _h - 120, _w - 48, 96);
             Ui.Card(card, Theme.Alpha(Theme.Background, 0.85f));
             var graph = new Rect(card.x + 16, card.y + 30, card.width - 32, card.height - 40);
-
-            double d = _ride.DistanceM;
-            if (route.IsLoop)
+            if (climbing)
+            {
+                string title = _ride.ActiveClimb != null ? $"{_ride.ActiveClimb.Name} · {L.Get("next_500m")}" : L.Get("next_500m");
+                GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), title, Theme.Caption);
+                StripCorner(card, $"<color=#4ADE80>↑</color> <b>{up:0} m</b>   Ø <b>{System.Math.Max(0, avg):0.0} %</b>");
+                DrawClimbProfile(graph, ahead, d);
+            }
+            else
             {
                 GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), $"{RouteLabel(route)} · {route.LengthM / 1000:0.0} km", Theme.Caption);
                 // Corner: climbing still to come in this round, of the whole round.
@@ -159,30 +178,31 @@ namespace FreeVelo.UI
                 StripCorner(card, string.Format(L.Get("ascent_left"), $"<color=#4ADE80>↑</color> <b>{total - done:0} m</b>", $"{total:0} m"));
                 DrawElevation(graph, route, pos);
             }
-            else
-            {
-                GUI.Label(new Rect(card.x + 18, card.y + 6, 600, 22), L.Get("ahead_3km"), Theme.Caption);
-                // Beyond the next junction: the way the rider would take by default (or has chosen there).
-                var ahead = _ride.Path != null && _ride.Route == _ride.Path.Route ? _ride.Path.Preview(d + 3000) : route;
-                // Corner: metres up and down in the next 3 km.
-                var (up, down) = Climbing(ahead, d, System.Math.Min(d + 3000, ahead.LengthM));
-                StripCorner(card, $"<color=#4ADE80>↑</color> <b>{up:0} m</b>   <color=#60A5FA>↓</color> <b>{down:0} m</b>");
-                DrawElevationAhead(graph, ahead, d);
-            }
         }
 
-        /// <summary>Profile from 300 m behind to 3 km ahead (as far as the way is known: up to the next junction).</summary>
-        private void DrawElevationAhead(Rect r, FreeVelo.Core.World.Route route, double distance)
+        /// <summary>Gradient colours as on Garmin's ClimbPro.</summary>
+        private static Color ClimbColor(double gradePercent) =>
+            gradePercent < 3 ? new Color(0.30f, 0.75f, 0.35f)
+            : gradePercent < 6 ? new Color(0.98f, 0.82f, 0.18f)
+            : gradePercent < 9 ? new Color(0.98f, 0.55f, 0.12f)
+            : gradePercent < 12 ? new Color(0.90f, 0.20f, 0.18f)
+            : new Color(0.55f, 0.08f, 0.10f);
+
+        /// <summary>
+        /// The next 500 m (and a little behind), coloured by gradient like ClimbPro; the ridden part dimmed. Beyond the
+        /// next junction the way the rider would take by default (or has chosen there).
+        /// </summary>
+        private void DrawClimbProfile(Rect r, FreeVelo.Core.World.Route route, double distance)
         {
-            double from = distance - 300, to = distance + 3000;
-            double end = route.LengthM;
+            double from = distance - ClimbBehindM, to = distance + ClimbAheadM;
+            double end = route.IsLoop ? double.MaxValue : route.LengthM;
             // Beyond the next junction the way on can still change: drawn a little fainter.
             var upcoming = _ride.NextJunction();
             double fixedUntil = upcoming != null ? upcoming.DistanceM : end;
 
-            // Samples every 15 m tied to the road (not to the screen); worked out again only when the rider has moved
+            // Samples every 5 m tied to the road (not to the screen); worked out again only when the rider has moved
             // on by one sample or the way ahead changed, so the outline scrolls smoothly.
-            const double step = 15;
+            const double step = 5;
             long first = (long)System.Math.Floor(from / step) - 1;
             int count = (int)((to - from) / step) + 4;
             if (_aheadRoute != route || _aheadFirst != first || _aheadSamples == null || _aheadSamples.Length != count)
@@ -201,8 +221,15 @@ namespace FreeVelo.UI
             }
 
             double span = System.Math.Max(MinAheadSpanM, max - min);
-            ProfileColumns(r, from, to, _aheadSamples, first * step, step, min, span, distance,
-                d => d > end ? 0.12f : d > fixedUntil ? 0.24f : 0.42f);
+            var samples = _aheadSamples;
+            double s0 = first * step;
+            ProfileColumns(r, from, to, samples, s0, step, min, span, distance, d =>
+            {
+                // Gradient over ±10 m, from the samples
+                double g = (SampleAt(samples, s0, step, d + 10) - SampleAt(samples, s0, step, d - 10)) / 20 * 100;
+                var c = ClimbColor(g);
+                return d > end ? Color.Lerp(Theme.Background, c, 0.25f) : d > fixedUntil ? Color.Lerp(Theme.Background, c, 0.6f) : c;
+            }, 0.45f);
             float px = r.x + (r.width * (float)((distance - from) / (to - from)));
             Ui.Rect(new Rect(px - 1.5f, r.y, 3, r.height), Theme.Text, 1);
 
