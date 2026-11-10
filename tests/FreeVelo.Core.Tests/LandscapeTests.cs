@@ -45,8 +45,21 @@ public class LandscapeTests
         foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.AlpineHouse or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.Church or SceneryKind.Farmhouse))
         {
             Assert.True(terrain.DistanceToRoad(i.X, i.Z, 8, out _, out _, out _) >= 8, $"{i.Kind} at ({i.X:0},{i.Z:0}) on a road");
+            // The whole outline – walls, balconies, the church's graveyard wall and tower – stays off every road.
+            foreach (var (x, z) in Landscape.OutlinePoints(i.Kind, i.Variant, i.X, i.Z, i.RotationDeg, 1))
+            {
+                double d = terrain.DistanceToRoad(x, z, 10, out var road, out _, out _);
+                Assert.True(road == null || d >= (road.Width / 2) + 1.4, $"{i.Kind} at ({i.X:0},{i.Z:0}) reaches the road at ({x:0},{z:0})");
+            }
             Assert.False(terrain.IsWater(i.X, i.Z, 5), $"{i.Kind} in the water");
             Assert.True(l.Blocked(i.X, i.Z));
+        }
+
+        // Fences never stand on a road either.
+        foreach (var f in l.Items.Where(i => i.Kind is SceneryKind.GardenFence or SceneryKind.Fence))
+        {
+            double d = terrain.DistanceToRoad(f.X, f.Z, 10, out var road, out _, out _);
+            Assert.True(road == null || d >= (road.Width / 2) + 0.9, $"fence at ({f.X:0},{f.Z:0}) on a road");
         }
 
         // Trees and rocks never grow where something is built.

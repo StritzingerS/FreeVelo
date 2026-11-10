@@ -197,11 +197,12 @@ namespace FreeVelo.Core.World.Gen
             // The church first: a lot near the centre with room behind (its tower towards the road).
             if (plan.Church)
             {
-                foreach (var lot in lots.Where(l => l.S > 45 && l.S < 190))
+                foreach (var lot in lots.Where(l => l.S > 45 && l.S < 260))
                 {
                     double back = 15; // further from the road than a house
                     double cx = lot.Item.X - (lot.TowardX * back), cz = lot.Item.Z - (lot.TowardZ * back);
                     if (!Free(cx, cz, SceneryModels.Radius(SceneryKind.Church) + 3, roadClear: 21)) continue;
+                    if (!FootprintClear(SceneryKind.Church, 0, cx, cz, lot.Item.RotationDeg)) continue; // the graveyard wall too
                     Place(SceneryKind.Church, cx, cz, lot.Item.RotationDeg, _random.Next(2));
                     // In front: the maypole (in May) and a big linden.
                     double fx = cx + (lot.TowardX * 22), fz = cz + (lot.TowardZ * 22);
@@ -231,6 +232,7 @@ namespace FreeVelo.Core.World.Gen
                 double x = lot.Item.X - (lot.TowardX * extra), z = lot.Item.Z - (lot.TowardZ * extra);
                 if (!Free(x, z, r + 1.5, roadClear: (r * 0.75) + 5)) continue;
                 int variant = _random.Next(3);
+                if (!FootprintClear(kind, variant, x, z, lot.Item.RotationDeg)) continue;
                 Place(kind, x, z, lot.Item.RotationDeg, variant);
                 Plot(kind, variant, x, z, lot.TowardX, lot.TowardZ, lot.AlongX, lot.AlongZ, lot.Item.RotationDeg);
                 if (kind == SceneryKind.Inn) inns--;
@@ -417,6 +419,51 @@ namespace FreeVelo.Core.World.Gen
             }
         }
 
+        /// <summary>
+        /// The ground a building covers, in its own frame (front = +Z): half width across, and from the back to the
+        /// front – with roof overhangs, balconies, ramps, terraces and, for the church, the graveyard wall and the tower.
+        /// </summary>
+        public static (double HalfX, double Back, double Front, double RightExtra) Outline(SceneryKind kind, int variant)
+        {
+            var (w, d) = Size(kind, variant);
+            return kind switch
+            {
+                SceneryKind.Church => (12.8, -23.6, 17.6, 0),
+                SceneryKind.Farmhouse => ((w / 2) + 1.4, -(d / 2) - 1.6, (d / 2) + 1.6, 4.4), // the ramp on the right
+                SceneryKind.Inn => ((w / 2) + 1.6, -(d / 2) - 1.6, (d / 2) + 3.2, 0),     // terrace in front
+                _ => ((w / 2) + 1.5, -(d / 2) - 1.6, (d / 2) + 1.6, 0),
+            };
+        }
+
+        /// <summary>A building's whole outline (see <see cref="Outline"/>) is off the roads (1.5 m from the asphalt) and dry.</summary>
+        private bool FootprintClear(SceneryKind kind, int variant, double x, double z, double rotationDeg)
+        {
+            foreach (var (px, pz) in OutlinePoints(kind, variant, x, z, rotationDeg, 2))
+            {
+                if (_terrain.IsWater(px, pz, 1)) return false;
+                double d = _terrain.DistanceToRoad(px, pz, 12, out var road, out _, out _);
+                if (road != null && d < (road.Width / 2) + 1.5) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>Points round a building's outline (and across it), every <paramref name="step"/> metres, in world space.</summary>
+        public static IEnumerable<(double X, double Z)> OutlinePoints(SceneryKind kind, int variant, double x, double z, double rotationDeg, double step)
+        {
+            var (hx, back, front, right) = Outline(kind, variant);
+            double r = rotationDeg * Math.PI / 180, c = Math.Cos(r), s = Math.Sin(r);
+            for (double lz = back; lz <= front + 0.01; lz += step)
+            {
+                for (double lx = -hx; lx <= hx + right + 0.01; lx += step)
+                {
+                    bool edge = lz - back < step || front - lz < step || lx + hx < step || hx + right - lx < step;
+                    if (!edge && ((int)((lz - back) / step) % 3 != 0)) continue; // the rim, and a few lines across
+                    yield return (x + (lx * c) + (lz * s), z - (lx * s) + (lz * c));
+                }
+            }
+        }
+
         /// <summary>A fence piece through these points stays off the roads (1 m from the asphalt) and out of the water.</summary>
         private bool FenceClear(params (double X, double Z)[] points)
         {
@@ -480,6 +527,7 @@ namespace FreeVelo.Core.World.Gen
             var house = P(0, setback);
             if (!Free(house.X, house.Z, SceneryModels.Radius(SceneryKind.Farmhouse) + 4, roadClear: 30) || _terrain.Slope(house.X, house.Z) > 0.12) return false;
             if (_map.ValleyDistance(house.X, house.Z) > 500) return false;
+            if (!FootprintClear(SceneryKind.Farmhouse, 2, house.X, house.Z, Facing(-vx, -vz))) return false;
 
             double roadAngle = Math.Atan2(a.TX, a.TZ);
             Place(SceneryKind.Farmhouse, house.X, house.Z, Facing(-vx, -vz), _random.Next(3));
