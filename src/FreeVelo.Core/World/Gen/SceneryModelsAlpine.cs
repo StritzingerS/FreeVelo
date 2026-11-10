@@ -1048,28 +1048,6 @@ namespace FreeVelo.Core.World.Gen
             // Real Golf IV (5-door) layout: 4.15 m long (z = ±2.075), front overhang 0.84 m, wheelbase 2.51 m; the
             // windscreen from the scuttle (z 0.72) up to the roof (z −0.08), the roof to z −1.52, the tailgate down to
             // the tail. Lower body: rounded corners; the bonnet falls from the scuttle to a low nose, the tail is upright.
-            body.Sweep(new[]
-            {
-                new Ring(new Vector3(0, 0.665f, -2.075f), half - 0.04f, half - 0.04f, belt - 0.665f, 0.265f, 5f),
-                new Ring(new Vector3(0, 0.667f, -2.04f), half - 0.01f, half - 0.01f, belt - 0.667f, 0.285f, 5f),
-                new Ring(new Vector3(0, 0.67f, -1.98f), half, half, belt - 0.67f, 0.3f, 4.5f),
-                new Ring(new Vector3(0, 0.66f, 0.72f), half, half, belt - 0.66f, 0.3f, 4f),
-                new Ring(new Vector3(0, 0.65f, 1.2f), half, half, 0.29f, 0.3f, 4f),
-                new Ring(new Vector3(0, 0.64f, 1.6f), half - 0.01f, half - 0.01f, 0.26f, 0.3f, 3.8f),
-                new Ring(new Vector3(0, 0.63f, 1.85f), half - 0.02f, half - 0.02f, 0.235f, 0.285f, 3.8f),
-                new Ring(new Vector3(0, 0.62f, 2.0f), half - 0.04f, half - 0.04f, 0.215f, 0.27f, 3.8f),
-                new Ring(new Vector3(0, 0.605f, 2.075f), half - 0.09f, half - 0.09f, 0.19f, 0.24f, 3.6f),
-            }, Vector3.UnitX, 22);
-            const float tail = -2.075f;
-
-            // Cabin: one closed shape (windscreen, roof, tailgate, two sides with tumblehome), painted; the windows
-            // sit on it, so the pillars are simply the paint between the glass.
-            var bf = new Vector3(0.8f, belt, 0.72f);     // bottom front (x > 0 side): the scuttle
-            var br = new Vector3(0.8f, belt, -2.02f);    // bottom rear: the tailgate runs down to the tail
-            var tf = new Vector3(0.7f, 1.43f, -0.08f);   // top front: windscreen top
-            var tr = new Vector3(0.71f, 1.43f, -1.52f);  // top rear: roof end
-            Vector3 M(Vector3 v, int side) => new Vector3(v.X * side, v.Y, v.Z);
-            var shell = body.Mesh;
             void Quad(MeshData m, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 outward)
             {
                 int q = m.Vertices.Count;
@@ -1081,6 +1059,90 @@ namespace FreeVelo.Core.World.Gen
                 TriOut(m, q, q + 2, q + 3, outward);
             }
 
+            // Upper body: from the belt down to just above the wheels (y 0.69); the bonnet falls to the nose.
+            body.Sweep(new[]
+            {
+                new Ring(new Vector3(0, 0.83f, -2.075f), half - 0.04f, half - 0.04f, belt - 0.83f, 0.14f, 6f),
+                new Ring(new Vector3(0, 0.83f, -2.04f), half - 0.01f, half - 0.01f, belt - 0.83f, 0.14f, 5f),
+                new Ring(new Vector3(0, 0.83f, -1.98f), half, half, belt - 0.83f, 0.14f, 6f),
+                new Ring(new Vector3(0, 0.83f, 0.72f), half, half, belt - 0.83f, 0.14f, 6f),
+                new Ring(new Vector3(0, 0.815f, 1.2f), half, half, 0.125f, 0.125f, 6f),
+                new Ring(new Vector3(0, 0.8f, 1.6f), half - 0.01f, half - 0.01f, 0.1f, 0.11f, 5.5f),
+                new Ring(new Vector3(0, 0.785f, 1.85f), half - 0.02f, half - 0.02f, 0.08f, 0.095f, 5.5f),
+                new Ring(new Vector3(0, 0.775f, 2.0f), half - 0.04f, half - 0.04f, 0.065f, 0.085f, 5.5f),
+                new Ring(new Vector3(0, 0.765f, 2.075f), half - 0.09f, half - 0.09f, 0.05f, 0.075f, 5f),
+            }, Vector3.UnitX, 22);
+
+            // Sides below it: panels with round wheel arches cut out (dark inside), the sill between the wheels.
+            const float archR = 0.37f, sill = 0.3f, panelTop = 0.8f, depth = 0.08f;
+            float Bottom(float z)
+            {
+                foreach (float a in new[] { -axle, axle })
+                {
+                    float dz = z - a;
+                    if (Math.Abs(dz) < archR) return Math.Min(panelTop - 0.01f, r + (float)Math.Sqrt((archR * archR) - (dz * dz)));
+                }
+
+                return sill;
+            }
+
+            var lining = near.Of(WorldMaterial.Tyre).Mesh;
+            for (int side = -1; side <= 1; side += 2)
+            {
+                float xo = side * half, xi = side * (half - depth);
+                for (float z = -1.99f; z < 1.99f - 0.001f; z += 0.04f)
+                {
+                    float z2 = Math.Min(1.99f, z + 0.04f);
+                    float b1 = Bottom(z), b2 = Bottom(z2);
+                    Quad(body.Mesh, new Vector3(xo, b1, z), new Vector3(xo, b2, z2), new Vector3(xo, panelTop, z2), new Vector3(xo, panelTop, z), new Vector3(side, 0, 0));
+                    // The edge underneath: dark in the arches, body colour along the sill
+                    Quad(b1 > sill + 0.01f ? lining : body.Mesh, new Vector3(xi, b1, z), new Vector3(xi, b2, z2), new Vector3(xo, b2, z2), new Vector3(xo, b1, z), Vector3.UnitY * -1);
+                }
+
+                // Arch liners: dark curved walls behind the wheels, so the arches read as openings.
+                foreach (float a in new[] { -axle, axle })
+                {
+                    for (int k = 0; k < 16; k++)
+                    {
+                        double t0 = Math.PI * k / 16, t1 = Math.PI * (k + 1) / 16;
+                        var p0 = new Vector3(0, r + (archR * (float)Math.Sin(t0)), a + (archR * (float)Math.Cos(t0)));
+                        var p1 = new Vector3(0, r + (archR * (float)Math.Sin(t1)), a + (archR * (float)Math.Cos(t1)));
+                        Quad(lining, new Vector3(side * 0.6f, p0.Y, p0.Z), new Vector3(side * 0.6f, p1.Y, p1.Z), new Vector3(xi, p1.Y, p1.Z), new Vector3(xi, p0.Y, p0.Z), new Vector3(0, r - p0.Y, a - p0.Z));
+                    }
+                }
+            }
+
+            // Bumpers: rounded bars across the front and the back, wrapping round the corners into the sides.
+            Ring Bar(float x, float scale, float y, float zc, float toFront, float toBack, float halfH) =>
+                new Ring(new Vector3(x, y, zc), toFront * scale, toBack * scale, halfH * scale, halfH * scale, 6f);
+            body.Sweep(new[]
+            {
+                Bar(-half - 0.005f, 0.55f, 0.5f, 1.97f, 0.11f, 0.14f, 0.19f),
+                Bar(-half + 0.03f, 0.95f, 0.5f, 1.97f, 0.11f, 0.14f, 0.19f),
+                Bar(-half + 0.12f, 1f, 0.5f, 1.97f, 0.11f, 0.14f, 0.19f),
+                Bar(half - 0.12f, 1f, 0.5f, 1.97f, 0.11f, 0.14f, 0.19f),
+                Bar(half - 0.03f, 0.95f, 0.5f, 1.97f, 0.11f, 0.14f, 0.19f),
+                Bar(half + 0.005f, 0.55f, 0.5f, 1.97f, 0.11f, 0.14f, 0.19f),
+            }, Vector3.UnitZ, 14);
+            body.Sweep(new[]
+            {
+                Bar(-half - 0.005f, 0.55f, 0.5f, -1.98f, 0.14f, 0.11f, 0.185f),
+                Bar(-half + 0.03f, 0.95f, 0.5f, -1.98f, 0.14f, 0.11f, 0.185f),
+                Bar(-half + 0.12f, 1f, 0.5f, -1.98f, 0.14f, 0.11f, 0.185f),
+                Bar(half - 0.12f, 1f, 0.5f, -1.98f, 0.14f, 0.11f, 0.185f),
+                Bar(half - 0.03f, 0.95f, 0.5f, -1.98f, 0.14f, 0.11f, 0.185f),
+                Bar(half + 0.005f, 0.55f, 0.5f, -1.98f, 0.14f, 0.11f, 0.185f),
+            }, Vector3.UnitZ, 14);
+            const float tail = -2.075f;
+
+            // Cabin: one closed shape (windscreen, roof, tailgate, two sides with tumblehome), painted; the windows
+            // sit on it, so the pillars are simply the paint between the glass.
+            var bf = new Vector3(0.8f, belt, 0.72f);     // bottom front (x > 0 side): the scuttle
+            var br = new Vector3(0.8f, belt, -2.02f);    // bottom rear: the tailgate runs down to the tail
+            var tf = new Vector3(0.7f, 1.43f, -0.08f);   // top front: windscreen top
+            var tr = new Vector3(0.71f, 1.43f, -1.52f);  // top rear: roof end
+            Vector3 M(Vector3 v, int side) => new Vector3(v.X * side, v.Y, v.Z);
+            var shell = body.Mesh;
             Quad(shell, M(bf, -1), M(bf, 1), M(tf, 1), M(tf, -1), new Vector3(0, 0.5f, 1));      // windscreen
             Quad(shell, M(tf, -1), M(tf, 1), M(tr, 1), M(tr, -1), Vector3.UnitY);               // roof
             Quad(shell, M(tr, -1), M(tr, 1), M(br, 1), M(br, -1), new Vector3(0, 0.5f, -1));     // tailgate
@@ -1136,31 +1198,30 @@ namespace FreeVelo.Core.World.Gen
                 near.Of(WorldMaterial.FireRed).Box(new Vector3(s * 0.63f, 0.81f, tail - 0.012f), new Vector3(0.36f, 0.05f, 0.03f), Rot.Identity);
                 near.Of(WorldMaterial.Awning).Box(new Vector3(s * (half - 0.035f), 0.88f, tail + 0.1f), new Vector3(0.04f, 0.19f, 0.2f), Rot.Identity);
                 // Tailgate seams
-                dark.Box(new Vector3(s * 0.43f, 0.79f, tail - 0.004f), new Vector3(0.012f, 0.36f, 0.01f), Rot.Identity);
+                dark.Box(new Vector3(s * 0.43f, 0.84f, tail - 0.004f), new Vector3(0.012f, 0.26f, 0.01f), Rot.Identity);
                 // Headlights: a reflector housing with two round lamps
-                var hl = new Vector3(s * 0.52f, 0.68f, 2.085f);
+                var hl = new Vector3(s * 0.52f, 0.755f, 2.07f);
                 chrome.Box(hl, new Vector3(0.36f, 0.13f, 0.05f), Rot.Identity);
                 near.Of(WorldMaterial.Frame).Disc(hl + new Vector3(s * -0.08f, 0, 0.035f), Vector3.UnitZ, 0, 0.06f, 0.02f, 10);
                 near.Of(WorldMaterial.Frame).Disc(hl + new Vector3(s * 0.08f, 0, 0.025f), Vector3.UnitZ, 0, 0.05f, 0.02f, 10);
             }
 
             // Grille: chrome bars between the headlights; bumpers in body colour with dark intakes and the plates
-            for (int k = 0; k < 4; k++) chrome.Box(new Vector3(0, 0.63f + (k * 0.035f), 2.095f), new Vector3(0.6f, 0.016f, 0.03f), Rot.Identity);
-            body.Box(new Vector3(0, 0.42f, 2.04f), new Vector3(1.64f, 0.24f, 0.16f), Rot.Identity);
+            for (int k = 0; k < 4; k++) chrome.Box(new Vector3(0, 0.71f + (k * 0.03f), 2.075f), new Vector3(0.6f, 0.014f, 0.03f), Rot.Identity);
             // Tailgate: lower seam and the handle
-            dark.Box(new Vector3(0, 0.61f, tail - 0.004f), new Vector3(0.88f, 0.012f, 0.01f), Rot.Identity);
-            chrome.Box(new Vector3(0, 0.74f, tail - 0.012f), new Vector3(0.18f, 0.045f, 0.025f), Rot.Identity);
+            dark.Box(new Vector3(0, 0.71f, tail - 0.004f), new Vector3(0.88f, 0.012f, 0.01f), Rot.Identity);
+            chrome.Box(new Vector3(0, 0.79f, tail - 0.012f), new Vector3(0.18f, 0.04f, 0.025f), Rot.Identity);
             // Rear bumper: big, body colour, a grey strip on top, the plate in it, dark below with twin exhausts.
-            body.Box(new Vector3(0, 0.49f, tail - 0.04f), new Vector3(1.74f, 0.26f, 0.14f), Rot.Identity);
-            near.Of(WorldMaterial.Plinth).Box(new Vector3(0, 0.63f, tail - 0.04f), new Vector3(1.74f, 0.035f, 0.15f), Rot.Identity);
-            dark.Box(new Vector3(0, 0.5f, tail - 0.112f), new Vector3(0.58f, 0.15f, 0.01f), Rot.Identity);
-            dark.Box(new Vector3(0, 0.33f, tail - 0.03f), new Vector3(1.66f, 0.12f, 0.13f), Rot.Identity);
-            foreach (float x in new[] { -0.52f, -0.42f }) chrome.Tube(new Vector3(x, 0.29f, tail + 0.05f), new Vector3(x, 0.29f, tail - 0.13f), 0.035f, 0.035f, 8, false);
-            dark.Box(new Vector3(0, 0.36f, 2.12f), new Vector3(0.62f, 0.09f, 0.02f), Rot.Identity);
-            for (int s = -1; s <= 1; s += 2) dark.Box(new Vector3(s * 0.55f, 0.36f, 2.12f), new Vector3(0.28f, 0.08f, 0.02f), Rot.Identity);
-            near.Of(WorldMaterial.WallWhite).Box(new Vector3(0, 0.5f, 2.13f), new Vector3(0.52f, 0.11f, 0.02f), Rot.Identity);
-            near.Of(WorldMaterial.WallWhite).Box(new Vector3(0, 0.5f, tail - 0.122f), new Vector3(0.52f, 0.11f, 0.01f), Rot.Identity);
-            dark.Box(new Vector3(0, 0.3f, 0), new Vector3(1.68f, 0.12f, 2.0f), Rot.Identity); // sills between the wheels
+            // On the bumpers: the grey strip along the rear one, the plates, dark intakes in front, the exhausts
+            near.Of(WorldMaterial.Plinth).Box(new Vector3(0, 0.655f, -2.07f), new Vector3(1.7f, 0.03f, 0.2f), Rot.Identity);
+            dark.Box(new Vector3(0, 0.5f, -2.137f), new Vector3(0.58f, 0.15f, 0.01f), Rot.Identity);
+            near.Of(WorldMaterial.WallWhite).Box(new Vector3(0, 0.5f, -2.145f), new Vector3(0.52f, 0.11f, 0.01f), Rot.Identity);
+            dark.Box(new Vector3(0, 0.37f, -2.08f), new Vector3(1.5f, 0.06f, 0.12f), Rot.Identity);
+            foreach (float x in new[] { -0.52f, -0.42f }) chrome.Tube(new Vector3(x, 0.3f, -1.95f), new Vector3(x, 0.3f, -2.16f), 0.035f, 0.035f, 8, false);
+            dark.Box(new Vector3(0, 0.4f, 2.118f), new Vector3(0.62f, 0.08f, 0.01f), Rot.Identity);
+            for (int s = -1; s <= 1; s += 2) dark.Box(new Vector3(s * 0.55f, 0.4f, 2.115f), new Vector3(0.26f, 0.07f, 0.01f), Rot.Identity);
+            near.Of(WorldMaterial.WallWhite).Box(new Vector3(0, 0.53f, 2.123f), new Vector3(0.52f, 0.11f, 0.01f), Rot.Identity);
+            dark.Box(new Vector3(0, 0.32f, 0), new Vector3(1.6f, 0.06f, 3.2f), Rot.Identity); // underbody between the wheels
 
             // Wheels: tyres, 7-spoke alloys with a hub
             var tyre = near.Of(WorldMaterial.Tyre);
