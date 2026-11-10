@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using FreeVelo.Core.Training;
 
@@ -40,6 +41,24 @@ namespace FreeVelo.Core.Recording
         private const byte UInt16 = 0x84;
         private const byte UInt32 = 0x86;
         private const byte UInt32Z = 0x8C;
+        private const byte SInt32 = 0x85;
+
+        /// <summary>
+        /// Where the virtual world lies on the globe (like Zwift's worlds, in the ocean, so the map shows no real roads):
+        /// Austria's latitude, in the middle of the North Atlantic. Strava then takes the elevation from the file.
+        /// </summary>
+        public const double WorldOriginLat = 47.5, WorldOriginLon = -32.0;
+
+        /// <summary>World position (metres east, north) → latitude / longitude in degrees.</summary>
+        public static (double Lat, double Lon) ToLatLon(double x, double z)
+        {
+            const double metresPerDegree = 111_320;
+            double lat = WorldOriginLat + (z / metresPerDegree);
+            double lon = WorldOriginLon + (x / (metresPerDegree * Math.Cos(WorldOriginLat * Math.PI / 180)));
+            return (lat, lon);
+        }
+
+        private static int Semicircles(double degrees) => (int)Math.Round(degrees * (2147483648.0 / 180.0));
 
         // Enum values
         private const byte FileActivity = 4;
@@ -78,12 +97,21 @@ namespace FreeVelo.Core.Recording
             Define(w, 1, MsgEvent, (253, 4, UInt32), (0, 1, Enum), (1, 1, Enum));
             WriteEvent(w, start, EventTimer, EventTypeStart);
 
-            // records
-            Define(w, 2, MsgRecord, (253, 4, UInt32), (5, 4, UInt32), (6, 2, UInt16), (2, 2, UInt16), (7, 2, UInt16), (3, 1, UInt8), (4, 1, UInt8));
+            // records (with GPS when the virtual position is known: the world lies in the North Atlantic, see WorldOrigin)
+            bool gps = ride.Samples.Any(s => s.WorldX.HasValue && s.WorldZ.HasValue);
+            if (gps) Define(w, 2, MsgRecord, (253, 4, UInt32), (0, 4, SInt32), (1, 4, SInt32), (5, 4, UInt32), (6, 2, UInt16), (2, 2, UInt16), (7, 2, UInt16), (3, 1, UInt8), (4, 1, UInt8));
+            else Define(w, 2, MsgRecord, (253, 4, UInt32), (5, 4, UInt32), (6, 2, UInt16), (2, 2, UInt16), (7, 2, UInt16), (3, 1, UInt8), (4, 1, UInt8));
             foreach (var s in ride.Samples)
             {
                 w.Write((byte)2);
                 w.Write(Timestamp(s.TimeUtc));
+                if (gps)
+                {
+                    var (lat, lon) = ToLatLon(s.WorldX ?? 0, s.WorldZ ?? 0);
+                    w.Write(Semicircles(lat));
+                    w.Write(Semicircles(lon));
+                }
+
                 w.Write(Scale32(s.DistanceM, 100));
                 w.Write(Scale16(s.SpeedMps, 1000));
                 w.Write(Scale16(s.AltitudeM + 500, 5));

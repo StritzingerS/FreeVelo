@@ -517,7 +517,9 @@ namespace FreeVelo.Ride
                         _physics.SpeedMps,
                         RideDistanceM,
                         position.Y,
-                        WorkoutState?.TargetW));
+                        WorkoutState?.TargetW,
+                        position.X,
+                        position.Z));
                 }
             }
 
@@ -732,7 +734,7 @@ namespace FreeVelo.Ride
 
                 time = time.AddSeconds(1);
                 if (samples.Count > 0 && time <= samples[samples.Count - 1].TimeUtc) time = samples[samples.Count - 1].TimeUtc.AddSeconds(1);
-                _recording.Add(new RideSample(time, (int)Math.Round(power), heartRate, cadence, _physics.SpeedMps, RideDistanceM, position.Y, WorkoutState?.TargetW));
+                _recording.Add(new RideSample(time, (int)Math.Round(power), heartRate, cadence, _physics.SpeedMps, RideDistanceM, position.Y, WorkoutState?.TargetW, position.X, position.Z));
             }
 
             Debug.Log($"FreeVelo: caught up {seconds:0} s after the app was in the background");
