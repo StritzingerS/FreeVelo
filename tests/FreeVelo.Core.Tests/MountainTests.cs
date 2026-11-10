@@ -220,4 +220,30 @@ public class MountainTests
         Assert.True(CoveredShare(terrain, 8, false) < 0.006, "8 m lower detail");
         Assert.True(CoveredShare(terrain, 32, true) < 0.01, "32 m distant tiles");
     }
+
+    [Fact]
+    public void PreparedTerrainLoadsExactlyAndOnlyForItsMap()
+    {
+        var terrain = Ground.Value;
+        using var file = new MemoryStream();
+        terrain.Save(file);
+        Assert.InRange(file.Length, 100_000, 60_000_000);
+
+        file.Position = 0;
+        var loaded = Terrain.TryLoad(Map, file);
+        Assert.NotNull(loaded);
+        var summit = Map.Mountain!.Stelvio;
+        foreach (var (x, z) in new[] { (0.0, 0.0), (500.0, -300.0), (summit.SummitX + 200, summit.SummitZ - 150) })
+        {
+            Assert.Equal(terrain.Height(x, z), loaded!.Height(x, z), 4);
+        }
+
+        // Saved for another world (another grid size changes the fingerprint like other roads would): not used.
+        file.Position = 0;
+        Assert.False(Terrain.IsSavedFor(Map, file, cell: 8));
+        file.Position = 0;
+        Assert.True(Terrain.IsSavedFor(Map, file));
+        // Damaged file: not used.
+        Assert.Null(Terrain.TryLoad(Map, new MemoryStream(file.ToArray().Take(5000).ToArray())));
+    }
 }

@@ -65,3 +65,7 @@ unity/**/[Aa]ssets/FreeVeloLocal.meta
 
 # FreeVelo server data (database, signing key) when run locally
 src/FreeVelo.Server/data/
+
+# Prepared world (generated at build time by FreeVelo → Prepare world)
+unity/FreeVelo/Assets/FreeVelo/Resources/FreeVeloWorld.bytes
+unity/FreeVelo/Assets/FreeVelo/Resources/FreeVeloWorld.bytes.meta

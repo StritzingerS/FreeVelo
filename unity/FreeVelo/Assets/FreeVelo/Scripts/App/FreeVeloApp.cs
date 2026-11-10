@@ -75,9 +75,14 @@ namespace FreeVelo.App
             // scenery take a few seconds and are generated in the background, then built into the scene.
             var map = WorldMap.Default;
             var path = NetworkPath.OnMainLoop(map, 0, 0);
+            // Prepared at build time (Resources/FreeVeloWorld.bytes) or saved on the phone after the first start:
+            // loading it takes a fraction of generating it. Only used if it belongs to exactly this map.
+            var prepared = Resources.Load<TextAsset>("FreeVeloWorld")?.bytes;
+            string cache = System.IO.Path.Combine(Application.persistentDataPath, "world-cache.bin");
             _worldTask = System.Threading.Tasks.Task.Run(() =>
             {
-                var terrain = FreeVelo.Core.World.Gen.Terrain.Build(map);
+                var terrain = LoadPreparedWorld(map, prepared, cache) ?? FreeVelo.Core.World.Gen.Terrain.Build(map);
+                if (prepared == null) SavePreparedWorld(terrain, cache);
                 return (terrain, SceneryLayout.Generate(terrain));
             });
             _ride.Initialize(_ble, path.Route);
@@ -160,6 +165,49 @@ namespace FreeVelo.App
             RenderSettings.fogColor = new Color(0.73f, 0.8f, 0.87f);
             RenderSettings.fogStartDistance = 250f;
             RenderSettings.fogEndDistance = 9000f; // hazy, but the mountain stays visible from the home world
+        }
+
+        /// <summary>The world prepared at build time, else the one saved on the phone; null if neither fits the map.</summary>
+        private static FreeVelo.Core.World.Gen.Terrain LoadPreparedWorld(WorldMap map, byte[] prepared, string cache)
+        {
+            if (prepared != null)
+            {
+                var t = FreeVelo.Core.World.Gen.Terrain.TryLoad(map, new System.IO.MemoryStream(prepared));
+                if (t != null) return t;
+            }
+
+            try
+            {
+                if (!System.IO.File.Exists(cache)) return null;
+                using var file = System.IO.File.OpenRead(cache);
+                return FreeVelo.Core.World.Gen.Terrain.TryLoad(map, file);
+            }
+            catch (System.Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>Keeps the generated world on the phone for the next start (unless it is already saved).</summary>
+        private static void SavePreparedWorld(FreeVelo.Core.World.Gen.Terrain terrain, string cache)
+        {
+            try
+            {
+                if (System.IO.File.Exists(cache))
+                {
+                    using var existing = System.IO.File.OpenRead(cache);
+                    if (FreeVelo.Core.World.Gen.Terrain.IsSavedFor(terrain.Map, existing)) return;
+                }
+
+                string tmp = cache + ".tmp";
+                using (var file = System.IO.File.Create(tmp)) terrain.Save(file);
+                if (System.IO.File.Exists(cache)) System.IO.File.Delete(cache);
+                System.IO.File.Move(tmp, cache);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("World cache not saved: " + e.Message);
+            }
         }
 
         private void Update()

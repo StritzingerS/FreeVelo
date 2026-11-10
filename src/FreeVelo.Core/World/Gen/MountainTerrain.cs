@@ -60,6 +60,29 @@ namespace FreeVelo.Core.World.Gen
             return t;
         }
 
+        /// <summary>Writes the solved shape (for a world prepared ahead, see <see cref="Terrain.Save"/>).</summary>
+        internal void Write(System.IO.BinaryWriter w)
+        {
+            w.Write(Nx);
+            w.Write(Nz);
+            w.Write(LowRoad);
+            w.Write(Summit);
+            foreach (float f in _offset) w.Write(f);
+            foreach (float f in _roadDistance) w.Write(f);
+        }
+
+        /// <summary>Reads a shape written by <see cref="Write"/> (null if it does not fit this map).</summary>
+        internal static MountainTerrain? Read(WorldMap map, (double MinX, double MinZ, double MaxX, double MaxZ) home, System.IO.BinaryReader r)
+        {
+            var t = new MountainTerrain(map, home);
+            if (r.ReadInt32() != t.Nx || r.ReadInt32() != t.Nz) return null;
+            t.LowRoad = r.ReadDouble();
+            t.Summit = r.ReadDouble();
+            for (int i = 0; i < t._offset.Length; i++) t._offset[i] = r.ReadSingle();
+            for (int i = 0; i < t._roadDistance.Length; i++) t._roadDistance[i] = r.ReadSingle();
+            return t;
+        }
+
         // ------------------------------------------------------------------ queries
 
         private float At(float[] grid, int x, int z) => grid[(Math.Max(0, Math.Min(Nz - 1, z)) * Nx) + Math.Max(0, Math.Min(Nx - 1, x))];
