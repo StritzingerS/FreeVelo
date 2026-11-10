@@ -671,6 +671,18 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>A lake or two on the floor of the second valley, beside the road and clear of everything.</summary>
         private void MakeLakes(Random random)
         {
+            // The big lake: an ellipse with a slightly irregular shore; the road goes round it.
+            var big = Valleys.BigLake;
+            var bigShape = new double[24];
+            for (int i = 0; i < bigShape.Length; i++)
+            {
+                double a = i * Math.PI * 2 / bigShape.Length;
+                double r = 1 / Math.Sqrt(Math.Pow(Math.Cos(a) / big.RX, 2) + Math.Pow(Math.Sin(a) / big.RZ, 2));
+                bigShape[i] = r / big.RZ * (0.94 + (0.1 * Noise.Random01(i, 7, _seed + 11)));
+            }
+
+            AddLake(big.X, big.Z, big.RZ, bigShape);
+
             var candidates = new List<(double X, double Z)>();
             foreach (var e in Edges.Where(e => e.Kind == RoadKind.Valley && e.IsMainLoop && (e.From == Valleys.Trafon || e.To == Valleys.Laerchwald || e.From == Valleys.Laerchwald)))
             {
@@ -685,7 +697,7 @@ namespace FreeVelo.Core.World.Gen
 
             foreach (var c in candidates.OrderBy(_ => random.NextDouble()))
             {
-                if (Lakes.Count >= 2) break;
+                if (Lakes.Count >= 3) break;
                 double radius = 70 + (random.NextDouble() * 70);
                 if (DistanceToRoads(c.X, c.Z) < radius * 1.25 + 70) continue;
                 if (DistanceToRiver(c.X, c.Z) < radius * 1.25 + 90) continue;
@@ -700,20 +712,26 @@ namespace FreeVelo.Core.World.Gen
                     for (int i = 0; i < shape.Length; i++) shape[i] = (copy[(i + shape.Length - 1) % shape.Length] + (2 * copy[i]) + copy[(i + 1) % shape.Length]) / 4;
                 }
 
-                var probe = new Lake(c.X, c.Z, radius, shape, 0);
-                double shore = double.MaxValue;
-                for (int a = 0; a < 48; a++)
-                {
-                    double angle = a * Math.PI * 2 / 48;
-                    for (double q = 1.0; q <= 1.6; q += 0.3)
-                    {
-                        double r = probe.RadiusAt(angle) * q;
-                        shore = Math.Min(shore, BaseHeight(c.X + (Math.Cos(angle) * r), c.Z + (Math.Sin(angle) * r)));
-                    }
-                }
-
-                Lakes.Add(new Lake(c.X, c.Z, radius, shape, shore - 0.6));
+                AddLake(c.X, c.Z, radius, shape);
             }
+        }
+
+        /// <summary>A lake whose water is a little below the lowest ground around it.</summary>
+        private void AddLake(double x, double z, double radius, double[] shape)
+        {
+            var probe = new Lake(x, z, radius, shape, 0);
+            double shore = double.MaxValue;
+            for (int a = 0; a < 48; a++)
+            {
+                double angle = a * Math.PI * 2 / 48;
+                for (double q = 1.0; q <= 1.6; q += 0.3)
+                {
+                    double r = probe.RadiusAt(angle) * q;
+                    shore = Math.Min(shore, BaseHeight(x + (Math.Cos(angle) * r), z + (Math.Sin(angle) * r)));
+                }
+            }
+
+            Lakes.Add(new Lake(x, z, radius, shape, shore - 0.6));
         }
 
         public double DistanceToRoads(double x, double z)

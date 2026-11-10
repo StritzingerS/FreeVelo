@@ -67,7 +67,7 @@ namespace FreeVelo.Core.World.Gen
 
             // Main loop (the valley round), in riding order from Laerchwald: north up the west valley to Kirchbach, down the
             // main valley to Trafon, back west to Laerchwald.
-            roads.Add(new PlannedRoad(Laerchwald, Kirchbach, Curve(p[Laerchwald], (-3150, -1700), (-3380, -1100), (-2950, -500), (-2700, 250), (-2250, 650), (-1750, 1300), (-1150, 1250), (-650, 1950), p[Kirchbach]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Laerchwald, Kirchbach, Curve(new[] { p[Laerchwald], (-3100, -1800), (-2750, -1500) }.Concat(AroundLake()).Concat(new[] { (-1900, 1150), (-1150, 1250), (-650, 1950), p[Kirchbach] }).ToArray()), RoadKind.Valley, true));
             roads.Add(new PlannedRoad(Kirchbach, Mitterbach, Curve(p[Kirchbach], (620, 1750), (430, 1150), (850, 600), (680, 0), (1150, -650), p[Mitterbach]), RoadKind.Valley, true));
             roads.Add(new PlannedRoad(Mitterbach, Hinterau, Curve(p[Mitterbach], (1350, -1900), (950, -2500), (1280, -3100), (880, -3700), (1120, -4100), p[Hinterau]), RoadKind.Valley, true));
             var stelvioIn = mountain.Stelvio.StartDirection;
@@ -102,6 +102,20 @@ namespace FreeVelo.Core.World.Gen
             roads.Add(new PlannedRoad(Oberalm, Valbrune, Curve(nodes[Oberalm], (550, 4700), (1000, 5300), (1600, 5600), (1900, 6150), (2500, 6400), (3100, 6850), (b.X - (alpeOut.X * 450), b.Z - (alpeOut.Z * 450)), b), RoadKind.Pass));
             _ = stelvioIn;
             return (nodes, roads);
+        }
+
+        /// <summary>The big lake in the second valley: centre and half axes (east–west, north–south).</summary>
+        public static readonly (double X, double Z, double RX, double RZ) BigLake = (-2050, -350, 450, 900);
+
+        /// <summary>The road along the big lake's west shore, 160 m from the water.</summary>
+        private static IEnumerable<(double X, double Z)> AroundLake()
+        {
+            var l = BigLake;
+            foreach (double deg in new[] { -118.0, -148, 180, 150, 122 })
+            {
+                double a = deg * Math.PI / 180;
+                yield return (l.X + ((l.RX + 160) * Math.Cos(a)), l.Z + ((l.RZ + 160) * Math.Sin(a)));
+            }
         }
 
         // ------------------------------------------------------------------ shapes

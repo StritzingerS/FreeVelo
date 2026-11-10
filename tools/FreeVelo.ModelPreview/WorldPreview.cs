@@ -28,7 +28,7 @@ public static class WorldPreview
         })));
         var r = map.River!;
         sb.Append($"],\"river\":{{\"x\":[{string.Join(",", r.X.Select(F))}],\"z\":[{string.Join(",", r.Z.Select(F))}]}}");
-        sb.Append(",\"lakes\":[" + string.Join(",", map.Lakes.Select(l => $"{{\"x\":{F(l.X)},\"z\":{F(l.Z)},\"r\":{F(l.Radius)}}}")) + "]");
+        sb.Append(",\"lakes\":[" + string.Join(",", map.Lakes.Select(l => $"{{\"x\":{F(l.X)},\"z\":{F(l.Z)},\"r\":{F(l.Radius)},\"rim\":[{string.Join(",", Enumerable.Range(0, 48).Select(i => { double a = i * Math.PI * 2 / 48, r = l.RadiusAt(a); return $"[{F(l.X + (Math.Cos(a) * r))},{F(l.Z + (Math.Sin(a) * r))}]"; }))}]}}")) + "]");
         sb.Append(",\"bridges\":[" + string.Join(",", map.Bridges.Select(b =>
         {
             var e = map.Edges[b.Edge];
