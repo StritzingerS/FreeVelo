@@ -1258,7 +1258,7 @@ namespace FreeVelo.UI
         }
 
         /// <summary>Garmin Connect's page for uploading activity files (manual import).</summary>
-        private const string GarminImportPage = "https://connect.garmin.com/modern/import-data";
+        private const string GarminImportPage = "https://connect.garmin.com/app/import-data";
 
         private static string FormatDuration(int seconds) => seconds < 60 ? $"{seconds}s" : seconds < 3600 ? $"{seconds / 60}m" : $"{seconds / 3600}h";
 
