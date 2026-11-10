@@ -934,7 +934,9 @@ namespace FreeVelo.Core.World.Gen
                 // Hose tower at the back corner
                 float tx = -(w / 2) + 2, tz = -(d / 2) + 2, th = 16f;
                 p.Of(WorldMaterial.WallWhite).Box(new Vector3(tx, th / 2, tz), new Vector3(3.6f, th, 3.6f), Rot.Identity);
-                p.Of(WorldMaterial.RoofBrown).Tube(new Vector3(tx, th, tz), new Vector3(tx, th + 2.4f, tz), 2.8f, 0.05f, 4);
+                HipRoof(p.Of(WorldMaterial.RoofBrown).Mesh, new Vector3(tx, th, tz), 2.4f, 2.6f, 0.3f);
+                p.Of(WorldMaterial.WoodDark).Box(new Vector3(tx, th - 0.15f, tz), new Vector3(3.9f, 0.3f, 3.9f), Rot.Identity); // eaves board
+                if (detailed) p.Of(WorldMaterial.Iron).Box(new Vector3(tx, th + 3.0f, tz), new Vector3(0.06f, 0.9f, 0.06f), Rot.Identity); // finial
                 if (!detailed) continue;
                 for (int s = -1; s <= 1; s += 2)
                 {
@@ -992,18 +994,115 @@ namespace FreeVelo.Core.World.Gen
             far.Of(WorldMaterial.WoodLight).Box(new Vector3(0, 0.2f + (layers * 0.06f), 0), new Vector3(length, layers * 0.12f, width), Rot.Identity);
         }
 
-        /// <summary>A small car: body, cabin with windows, wheels (front = +Z).</summary>
+        /// <summary>
+        /// A square hipped roof (pyramid) sitting square on a tower: <paramref name="half"/> = half the eave width
+        /// (tower plus overhang), <paramref name="height"/> = to the tip; with a thickness so it reads from below too.
+        /// </summary>
+        private static void HipRoof(MeshData m, Vector3 baseCenter, float half, float height, float thickness)
+        {
+            var tip = baseCenter + new Vector3(0, height, 0);
+            var corners = new[] { new Vector3(-half, 0, -half), new Vector3(half, 0, -half), new Vector3(half, 0, half), new Vector3(-half, 0, half) };
+            for (int k = 0; k < 4; k++)
+            {
+                var a = baseCenter + corners[k];
+                var b = baseCenter + corners[(k + 1) % 4];
+                var mid = (a + b) / 2;
+                int start = m.Vertices.Count;
+                Add(m, a);
+                Add(m, b);
+                Add(m, tip);
+                TriOut(m, start, start + 1, start + 2, new Vector3(mid.X - baseCenter.X, 0.6f, mid.Z - baseCenter.Z));
+                // Underside and the edge of the eaves
+                int under = m.Vertices.Count;
+                Add(m, a - new Vector3(0, thickness, 0));
+                Add(m, b - new Vector3(0, thickness, 0));
+                Add(m, baseCenter + new Vector3(0, height * 0.55f, 0));
+                TriOut(m, under, under + 1, under + 2, new Vector3(0, -1, 0));
+                int edge = m.Vertices.Count;
+                Add(m, a);
+                Add(m, b);
+                Add(m, b - new Vector3(0, thickness, 0));
+                Add(m, a - new Vector3(0, thickness, 0));
+                var outward = new Vector3(mid.X - baseCenter.X, 0, mid.Z - baseCenter.Z);
+                TriOut(m, edge, edge + 1, edge + 2, outward);
+                TriOut(m, edge, edge + 2, edge + 3, outward);
+            }
+        }
+
+        /// <summary>
+        /// A small car (front = +Z): a rounded body swept along its length (bonnet, cabin, boot), glass all round,
+        /// tyres with silver rims in dark wheel arches, head and tail lights, bumpers, grille, number plates, mirrors.
+        /// </summary>
         private static void Car(Parts near, int v)
         {
             var paint = v == 0 ? WorldMaterial.CarRed : v == 1 ? WorldMaterial.CarBlue : WorldMaterial.CarSilver;
-            near.Of(paint).Box(new Vector3(0, 0.6f, 0), new Vector3(1.75f, 0.6f, 4.1f), Rot.Identity);
-            near.Of(paint).Box(new Vector3(0, 1.1f, -0.25f), new Vector3(1.6f, 0.5f, 2.2f), Rot.Identity);
-            near.Of(WorldMaterial.Glass).Box(new Vector3(0, 1.12f, -0.25f), new Vector3(1.62f, 0.38f, 2.0f), Rot.Identity);
-            near.Of(WorldMaterial.Glass).Box(new Vector3(0, 1.12f, 0.88f), new Vector3(1.5f, 0.36f, 0.06f), Rot.AboutX(-35));
-            for (int sx = -1; sx <= 1; sx += 2)
+            var body = near.Of(paint);
+            // Lower body: rounded box, lower and narrower at the nose and the tail.
+            var lower = new[]
             {
-                for (int sz = -1; sz <= 1; sz += 2) near.Of(WorldMaterial.Tyre).Tube(new Vector3(sx * 0.8f, 0.32f, sz * 1.3f), new Vector3(sx * 0.98f, 0.32f, sz * 1.3f), 0.32f, 0.32f, 10);
+                new Ring(new Vector3(0, 0.6f, -2.06f), 0.74f, 0.74f, 0.14f, 0.2f, 4f),
+                new Ring(new Vector3(0, 0.62f, -1.95f), 0.84f, 0.84f, 0.24f, 0.27f, 5f),
+                new Ring(new Vector3(0, 0.63f, -1.4f), 0.87f, 0.87f, 0.28f, 0.3f, 5f),
+                new Ring(new Vector3(0, 0.63f, 1.2f), 0.87f, 0.87f, 0.26f, 0.3f, 5f),
+                new Ring(new Vector3(0, 0.61f, 1.85f), 0.85f, 0.85f, 0.18f, 0.28f, 5f),
+                new Ring(new Vector3(0, 0.58f, 2.05f), 0.76f, 0.76f, 0.1f, 0.22f, 4f),
+            };
+            body.SmoothSweep(lower, Vector3.UnitX, 16, 3);
+            // Cabin: from the rear window over the roof to the windscreen.
+            var cabin = new[]
+            {
+                new Ring(new Vector3(0, 0.92f, -1.62f), 0.78f, 0.78f, 0.04f, 0.04f, 4f),
+                new Ring(new Vector3(0, 1.1f, -1.3f), 0.76f, 0.76f, 0.24f, 0.2f, 4f),
+                new Ring(new Vector3(0, 1.14f, -0.6f), 0.74f, 0.74f, 0.32f, 0.22f, 4f),
+                new Ring(new Vector3(0, 1.14f, 0.05f), 0.74f, 0.74f, 0.32f, 0.22f, 4f),
+                new Ring(new Vector3(0, 1.0f, 0.7f), 0.78f, 0.78f, 0.12f, 0.12f, 4f),
+                new Ring(new Vector3(0, 0.92f, 0.95f), 0.8f, 0.8f, 0.02f, 0.02f, 4f),
+            };
+            body.SmoothSweep(cabin, Vector3.UnitX, 16, 3);
+
+            // Glass: side windows (two per side), windscreen and rear window
+            var glass = near.Of(WorldMaterial.Glass);
+            for (int s = -1; s <= 1; s += 2)
+            {
+                glass.Box(new Vector3(s * 0.765f, 1.14f, -0.85f), new Vector3(0.03f, 0.24f, 0.72f), Rot.AboutZ(s * 8));
+                glass.Box(new Vector3(s * 0.76f, 1.14f, -0.05f), new Vector3(0.03f, 0.24f, 0.66f), Rot.AboutZ(s * 8));
+                // Mirrors
+                body.Box(new Vector3(s * 0.92f, 1.06f, 0.55f), new Vector3(0.14f, 0.1f, 0.08f), Rot.Identity);
             }
+
+            // Windscreen and rear window lie on the cabin's sloping front and back (a hair outside the paint).
+            glass.Box(new Vector3(0, 1.235f, 0.6f), new Vector3(1.28f, 0.03f, 0.8f), Rot.AboutX(33));
+            glass.Box(new Vector3(0, 1.22f, -1.14f), new Vector3(1.22f, 0.03f, 0.74f), Rot.AboutX(-29));
+
+            // Wheels: dark arches, tyres, silver rims and hub caps
+            var tyre = near.Of(WorldMaterial.Tyre);
+            var rim = near.Of(WorldMaterial.CarSilver);
+            foreach (float z in new[] { -1.3f, 1.3f })
+            {
+                for (int s = -1; s <= 1; s += 2)
+                {
+                    tyre.Ellipsoid(new Vector3(s * 0.84f, 0.42f, z), new Vector3(0.06f, 0.4f, 0.46f), Rot.Identity, 10, 6);
+                    tyre.Tube(new Vector3(s * 0.66f, 0.33f, z), new Vector3(s * 0.9f, 0.33f, z), 0.33f, 0.33f, 14);
+                    rim.Disc(new Vector3(s * 0.905f, 0.33f, z), Vector3.UnitX, 0.04f, 0.21f, 0.02f, 12);
+                    rim.Sphere(new Vector3(s * 0.91f, 0.33f, z), 0.05f, 6, 4);
+                }
+            }
+
+            // Front: headlights, grille, bumper, plate; back: tail lights, bumper, plate
+            var light = near.Of(WorldMaterial.Frame);
+            var red = near.Of(WorldMaterial.Awning);
+            var trim = near.Of(WorldMaterial.Iron);
+            for (int s = -1; s <= 1; s += 2)
+            {
+                light.Box(new Vector3(s * 0.56f, 0.72f, 2.02f), new Vector3(0.36f, 0.12f, 0.06f), Rot.Identity);
+                red.Box(new Vector3(s * 0.62f, 0.76f, -2.05f), new Vector3(0.26f, 0.14f, 0.05f), Rot.Identity);
+            }
+
+            trim.Box(new Vector3(0, 0.66f, 2.06f), new Vector3(0.62f, 0.14f, 0.04f), Rot.Identity); // grille
+            trim.Box(new Vector3(0, 0.42f, 2.06f), new Vector3(1.66f, 0.16f, 0.12f), Rot.Identity);
+            trim.Box(new Vector3(0, 0.44f, -2.1f), new Vector3(1.66f, 0.16f, 0.12f), Rot.Identity);
+            trim.Box(new Vector3(0, 0.26f, 0), new Vector3(1.6f, 0.1f, 3.6f), Rot.Identity); // sills / underbody
+            foreach (float z in new[] { 2.13f, -2.17f }) near.Of(WorldMaterial.WallWhite).Box(new Vector3(0, 0.52f, z), new Vector3(0.52f, 0.12f, 0.02f), Rot.Identity);
         }
 
         private static void VillageSign(Parts near)

@@ -181,7 +181,7 @@ public static class WorldPreview
         meshes.Add(Ground(new Vector3(-30, 0, -40), new Vector3(x + 30, 0, 40)));
         var renderer = new Renderer(meshes);
         float cx = (x - 11) / 2;
-        float dist = Math.Max(14, x * 0.75f);
+        float dist = Environment.GetEnvironmentVariable("CAMCLOSE") == "1" ? Math.Max(7, x * 0.45f) : Math.Max(14, x * 0.75f); // CAMCLOSE=1: closer
         var cameras = new[]
         {
             new Camera { Name = "front", Position = new Vector3(cx, 6, -dist), Target = new Vector3(cx, 5, 0), FieldOfView = 50 },
