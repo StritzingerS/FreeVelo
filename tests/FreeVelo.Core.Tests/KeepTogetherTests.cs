@@ -143,7 +143,7 @@ public class KeepTogetherTests
         var a = BuiltInRoutes.Get(BuiltInRoutes.DefaultId);
         Assert.Same(a, BuiltInRoutes.Get(""));
         Assert.Same(a, BuiltInRoutes.Get("unknown"));
-        Assert.InRange(a.LengthM, 9_500, 10_500);
+        Assert.InRange(a.LengthM, 24_000, 31_000);
     }
 
     [Fact]

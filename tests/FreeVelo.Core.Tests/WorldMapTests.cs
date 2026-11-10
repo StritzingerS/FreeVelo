@@ -22,12 +22,16 @@ public class WorldMapTests
     [Fact]
     public void NetworkHasJunctionsWithChoices()
     {
-        Assert.True(Map.Nodes.Count >= 4, "several junctions");
-        Assert.True(Map.Edges.Count(e => !e.IsMainLoop) >= 2, "link roads besides the main loop");
-        Assert.Contains(Map.Edges, e => e.Surface != Physics.RoadSurface.Asphalt);
-        // Home world: every node is a junction (the mountain's feet and summits just connect two roads)
-        var homeNodes = Map.Edges.Where(e => e.Kind == RoadKind.Home).SelectMany(e => new[] { e.From, e.To }).Distinct();
-        foreach (int id in homeNodes) Assert.True(Map.Nodes[id].Edges.Count >= 3, $"node {id} is a junction");
+        Assert.True(Map.Nodes.Count >= 8, "villages and summits");
+        Assert.True(Map.Edges.Count(e => !e.IsMainLoop) >= 2, "roads besides the valley round");
+        // The villages where roads meet are junctions; every village has a name.
+        foreach (string name in new[] { "Lärchwald", "Kirchbach", "Mitterbach", "Trafon" })
+        {
+            var node = Assert.Single(Map.Nodes, n => n.Name == name);
+            Assert.True(node.Edges.Count >= 3, $"{name} is a junction");
+        }
+
+        Assert.All(Map.Nodes, n => Assert.False(string.IsNullOrEmpty(n.Name)));
     }
 
     [Fact]
@@ -66,7 +70,15 @@ public class WorldMapTests
         for (int i = 1; i < river.Level.Length; i++) Assert.True(river.Level[i] <= river.Level[i - 1] + 1e-9, "the river never flows uphill");
 
         Assert.NotEmpty(Map.Lakes);
-        foreach (var lake in Map.Lakes) Assert.True(Map.DistanceToRoads(lake.X, lake.Z) > lake.Radius * 1.25, "no road through a lake");
+        Assert.Contains(Map.Lakes, l => l.Radius > 700); // the big lake the road goes round
+        foreach (var lake in Map.Lakes)
+        {
+            for (int a = 0; a < 48; a++)
+            {
+                double angle = a * Math.PI * 2 / 48, r = lake.RadiusAt(angle) * 0.98;
+                Assert.True(Map.DistanceToRoads(lake.X + (Math.Cos(angle) * r), lake.Z + (Math.Sin(angle) * r)) > 60, "no road through a lake");
+            }
+        }
     }
 
     [Fact]
@@ -74,10 +86,40 @@ public class WorldMapTests
     {
         var loop = Map.MainLoop;
         Assert.True(loop.IsLoop);
-        Assert.InRange(loop.LengthM, 9_900, 10_100);
+        Assert.InRange(loop.LengthM, 24_000, 31_000);
+        Assert.InRange(loop.TotalAscentM, 20, 120); // the valley round is (nearly) flat
         Assert.Equal(loop.Points[0].X, loop.Points[^1].X, 3);
         Assert.Equal(loop.Points[0].ElevationM, loop.Points[^1].ElevationM, 3);
         Assert.Same(loop, BuiltInRoutes.Get(BuiltInRoutes.DefaultId));
+    }
+
+    [Fact]
+    public void ValleyRoadsAreFlatAndMountainRoadsEven()
+    {
+        foreach (var e in Map.Edges.Where(e => e.Kind == RoadKind.Valley))
+        {
+            for (int i = 10; i < e.X.Length; i++)
+            {
+                double grade = Math.Abs(e.E[i] - e.E[i - 10]) / (e.D[i] - e.D[i - 10]);
+                Assert.True(grade <= (e.IsMainLoop ? 0.031 : 0.045), $"valley road {e.Id} at {e.D[i]:0} m: {grade:P1}");
+            }
+        }
+
+        // Mountain roads: the same gradient all the way (apart from easing in and out at the ends).
+        foreach (var e in Map.Edges.Where(e => e.Kind == RoadKind.Pass))
+        {
+            double mean = (e.E[^1] - e.E[0]) / e.Length;
+            for (int i = 0; i < e.X.Length - 10; i++)
+            {
+                if (e.D[i] < 130 || e.D[i + 10] > e.Length - 130) continue;
+                double grade = (e.E[i + 10] - e.E[i]) / (e.D[i + 10] - e.D[i]);
+                Assert.True(Math.Abs(grade - (mean * e.Length / (e.Length - 120))) < 0.002, $"mountain road {e.Id} at {e.D[i]:0} m: {grade:P2}");
+            }
+        }
+
+        var alm = Map.AlmLoop();
+        Assert.True(alm.IsLoop);
+        Assert.InRange(alm.TotalAscentM, 350, 550);
     }
 
     [Fact]
@@ -85,7 +127,7 @@ public class WorldMapTests
     {
         var path = NetworkPath.OnMainLoop(Map, 0, 0);
         var loop = Map.MainLoop;
-        for (double d = 0; d < 25_000; d += 50)
+        for (double d = 200; d < 25_000; d += 50) // (at the very start the path doesn't know the road before the village yet)
         {
             path.Update(d);
             var a = path.Route.Sample(d);

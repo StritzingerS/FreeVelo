@@ -97,7 +97,7 @@ namespace FreeVelo.Core.World.Gen
 
             // Over the plateau, and down along the slope above the main valley to Mitterbach.
             roads.Add(new PlannedRoad(Oberalm, AlmEnd, Curve(Wobble(6, 60, nodes[Oberalm], (2050, 4850), p[AlmEnd])), RoadKind.Pass));
-            roads.Add(new PlannedRoad(AlmEnd, Mitterbach, Curve(Wobble(7, 75, p[AlmEnd], (2900, 4300), (2650, 3700), (2900, 3000), (2550, 2300), (2700, 1600), (2400, 1000), (2550, 350), (2300, -150), (2100, -800), (1600, -1300), p[Mitterbach])), RoadKind.Pass));
+            roads.Add(new PlannedRoad(AlmEnd, Mitterbach, Curve(Wobble(7, 75, p[AlmEnd], (2900, 4300), (2650, 3700), (2900, 3000), (2550, 2300), (2700, 1600), (2400, 1000), (2550, 350), (2300, -150), (1800, -350), (1300, -750), p[Mitterbach])), RoadKind.Pass));
 
             // From the plateau up to Valbrune, arriving the way the Alpe d'Huez starts.
             var alpeOut = mountain.Alpe.StartDirection;
