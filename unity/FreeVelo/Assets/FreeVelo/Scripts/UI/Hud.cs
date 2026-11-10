@@ -907,14 +907,11 @@ namespace FreeVelo.UI
             if (Ui.IconButton(new Rect(24, 24, 60, 60), _ride.IsPaused ? Icon.Play : Icon.Pause)) _ride.TogglePause();
             if (Ui.IconButton(new Rect(92, 24, 60, 60), Icon.Stop)) _confirmEnd = true;
 
-            // Metrics bar (top centre). The side cards (320 wide + margins) go next to it when there is room,
-            // otherwise below the distance/grade chips.
-            const float sideSpace = 344 + 16;
-            bool sidesBeside = _w - (2 * sideSpace) >= 640;
-            float barW = sidesBeside ? Mathf.Min(900, _w - (2 * sideSpace)) : Mathf.Min(900, _w - 48);
-            var bar = new Rect((_w - barW) / 2f, 20, barW, 112);
+            // Metrics bar (top centre, as wide as the pause / stop buttons allow); the side cards go below it.
+            float barW = Mathf.Min(1080, _w - (2 * 172));
+            var bar = new Rect((_w - barW) / 2f, 16, barW, 124);
             Ui.Card(bar, Theme.Alpha(Theme.Background, 0.88f));
-            float powerW = barW * 0.24f;
+            float powerW = barW * 0.2f;
             float side = (barW - powerW) / 6f;
 
             // Left: the ride so far (time, distance, elevation gained); right: live values (speed, cadence, heart rate).
@@ -953,8 +950,8 @@ namespace FreeVelo.UI
 
             // Chips under the bar: gradient (and braking)
             float cy = bar.yMax + 16;
-            _sideTop = sidesBeside ? 24 : cy + 54;
-            _leftTop = sidesBeside ? 100 : cy + 54;
+            _sideTop = cy + 54;
+            _leftTop = cy + 54;
             string grade = $"{pos.GradePercent:+0.0;-0.0;0.0} %";
             var gradeColor = pos.GradePercent > 4 ? Theme.Danger : pos.GradePercent > 1.5 ? Theme.Warning : pos.GradePercent < -1.5 ? Theme.Info : Theme.Muted;
             var chipStyle = Theme.With(Theme.H3, size: 17, anchor: TextAnchor.MiddleLeft);
@@ -989,7 +986,7 @@ namespace FreeVelo.UI
             else DrawRideStrip();
             if (!_ride.IsGroupRide) DrawJunctionCard(workout);
             DrawClimbTimer(workout);
-            if (_ride.GearsActive) DrawGearControl();
+            if (_ride.GearsActive) DrawGearControl(rightBusy: workout && !_ride.WorkoutComplete);
             if (_ride.IsGroupRide && _group != null) DrawGroupOverlay();
 
             // Cue
@@ -1022,7 +1019,7 @@ namespace FreeVelo.UI
         private int MetricFontSize(float width)
         {
             if (Mathf.Abs(width - _metricFontWidth) < 0.5f) return _metricFontSize;
-            var style = Theme.With(Theme.Value, anchor: TextAnchor.MiddleCenter);
+            var style = Theme.With(Theme.Value, size: 48, anchor: TextAnchor.MiddleCenter);
             foreach (var (value, unit) in WidestMetrics)
             {
                 while (style.fontSize > 18 && style.CalcSize(new GUIContent(MetricText(value, unit))).x > width - 8) style.fontSize -= 1;
@@ -1039,7 +1036,7 @@ namespace FreeVelo.UI
         private static void Metric(Rect r, Icon icon, string value, string unit, Color iconColor, GUIStyle style)
         {
             Ui.DrawIcon(new Rect(r.center.x - 10, r.y + 16, 20, 20), icon, iconColor);
-            GUI.Label(new Rect(r.x, r.y + 40, r.width, 56), MetricText(value, unit), style);
+            GUI.Label(new Rect(r.x, r.y + 38, r.width, 72), MetricText(value, unit), style);
         }
 
         private static void InfoChip(Rect r, Icon icon, string text, Color iconColor, GUIStyle style)

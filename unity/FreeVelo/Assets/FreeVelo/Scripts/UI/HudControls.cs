@@ -13,16 +13,20 @@ namespace FreeVelo.UI
     {
         private const float BackupCardH = 150;
 
-        /// <summary>Ride screen: harder (+) / easier (−) with the current virtual gear, right side.</summary>
-        private void DrawGearControl()
+        /// <summary>
+        /// Ride screen: easier (−) / gear / harder (+) as a compact pill above the elevation strip – bottom right, or
+        /// bottom left while the workout card takes the right side.
+        /// </summary>
+        private void DrawGearControl(bool rightBusy)
         {
             var gears = _ride.Gears;
-            var card = new Rect(_w - 112, _h * 0.42f, 88, 220);
+            const float w = 232, h = 72;
+            var card = new Rect(rightBusy ? 24 : _w - 24 - w, _h - 136 - 14 - h, w, h);
             Ui.Card(card, Theme.Alpha(Theme.Background, 0.88f));
-            if (Ui.IconButton(new Rect(card.x + 12, card.y + 12, 64, 64), Icon.Plus, ButtonKind.Secondary, gears.Gear < gears.Count - 1)) _ride.Shift(+1);
-            GUI.Label(new Rect(card.x, card.y + 82, card.width, 18), L.Get("gear").ToUpperInvariant(), Theme.With(Theme.Overline, anchor: TextAnchor.MiddleCenter));
-            GUI.Label(new Rect(card.x, card.y + 98, card.width, 34), $"{gears.Gear + 1}", Theme.With(Theme.H1, size: 30, anchor: TextAnchor.MiddleCenter));
-            if (Ui.IconButton(new Rect(card.x + 12, card.yMax - 76, 64, 64), Icon.Minus, ButtonKind.Secondary, gears.Gear > 0)) _ride.Shift(-1);
+            if (Ui.IconButton(new Rect(card.x + 8, card.y + 8, 56, 56), Icon.Minus, ButtonKind.Secondary, gears.Gear > 0)) _ride.Shift(-1);
+            GUI.Label(new Rect(card.x + 64, card.y + 8, w - 128, 18), L.Get("gear").ToUpperInvariant(), Theme.With(Theme.Overline, anchor: TextAnchor.MiddleCenter));
+            GUI.Label(new Rect(card.x + 64, card.y + 24, w - 128, 40), $"{gears.Gear + 1}", Theme.With(Theme.H1, size: 30, anchor: TextAnchor.MiddleCenter));
+            if (Ui.IconButton(new Rect(card.xMax - 64, card.y + 8, 56, 56), Icon.Plus, ButtonKind.Secondary, gears.Gear < gears.Count - 1)) _ride.Shift(+1);
         }
 
         /// <summary>Settings: virtual gears on/off (the controller itself is on the devices page).</summary>
