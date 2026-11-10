@@ -79,6 +79,7 @@ namespace FreeVelo.App
             ["duration"] = ("Duration", "Dauer"),
             ["from"] = ("From", "Von"),
             ["to"] = ("To", "Bis"),
+            ["skip_last_block"] = ("Last repetition without its last block", "Letzte Wiederholung ohne letzten Block"),
             ["repeats"] = ("Repeats", "Wiederholungen"),
             ["blocks"] = ("blocks", "Blöcke"),
             ["duplicate"] = ("Duplicate", "Duplizieren"),

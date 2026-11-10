@@ -180,7 +180,15 @@ namespace FreeVelo.Core.Workouts
 
         public List<WorkoutBlock> Blocks { get; } = new List<WorkoutBlock>();
 
-        public override int TotalDurationS => Count * Blocks.Sum(b => b.TotalDurationS);
+        /// <summary>The last repetition ends without its last block (e.g. no recovery after the last interval).</summary>
+        public bool SkipLastBlock { get; set; }
+
+        /// <summary>The blocks of repetition <paramref name="i"/> (0-based).</summary>
+        public IEnumerable<WorkoutBlock> BlocksOf(int i) =>
+            SkipLastBlock && i == Count - 1 && Blocks.Count > 1 ? Blocks.Take(Blocks.Count - 1) : Blocks;
+
+        public override int TotalDurationS =>
+            (Count * Blocks.Sum(b => b.TotalDurationS)) - (SkipLastBlock && Blocks.Count > 1 ? Blocks[Blocks.Count - 1].TotalDurationS : 0);
     }
 
     public enum WorkoutCategory
@@ -238,7 +246,7 @@ namespace FreeVelo.Core.Workouts
                     case RepeatBlock r:
                         for (int i = 0; i < r.Count; i++)
                         {
-                            Expand(r.Blocks, new RepeatInfo(i + 1, r.Count), ref time, result);
+                            Expand(r.BlocksOf(i), new RepeatInfo(i + 1, r.Count), ref time, result);
                         }
 
                         break;

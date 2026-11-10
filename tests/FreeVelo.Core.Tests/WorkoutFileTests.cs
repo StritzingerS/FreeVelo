@@ -179,4 +179,18 @@ public class WorkoutFileTests
             Assert.Equal(w.Flatten().Count, copy.Flatten().Count);
         }
     }
+
+    [Fact]
+    public void LastRepetitionCanSkipItsLastBlock()
+    {
+        var w = new Workout("t", new LocalizedText("T", "T"));
+        w.Blocks.Add(new RepeatBlock(3, new WorkoutBlock[] { new SteadyBlock(240, PowerTarget.Percent(110)), new SteadyBlock(120, PowerTarget.Percent(55)) }) { SkipLastBlock = true });
+        Assert.Equal((3 * 360) - 120, w.TotalDurationS);
+        Assert.Equal(5, w.Flatten().Count); // on, off, on, off, on
+
+        // Kept in FreeVelo's own format, expanded in strict Zwift files.
+        var copy = WorkoutFiles.Clone(w);
+        Assert.True(((RepeatBlock)copy.Blocks[0]).SkipLastBlock);
+        Assert.Equal(w.TotalDurationS, copy.TotalDurationS);
+    }
 }

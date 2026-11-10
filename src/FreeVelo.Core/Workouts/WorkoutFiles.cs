@@ -123,7 +123,10 @@ namespace FreeVelo.Core.Workouts
                     }
 
                     case "repeat":
-                        yield return new RepeatBlock(Math.Max(1, (int)Num(e, "Count", 1)), ReadBlocks(e).ToList());
+                        yield return new RepeatBlock(Math.Max(1, (int)Num(e, "Count", 1)), ReadBlocks(e).ToList())
+                        {
+                            SkipLastBlock = Num(e, "SkipLast", 0) > 0,
+                        };
                         break;
 
                     case "textevent":
@@ -242,7 +245,7 @@ namespace FreeVelo.Core.Workouts
                         parent.Add(Extras(new XElement(f.IsMaxEffort ? "MaxEffort" : "FreeRide", Dur(f)), f));
                         break;
 
-                    case RepeatBlock rep when strict && rep.Blocks.Count == 2 && rep.Blocks[0] is SteadyBlock on && rep.Blocks[1] is SteadyBlock off:
+                    case RepeatBlock rep when strict && !rep.SkipLastBlock && rep.Blocks.Count == 2 && rep.Blocks[0] is SteadyBlock on && rep.Blocks[1] is SteadyBlock off:
                     {
                         var e = new XElement("IntervalsT",
                             new XAttribute("Repeat", rep.Count),
@@ -258,12 +261,13 @@ namespace FreeVelo.Core.Workouts
                     }
 
                     case RepeatBlock rep when strict:
-                        for (int i = 0; i < rep.Count; i++) WriteBlocks(parent, rep.Blocks, true, ftpW);
+                        for (int i = 0; i < rep.Count; i++) WriteBlocks(parent, rep.BlocksOf(i), true, ftpW);
                         break;
 
                     case RepeatBlock rep:
                     {
                         var e = new XElement("Repeat", new XAttribute("Count", rep.Count));
+                        if (rep.SkipLastBlock) e.Add(new XAttribute("SkipLast", 1));
                         WriteBlocks(e, rep.Blocks, false, ftpW);
                         parent.Add(e);
                         break;

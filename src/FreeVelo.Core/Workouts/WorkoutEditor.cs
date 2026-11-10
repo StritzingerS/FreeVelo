@@ -167,6 +167,14 @@ namespace FreeVelo.Core.Workouts
             r.Count = count;
         }
 
+        /// <summary>The last repetition of an interval block ends without its last block (e.g. no final recovery).</summary>
+        public void SetSkipLast(int index, bool skip)
+        {
+            if (!(Get(index) is RepeatBlock r) || r.SkipLastBlock == skip) return;
+            Record();
+            r.SkipLastBlock = skip;
+        }
+
         /// <summary>Switches all targets of the workout to watts (true) or % FTP (false), keeping the power at the current FTP.</summary>
         public void SetUnit(bool watts)
         {
