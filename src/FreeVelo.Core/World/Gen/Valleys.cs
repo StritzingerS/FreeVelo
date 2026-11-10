@@ -68,10 +68,10 @@ namespace FreeVelo.Core.World.Gen
             // Main loop (the valley round), in riding order from Laerchwald: north up the west valley to Kirchbach, down the
             // main valley to Trafon, back west to Laerchwald.
             roads.Add(new PlannedRoad(Laerchwald, Kirchbach, Curve(new[] { p[Laerchwald], (-3100, -1800), (-2750, -1500) }.Concat(AroundLake()).Concat(new[] { (-1900, 1150), (-1150, 1250), (-650, 1950), p[Kirchbach] }).ToArray()), RoadKind.Valley, true));
-            roads.Add(new PlannedRoad(Kirchbach, Mitterbach, Curve(p[Kirchbach], (620, 1500), (640, 600), (960, -350), p[Mitterbach]), RoadKind.Valley, true));
-            roads.Add(new PlannedRoad(Mitterbach, Hinterau, Curve(p[Mitterbach], (1300, -1700), (1000, -2050), (1290, -2450), (960, -2800), (1250, -3200), (920, -3550), (1190, -3900), (960, -4250), p[Hinterau]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Kirchbach, Mitterbach, Curve(p[Kirchbach], (520, 1750), (460, 1200), (720, 600), (660, 50), (960, -500), p[Mitterbach]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Mitterbach, Hinterau, Curve(p[Mitterbach], (1320, -1750), (1060, -2000), (1180, -2450), (900, -2650), (1300, -3050), (1150, -3500), (880, -3650), (1060, -4050), p[Hinterau]), RoadKind.Valley, true));
             var stelvioIn = mountain.Stelvio.StartDirection;
-            roads.Add(new PlannedRoad(Hinterau, Trafon, Curve(p[Hinterau], (620, -4850), (900, -5200), (590, -5550), (880, -5900), (570, -6250), (850, -6600), (660, -6950), (900, -7250), p[Trafon]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Hinterau, Trafon, Curve(p[Hinterau], (560, -4700), (700, -5150), (950, -5300), (600, -5800), (760, -6050), (560, -6400), (900, -6800), (720, -7100), p[Trafon]), RoadKind.Valley, true));
             roads.Add(new PlannedRoad(Trafon, Laerchwald, Curve(p[Trafon], (300, -7760), (-350, -7450), (-900, -7700), (-1450, -7100), (-1750, -6400), (-2150, -5900), (-2700, -5250), (-2850, -4600), (-3250, -4000), (-3050, -3200), p[Laerchwald]), RoadKind.Valley, true));
 
             // Over the saddle between the two valleys.
