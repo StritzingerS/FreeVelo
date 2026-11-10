@@ -85,6 +85,9 @@ namespace FreeVelo.Core.Plans
         public string start = "";
         public int weeks;
 
+        /// <summary>The FTP test at the end (workout id); empty in older plans = ramp test.</summary>
+        public string testWorkoutId = "";
+
         /// <summary>Training days as <see cref="DayOfWeek"/> values.</summary>
         public int[] weekdays = new int[0];
         public List<PlannedSession> sessions = new List<PlannedSession>();
@@ -195,7 +198,11 @@ namespace FreeVelo.Core.Plans
         public static List<DayOfWeek> Sorted(IEnumerable<DayOfWeek> days) => days.Distinct().OrderBy(d => ((int)d + 6) % 7).ToList();
 
         /// <summary>Creates a plan starting in the week of <paramref name="today"/>; days already over this week stay empty.</summary>
-        public static TrainingPlan Create(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> weekdays, DateTime today)
+        public static TrainingPlan Create(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> weekdays, DateTime today) =>
+            Create(template, weeks, weekdays, today, RampTest);
+
+        /// <summary>Same, with the FTP test the plan ends with (<see cref="RampTest"/>, "ftp-20min" or "ftp-2x8").</summary>
+        public static TrainingPlan Create(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> weekdays, DateTime today, string testWorkoutId)
         {
             var days = Sorted(weekdays);
             if (days.Count < MinSessions || days.Count > MaxSessions) throw new ArgumentException($"{MinSessions}–{MaxSessions} training days");
@@ -206,6 +213,7 @@ namespace FreeVelo.Core.Plans
                 start = TrainingLoad.Monday(today).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 weeks = weeks,
                 weekdays = days.Select(d => (int)d).ToArray(),
+                testWorkoutId = testWorkoutId,
             };
             plan.sessions.AddRange(Generate(template, plan, 0, today.Date));
             return plan;
@@ -258,7 +266,7 @@ namespace FreeVelo.Core.Plans
                         else if (kind == SessionKind.Endurance) (workout, adjust) = (Endurance, RecoveryWeekPercent);
                     }
 
-                    if (testWeek && i == days.Count - 1) (kind, workout, adjust) = (SessionKind.Test, RampTest, 0);
+                    if (testWeek && i == days.Count - 1) (kind, workout, adjust) = (SessionKind.Test, string.IsNullOrEmpty(plan.testWorkoutId) ? RampTest : plan.testWorkoutId, 0);
                     else if (testWeek && i == days.Count - 2) (kind, workout, adjust) = (SessionKind.Recovery, Recovery, 0); // fresh for the test
 
                     var date = monday.AddDays(((int)days[i] + 6) % 7);

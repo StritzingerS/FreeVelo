@@ -228,4 +228,16 @@ public class PlanTests
         Assert.All(ramps, r => Assert.InRange(r, 7, 20));
         Assert.True(ramps[0] < ramps[2]); // the rise slows down (newest first)
     }
+
+    [Fact]
+    public void ThePlanEndsWithTheChosenFtpTest()
+    {
+        var days = new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
+        var plan = PlanTemplates.Create(PlanTemplates.Find("ftp-build")!, 8, days, new DateTime(2026, 11, 9), "ftp-20min");
+        Assert.Equal("ftp-20min", plan.sessions.Single(s => s.Kind == SessionKind.Test).workoutId);
+
+        // Other training days later: the plan is regenerated and keeps its test.
+        PlanAdapter.ChangeWeekdays(plan, new[] { DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Sunday }, new DateTime(2026, 11, 10));
+        Assert.Equal("ftp-20min", plan.sessions.Single(s => s.Kind == SessionKind.Test).workoutId);
+    }
 }

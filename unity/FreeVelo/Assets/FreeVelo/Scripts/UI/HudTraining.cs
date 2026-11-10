@@ -15,6 +15,10 @@ namespace FreeVelo.UI
         private int _trainingTab; // 0 = plan, 1 = history
         private string _planTemplate = "ftp-build";
         private int _planWeeks = 8;
+
+        /// <summary>FTP test at the end of the plan: 20 min (recommended, most accurate), ramp, 2 × 8 min.</summary>
+        private static readonly string[] PlanTests = { "ftp-20min", "ftp-ramp", "ftp-2x8" };
+        private int _planTest;
         private readonly HashSet<DayOfWeek> _planDays = new HashSet<DayOfWeek> { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
         private bool _editingDays;
         private bool _confirmStopPlan;
@@ -62,7 +66,9 @@ namespace FreeVelo.UI
         private void DrawPlanChooser(Rect c)
         {
             var view = new Rect(c.x - 8, c.y, c.width + 16, c.height);
-            float contentH = 2 * 130 + 16 + 24 + 170 + 24;
+            var chosen = PlanTemplates.Find(_planTemplate) ?? PlanTemplates.All[0];
+            float setupH = chosen.EndsWithTest ? 290 : 170;
+            float contentH = 2 * 130 + 16 + 24 + setupH + 24;
             Ui.BeginScroll(3100, view, contentH);
             float x0 = 8, w = c.width;
 
@@ -91,7 +97,7 @@ namespace FreeVelo.UI
             }
 
             var template = PlanTemplates.Find(_planTemplate) ?? PlanTemplates.All[0];
-            var setup = new Rect(x0, 22 + 2 * 146 + 8, w, 170);
+            var setup = new Rect(x0, 22 + 2 * 146 + 8, w, setupH);
             Ui.Card(setup);
             GUI.Label(new Rect(setup.x + 24, setup.y + 18, 200, 20), L.Get("weeks").ToUpperInvariant(), Theme.Overline);
             _planWeeks = Ui.Stepper(new Rect(setup.x + 24, setup.y + 42, 230, 52), _planWeeks, null, 1, 1, template.MinWeeks, template.MaxWeeks);
@@ -100,12 +106,23 @@ namespace FreeVelo.UI
 
             int n = _planDays.Count;
             bool valid = n >= PlanTemplates.MinSessions && n <= PlanTemplates.MaxSessions;
-            GUI.Label(new Rect(setup.x + 24, setup.y + 110, setup.width - 260, 44),
+            if (template.EndsWithTest)
+            {
+                // Which FTP test ends the plan, with a recommendation for each.
+                GUI.Label(new Rect(setup.x + 24, setup.y + 112, 400, 20), L.Get("plan_test").ToUpperInvariant(), Theme.Overline);
+                _planTest = Ui.Segmented(new Rect(setup.x + 24, setup.y + 136, Mathf.Min(460, setup.width - 48), 44),
+                    new[] { L.Get("test_20min"), L.Get("test_ramp"), L.Get("test_2x8") }, _planTest);
+                string hint = _planTest == 0 ? "test_hint_20min" : _planTest == 1 ? "test_hint_ramp" : "test_hint_2x8";
+                GUI.Label(new Rect(setup.x + 24, setup.y + 186, setup.width - 48, 40), L.Get(hint), Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+            }
+
+            float summaryY = template.EndsWithTest ? setup.yMax - 64 : setup.y + 110;
+            GUI.Label(new Rect(setup.x + 24, summaryY, setup.width - 260, 44),
                 valid ? string.Format(L.Get("plan_summary"), _planWeeks, n) : L.Get("plan_days_hint"),
                 Theme.With(Theme.Caption, valid ? Theme.Muted : Theme.Warning, wrap: true));
             if (Ui.Button(new Rect(setup.xMax - 220, setup.yMax - 70, 196, 52), L.Get("plan_start"), ButtonKind.Primary, Icon.Play, valid))
             {
-                PlanStore.Start(template, _planWeeks, _planDays);
+                PlanStore.Start(template, _planWeeks, _planDays, PlanTests[_planTest]);
                 PlanStore.UpdateForToday();
             }
 
