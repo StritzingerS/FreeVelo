@@ -1239,7 +1239,26 @@ namespace FreeVelo.UI
                 _ride.Close();
                 Navigate(Page.Home);
             }
+
+            // Garmin has no upload for individuals: save the FIT file to Downloads and open Garmin Connect's import page.
+            if (!string.IsNullOrEmpty(s.FitPath))
+            {
+                float gw = Ui.ButtonWidth(L.Get("garmin_open_import"), true, 56);
+                if (Ui.Button(new Rect(x + 192, r.yMax - 88, gw, 56), L.Get("garmin_open_import"), ButtonKind.Secondary, Icon.Share))
+                {
+                    string saved = FileActions.SaveToDownloads(s.FitPath);
+                    if (saved.StartsWith("✗")) Ui.Toast(saved);
+                    else
+                    {
+                        Ui.Toast(string.Format(L.Get("garmin_import_hint"), System.IO.Path.GetFileName(s.FitPath)));
+                        Application.OpenURL(GarminImportPage);
+                    }
+                }
+            }
         }
+
+        /// <summary>Garmin Connect's page for uploading activity files (manual import).</summary>
+        private const string GarminImportPage = "https://connect.garmin.com/modern/import-data";
 
         private static string FormatDuration(int seconds) => seconds < 60 ? $"{seconds}s" : seconds < 3600 ? $"{seconds / 60}m" : $"{seconds / 3600}h";
 

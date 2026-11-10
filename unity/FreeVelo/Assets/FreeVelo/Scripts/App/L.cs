@@ -221,6 +221,8 @@ namespace FreeVelo.App
             ["cancel"] = ("Cancel", "Abbrechen"),
             ["confirm_disconnect"] = ("Really disconnect?", "Wirklich trennen?"),
             ["strava_connect"] = ("Connect with Strava", "Mit Strava verbinden"),
+            ["garmin_open_import"] = ("Open Garmin import", "Garmin-Import öffnen"),
+            ["garmin_import_hint"] = ("Saved to Downloads – choose \"{0}\" on the Garmin page.", "In Downloads gespeichert – auf der Garmin-Seite „{0}“ auswählen."),
             ["garmin_hint"] = ("Import your rides with power from Garmin Connect: create a personal API key on Garmin Connect and paste it here.", "Fahrten mit Leistung aus Garmin Connect übernehmen: einen persönlichen API-Schlüssel in Garmin Connect erstellen und hier einfügen."),
             ["garmin_create_key"] = ("Create key", "Schlüssel erstellen"),
             ["garmin_connect"] = ("Connect", "Verbinden"),
