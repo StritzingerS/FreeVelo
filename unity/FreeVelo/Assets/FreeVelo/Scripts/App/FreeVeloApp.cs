@@ -79,22 +79,38 @@ namespace FreeVelo.App
             // loading it takes a fraction of generating it. Only used if it belongs to exactly this map.
             var prepared = Resources.Load<TextAsset>("FreeVeloWorld")?.bytes;
             string cache = System.IO.Path.Combine(Application.persistentDataPath, "world-cache.bin");
+            var startClock = System.Diagnostics.Stopwatch.StartNew();
+            _startClock = startClock;
             _worldTask = System.Threading.Tasks.Task.Run(() =>
             {
+                var clock = System.Diagnostics.Stopwatch.StartNew();
                 LoadingStep = "loading_world_load";
                 var terrain = LoadPreparedWorld(map, prepared, cache);
+                bool loaded = terrain != null;
                 if (terrain == null)
                 {
                     LoadingStep = "loading_world_generate"; // no prepared world: generated once, then kept
                     terrain = FreeVelo.Core.World.Gen.Terrain.Build(map);
                 }
 
+                long terrainMs = clock.ElapsedMilliseconds;
                 LoadingStep = "loading_world_scenery";
                 if (prepared == null) SavePreparedWorld(terrain, cache);
                 // Scenery and the mountain's far tiles in parallel, both off the main thread.
-                var far = System.Threading.Tasks.Task.Run(() => WorldBuilder.ComputeFarTiles(terrain));
+                clock.Restart();
+                var farClock = System.Diagnostics.Stopwatch.StartNew();
+                long farMs = 0;
+                var far = System.Threading.Tasks.Task.Run(() =>
+                {
+                    var tiles = WorldBuilder.ComputeFarTiles(terrain);
+                    farMs = farClock.ElapsedMilliseconds;
+                    return tiles;
+                });
                 var layout = SceneryLayout.Generate(terrain);
-                return (terrain, layout, far.Result);
+                long layoutMs = clock.ElapsedMilliseconds;
+                var farTiles = far.Result;
+                BackgroundTimes = $"world {(loaded ? "loaded" : "generated")} {terrainMs}, scenery layout {layoutMs}, far tiles {farMs} (parallel)";
+                return (terrain, layout, farTiles);
             });
             _ride.Initialize(_ble, path.Route);
             _ride.Map = map;
@@ -238,8 +254,15 @@ namespace FreeVelo.App
                 return;
             }
 
+            long waitedMs = _startClock?.ElapsedMilliseconds ?? 0;
             _world.Build(_ride.Map, task.Result.Terrain, task.Result.Layout, task.Result.Far);
+            // Where the start-up time goes, in the log on the devices page ("Show log").
+            _ble.AddLog($"Start-up (ms): background {waitedMs} [{BackgroundTimes}]");
+            _ble.AddLog("Scene " + _world.BuildTimes.Replace("World build (ms):", "(ms):") + $" · total {_startClock?.ElapsedMilliseconds ?? 0}");
         }
+
+        private System.Diagnostics.Stopwatch _startClock;
+        private static volatile string BackgroundTimes = "";
 
         private void LateUpdate()
         {

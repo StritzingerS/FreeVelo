@@ -77,8 +77,12 @@ namespace FreeVelo.World
             BuildMountains();
             BuildMountain(far);
             Step("mountain");
-            Debug.Log(times.ToString());
+            BuildTimes = times.ToString();
+            Debug.Log(BuildTimes);
         }
+
+        /// <summary>Time of each step of the last <see cref="Build"/> (for the log on the devices page).</summary>
+        public string BuildTimes { get; private set; } = "";
 
         /// <summary>Ground height (same grid as the terrain mesh).</summary>
         public float GroundHeight(float x, float z) => _terrain != null ? (float)_terrain.Height(x, z) : 0f;

@@ -9,7 +9,7 @@ and the bike can be controlled with Zwift Click / Play buttons and virtual gears
 - [ ] Group ride with three riders: riding together, Keep Together, stop-and-tow (the "done when" of phase 2);
       also check the latest fixes on the phones – smooth towing, a force-closed app drops out, friends see and
       join each other's private rides
-- [ ] Ask Strava for more than one athlete (strava.com/settings/api; screenshots of "Connect with Strava" and of
+- [x] Ask Strava for more than one athlete (10 athletes allowed now) (strava.com/settings/api; screenshots of "Connect with Strava" and of
       an upload) – needed before friends can connect Strava
 - [ ] Long validation ride: full 4×4 on the Neo 2, partly with the phone locked; FIT file checked in
       Garmin Connect / Strava (carried over from phase 1)
