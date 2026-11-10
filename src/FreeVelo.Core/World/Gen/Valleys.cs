@@ -80,26 +80,27 @@ namespace FreeVelo.Core.World.Gen
             // Alm road up: north out of Kirchbach, then six long traverses with hairpins, then to Oberalm.
             // Each traverse and hairpin a little different, like real ones (lengths, angles, bows, radii).
             var stack = Switchbacks((250, 2700), (1, 0), (0, 1),
-                traverses: new[] { 1400.0, 1300, 1250, 1350, 1150, 1150 },
+                traverses: new[] { 1150.0, 1050, 1050, 1100, 950, 950 },
                 rises: new[] { 210.0, 150, 250, 130, 220, 170 },
                 bows: new[] { 30.0, -18, 40, -20, 15, -28 },
                 radii: new[] { 14.0, 21, 12, 18, 15 });
             var top = stack[stack.Count - 1];
-            nodes[Oberalm] = (top.X + 60, top.Z + 220);
+            nodes[Oberalm] = (top.X + 180, top.Z + 760);
             var up = new List<(double X, double Z)> { p[Kirchbach], (265, 2520) };
             up.AddRange(stack);
-            up.Add((top.X - 10, top.Z + 110));
+            up.Add((top.X - 20, top.Z + 130));
+            up.Add((top.X + 40, top.Z + 420));
             up.Add(nodes[Oberalm]);
             roads.Add(new PlannedRoad(Kirchbach, Oberalm, Curve(up.ToArray()), RoadKind.Pass));
 
             // Over the plateau, and down along the slope above the main valley to Mitterbach.
-            roads.Add(new PlannedRoad(Oberalm, AlmEnd, Curve(Wobble(6, 60, nodes[Oberalm], (700, 4450), (1200, 4300), (1700, 4700), (2200, 4600), p[AlmEnd])), RoadKind.Pass));
+            roads.Add(new PlannedRoad(Oberalm, AlmEnd, Curve(Wobble(6, 60, nodes[Oberalm], (1000, 4950), (1550, 4850), (2100, 5000), p[AlmEnd])), RoadKind.Pass));
             roads.Add(new PlannedRoad(AlmEnd, Mitterbach, Curve(Wobble(7, 75, p[AlmEnd], (2900, 4300), (2650, 3700), (2900, 3000), (2550, 2300), (2700, 1600), (2400, 1000), (2550, 350), (2300, -150), (2100, -800), (1600, -1300), p[Mitterbach])), RoadKind.Pass));
 
             // From the plateau up to Valbrune, arriving the way the Alpe d'Huez starts.
             var alpeOut = mountain.Alpe.StartDirection;
             var b = p[Valbrune];
-            roads.Add(new PlannedRoad(Oberalm, Valbrune, Curve(Wobble(8, 75, nodes[Oberalm], (550, 4700), (1000, 5300), (1600, 5600), (1900, 6150), (2500, 6400), (3100, 6850)).Concat(new[] { (b.X - (alpeOut.X * 450), b.Z - (alpeOut.Z * 450)), b }).ToArray()), RoadKind.Pass));
+            roads.Add(new PlannedRoad(Oberalm, Valbrune, Curve(Wobble(8, 75, nodes[Oberalm], (750, 5450), (1300, 5800), (1900, 6150), (2500, 6400), (3100, 6850)).Concat(new[] { (b.X - (alpeOut.X * 450), b.Z - (alpeOut.Z * 450)), b }).ToArray()), RoadKind.Pass));
             _ = stelvioIn;
             return (nodes, roads);
         }
