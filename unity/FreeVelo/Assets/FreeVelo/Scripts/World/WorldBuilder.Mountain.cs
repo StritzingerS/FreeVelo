@@ -96,6 +96,7 @@ namespace FreeVelo.World
 
             BuildSummitSigns();
             BuildVillageSigns();
+            BuildLanes();
         }
 
         /// <summary>Number of ground covers (submeshes of the mountain pieces).</summary>
@@ -105,6 +106,49 @@ namespace FreeVelo.World
         {
             var (c, _) = WorldMaterials.All[crop];
             return new Color(c.X, c.Y, c.Z);
+        }
+
+        /// <summary>
+        /// The side lanes as one strip each, following the ground every 2 m and rising to the road surface where they
+        /// leave the road (rigid pieces stuck out of the meadow wherever it sloped).
+        /// </summary>
+        private void BuildLanes()
+        {
+            var landscape = _terrain.Landscape;
+            if (landscape == null || landscape.Lanes.Count == 0) return;
+            var paved = new Strips();
+            var gravel = new Strips();
+            foreach (var (ax, az, bx, bz, isGravel) in landscape.Lanes)
+            {
+                float length = Mathf.Sqrt((float)(((bx - ax) * (bx - ax)) + ((bz - az) * (bz - az))));
+                if (length < 1) continue;
+                var along = new Vector3((float)(bx - ax), 0, (float)(bz - az)) / length;
+                var right = new Vector3(along.z, 0, -along.x);
+                float half = isGravel ? 1.5f : 1.7f;
+                var strip = isGravel ? gravel : paved;
+                strip.Begin();
+                int steps = Mathf.CeilToInt(length / 2f);
+                for (int k = 0; k <= steps; k++)
+                {
+                    float t = length * k / steps;
+                    double x = ax + (along.x * t), z = az + (along.z * t);
+                    float y = (float)_terrain.Height(x, z) + 0.08f;
+                    double d = _terrain.DistanceToRoad(x, z, 12, out var road, out double roadHeight, out _);
+                    if (road != null)
+                    {
+                        // Up onto the road where the lane joins it, then down to the meadow over a couple of metres.
+                        float over = (float)(d - (road.Width / 2));
+                        float blend = Mathf.Clamp01(1 - (over / 3.5f));
+                        y = Mathf.Max(y, Mathf.Lerp(y, (float)roadHeight + 0.03f, blend));
+                    }
+
+                    var c = new Vector3((float)x, y, (float)z);
+                    strip.Add(c - (right * half), c + (right * half), t / (half * 2));
+                }
+            }
+
+            CreateMesh("Lanes", paved.ToMesh("Lanes"), Mat(Color.white, TextureFactory.Asphalt(), 0.12f), false);
+            CreateMesh("GravelLanes", gravel.ToMesh("GravelLanes"), Mat(Color.white, TextureFactory.GravelRoad(), 0.05f), false);
         }
 
         /// <summary>Dark blue letters, as on the white Austrian place-name and direction signs.</summary>

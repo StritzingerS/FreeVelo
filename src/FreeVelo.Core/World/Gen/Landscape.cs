@@ -56,6 +56,9 @@ namespace FreeVelo.Core.World.Gen
         private readonly HashSet<long> _blocked = new HashSet<long>();
         private readonly List<(double X, double Z, double R)> _footprints = new List<(double, double, double)>();
         private readonly List<(double AX, double AZ, double BX, double BZ)> _lanes = new List<(double, double, double, double)>();
+
+        /// <summary>The side lanes, from the road's edge outwards: asphalt in the villages, gravel to the farms (the app drapes them on the ground).</summary>
+        public List<(double AX, double AZ, double BX, double BZ, bool Gravel)> Lanes { get; } = new List<(double, double, double, double, bool)>();
         private readonly Dictionary<long, List<SceneryItem>> _itemsByChunk = new Dictionary<long, List<SceneryItem>>();
         private readonly Dictionary<long, List<FieldPatch>> _fieldsByChunk = new Dictionary<long, List<FieldPatch>>();
 
@@ -623,15 +626,9 @@ namespace FreeVelo.Core.World.Gen
                 }
             }
 
-            double rot = Facing(dx, dz);
-            for (double t = 2.5; t < length; t += 5)
-            {
-                double x = ax + (dx * t), z = az + (dz * t);
-                Items.Add(new SceneryItem { Kind = SceneryKind.Lane, Variant = gravel ? 1 : 0, X = (float)x, Y = (float)_terrain.Height(x, z), Z = (float)z, RotationDeg = (float)rot, Scale = 1 });
-                BlockCircle(x, z, 3);
-            }
-
+            for (double t = 2.5; t < length; t += 5) BlockCircle(ax + (dx * t), az + (dz * t), 3);
             _lanes.Add((ax, az, bx, bz));
+            Lanes.Add((ax, az, bx, bz, gravel));
             return true;
         }
 
