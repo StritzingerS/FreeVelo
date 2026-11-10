@@ -669,13 +669,13 @@ namespace FreeVelo.UI
                     GUI.Label(new Rect(log.x + 16, log.yMax - 28, log.width - 380, 20), System.IO.Path.GetFileName(path), Clip(Theme.With(Theme.Caption, Theme.Faint, 13)));
                     if (Ui.Button(new Rect(log.xMax - 356, log.yMax - 50, 170, 40), L.Get("share_log"), ButtonKind.Secondary, Icon.Share))
                     {
-                        string error = FileActions.Share(path, L.Get("share_log"));
+                        string error = FileActions.Share(_ble.LogFileForSharing(), L.Get("share_log"));
                         if (error != null) Ui.Toast(error);
                     }
 
                     if (Ui.Button(new Rect(log.xMax - 178, log.yMax - 50, 166, 40), L.Get("save_log"), ButtonKind.Secondary, Icon.Download))
                     {
-                        Ui.Toast(FileActions.SaveToDownloads(path));
+                        Ui.Toast(FileActions.SaveToDownloads(_ble.LogFileForSharing()));
                     }
                 }
             }
