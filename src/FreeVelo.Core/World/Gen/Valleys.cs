@@ -68,10 +68,10 @@ namespace FreeVelo.Core.World.Gen
             // Main loop (the valley round), in riding order from Laerchwald: north up the west valley to Kirchbach, down the
             // main valley to Trafon, back west to Laerchwald.
             roads.Add(new PlannedRoad(Laerchwald, Kirchbach, Curve(new[] { p[Laerchwald], (-3100, -1800), (-2750, -1500) }.Concat(AroundLake()).Concat(new[] { (-1900, 1150), (-1150, 1250), (-650, 1950), p[Kirchbach] }).ToArray()), RoadKind.Valley, true));
-            roads.Add(new PlannedRoad(Kirchbach, Mitterbach, Curve(p[Kirchbach], (620, 1750), (430, 1150), (850, 600), (680, 0), (1150, -650), p[Mitterbach]), RoadKind.Valley, true));
-            roads.Add(new PlannedRoad(Mitterbach, Hinterau, Curve(p[Mitterbach], (1350, -1900), (950, -2500), (1280, -3100), (880, -3700), (1120, -4100), p[Hinterau]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Kirchbach, Mitterbach, Curve(p[Kirchbach], (620, 1500), (640, 600), (960, -350), p[Mitterbach]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Mitterbach, Hinterau, Curve(p[Mitterbach], (1300, -1700), (1000, -2050), (1290, -2450), (960, -2800), (1250, -3200), (920, -3550), (1190, -3900), (960, -4250), p[Hinterau]), RoadKind.Valley, true));
             var stelvioIn = mountain.Stelvio.StartDirection;
-            roads.Add(new PlannedRoad(Hinterau, Trafon, Curve(p[Hinterau], (560, -5050), (920, -5650), (560, -6250), (860, -6850), p[Trafon]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Hinterau, Trafon, Curve(p[Hinterau], (620, -4850), (900, -5200), (590, -5550), (880, -5900), (570, -6250), (850, -6600), (660, -6950), (900, -7250), p[Trafon]), RoadKind.Valley, true));
             roads.Add(new PlannedRoad(Trafon, Laerchwald, Curve(p[Trafon], (300, -7760), (-350, -7450), (-900, -7700), (-1450, -7100), (-1750, -6400), (-2150, -5900), (-2700, -5250), (-2850, -4600), (-3250, -4000), (-3050, -3200), p[Laerchwald]), RoadKind.Valley, true));
 
             // Over the saddle between the two valleys.
@@ -219,6 +219,9 @@ namespace FreeVelo.Core.World.Gen
         private readonly int _nx, _nz;
         private readonly float[] _height;
         private readonly float[] _distance;
+        private readonly float[] _halfWidth;
+        private readonly float[] _rise;
+        private readonly float[] _relief;
 
         private ValleyFloor(double minX, double minZ, int nx, int nz)
         {
@@ -228,16 +231,26 @@ namespace FreeVelo.Core.World.Gen
             _nz = nz;
             _height = new float[nx * nz];
             _distance = new float[nx * nz];
+            _halfWidth = new float[nx * nz];
+            _rise = new float[nx * nz];
+            _relief = new float[nx * nz];
         }
 
-        public static ValleyFloor Build(IEnumerable<RoadEdge> valleyRoads, (double MinX, double MinZ, double MaxX, double MaxZ) area)
+        /// <summary>
+        /// <paramref name="shape"/> gives each valley road its valley: half width of the flat floor, how high the slopes
+        /// rise (before the mountain's relief) and how strong that relief is (1 = normal).
+        /// </summary>
+        public static ValleyFloor Build(IEnumerable<RoadEdge> valleyRoads, (double MinX, double MinZ, double MaxX, double MaxZ) area,
+            Func<RoadEdge, (double HalfWidth, double Rise, double Relief)> shape)
         {
+            var roads = valleyRoads.ToList();
             double minX = Math.Floor(area.MinX / Cell) * Cell, minZ = Math.Floor(area.MinZ / Cell) * Cell;
             int nx = (int)Math.Ceiling((area.MaxX - minX) / Cell) + 1, nz = (int)Math.Ceiling((area.MaxZ - minZ) / Cell) + 1;
             var f = new ValleyFloor(minX, minZ, nx, nz);
             var sum = new double[nx * nz];
             var count = new int[nx * nz];
-            foreach (var e in valleyRoads)
+            var edgeOf = new int[nx * nz];
+            foreach (var e in roads)
             {
                 for (int i = 0; i < e.X.Length; i++)
                 {
@@ -245,6 +258,7 @@ namespace FreeVelo.Core.World.Gen
                     if (gx < 0 || gz < 0 || gx >= nx || gz >= nz) continue;
                     sum[(gz * nx) + gx] += e.E[i];
                     count[(gz * nx) + gx]++;
+                    edgeOf[(gz * nx) + gx] = roads.IndexOf(e);
                 }
             }
 
@@ -264,6 +278,7 @@ namespace FreeVelo.Core.World.Gen
                 {
                     dist[k] = dist[other] + step;
                     near[k] = near[other];
+                    edgeOf[k] = edgeOf[other];
                 }
             }
 
@@ -297,6 +312,29 @@ namespace FreeVelo.Core.World.Gen
             // Away from the roads the nearest road's height is blurred (no creases where another road becomes nearest).
             var blurred = (float[])near.Clone();
             for (int pass = 0; pass < 3; pass++) blurred = BoxBlur(blurred, nx, nz, 8);
+            // The valley's shape, from the nearest road, blended between neighbouring valleys.
+            var shapes = roads.Select(shape).ToList();
+            var width = new float[nx * nz];
+            var rise = new float[nx * nz];
+            var relief = new float[nx * nz];
+            for (int k = 0; k < dist.Length; k++)
+            {
+                var sh = shapes[edgeOf[k]];
+                width[k] = (float)sh.HalfWidth;
+                rise[k] = (float)sh.Rise;
+                relief[k] = (float)sh.Relief;
+            }
+
+            for (int pass = 0; pass < 3; pass++)
+            {
+                width = BoxBlur(width, nx, nz, 8);
+                rise = BoxBlur(rise, nx, nz, 8);
+                relief = BoxBlur(relief, nx, nz, 8);
+            }
+
+            Array.Copy(width, f._halfWidth, width.Length);
+            Array.Copy(rise, f._rise, rise.Length);
+            Array.Copy(relief, f._relief, relief.Length);
             for (int k = 0; k < dist.Length; k++)
             {
                 double w = Math.Exp(-dist[k] / 180);
@@ -362,6 +400,9 @@ namespace FreeVelo.Core.World.Gen
 
         /// <summary>Floor height (the valley roads' height carried out sideways).</summary>
         public double Height(double x, double z) => Bilinear(_height, x, z);
+
+        /// <summary>Half width of the flat valley floor here, the height its slopes rise and the strength of the mountain relief (1 = normal).</summary>
+        public (double HalfWidth, double Rise, double Relief) Shape(double x, double z) => (Bilinear(_halfWidth, x, z), Bilinear(_rise, x, z), Bilinear(_relief, x, z));
 
         /// <summary>Distance to the nearest valley road (32 m resolution).</summary>
         public double Distance(double x, double z) => Bilinear(_distance, x, z);

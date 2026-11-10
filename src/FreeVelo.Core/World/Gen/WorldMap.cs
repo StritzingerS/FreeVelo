@@ -233,13 +233,34 @@ namespace FreeVelo.Core.World.Gen
         {
             if (_floor == null) return 650;
             double d = _floor.Distance(x, z);
+            var (halfWidth, rise, _) = _floor.Shape(x, z);
             double meadow = 2.5 * Noise.Fractal(x / 220, z / 220, _seed, 2) * SmoothStep((d - 40) / 200);
-            double slope = (150 * SmoothStep((d - 420) / 1400)) + (25 * Noise.Fractal(x / 1500, z / 1500, _seed + 9, 3) * SmoothStep((d - 400) / 800));
+            double slope = (rise * SmoothStep((d - halfWidth) / 1400)) + (25 * Noise.Fractal(x / 1500, z / 1500, _seed + 9, 3) * SmoothStep((d - halfWidth + 20) / 800));
             return _floor.Height(x, z) + meadow + slope;
         }
 
         /// <summary>Distance to the nearest valley road (32 m resolution): the mountain's relief stays off the valley floors.</summary>
         public double ValleyDistance(double x, double z) => _floor?.Distance(x, z) ?? double.MaxValue;
+
+        /// <summary>
+        /// How much of the mountain's relief belongs here: none on the valley floors, rising beyond them; weaker beside
+        /// the open, green stretch Kirchbach – Mitterbach, stronger in the narrow valley Mitterbach – Trafon.
+        /// </summary>
+        public double ReliefFactor(double x, double z)
+        {
+            if (_floor == null) return 1;
+            var (halfWidth, _, relief) = _floor.Shape(x, z);
+            return SmoothStep((_floor.Distance(x, z) - halfWidth - 30) / 800) * relief;
+        }
+
+        /// <summary>The valley along each valley road: wide and gentle, narrow between high slopes, or in between.</summary>
+        private static (double HalfWidth, double Rise, double Relief) ValleyShape(RoadEdge e)
+        {
+            bool Is(int a, int b) => (e.From == a && e.To == b) || (e.From == b && e.To == a);
+            if (Is(Valleys.Kirchbach, Valleys.Mitterbach)) return (650, 80, 0.45);
+            if (Is(Valleys.Mitterbach, Valleys.Hinterau) || Is(Valleys.Hinterau, Valleys.Trafon)) return (230, 320, 1.4);
+            return (420, 150, 1.0);
+        }
 
         /// <summary>Half width of the river's channel area (from the river centre to where the ground is untouched).</summary>
         public const double ValleyHalfWidth = 220;
@@ -398,7 +419,7 @@ namespace FreeVelo.Core.World.Gen
             map.SetElevations();
             var (minX, minZ, maxX, maxZ) = map.MountainBounds;
             double margin = MountainTerrain.Margin + 600;
-            map._floor = ValleyFloor.Build(map.Edges.Where(e => e.Kind == RoadKind.Valley), (minX - margin, minZ - margin, maxX + margin, maxZ + margin));
+            map._floor = ValleyFloor.Build(map.Edges.Where(e => e.Kind == RoadKind.Valley), (minX - margin, minZ - margin, maxX + margin, maxZ + margin), ValleyShape);
             map.River = map.MakeRiver();
             map._riverIndex = new SegmentIndex(map.River.X, map.River.Z, 60);
             map.FindBridges();
@@ -613,6 +634,28 @@ namespace FreeVelo.Core.World.Gen
                 px += dx * 20;
                 pz += dz * 20;
                 river.Add(px, pz);
+            }
+
+            // Smoothed over about 300 m: the river meanders more gently than the road and never folds on itself
+            // inside the road's tight bends (where it may cross under the road on a bridge).
+            river = river.Resample(20);
+            for (int pass = 0; pass < 3; pass++)
+            {
+                var smooth = new Polyline();
+                for (int i = 0; i < river.Count; i++)
+                {
+                    int lo = Math.Max(0, i - 7), hi = Math.Min(river.Count - 1, i + 7);
+                    double sx2 = 0, sz2 = 0;
+                    for (int k = lo; k <= hi; k++)
+                    {
+                        sx2 += river.X[k];
+                        sz2 += river.Z[k];
+                    }
+
+                    smooth.Add(sx2 / (hi - lo + 1), sz2 / (hi - lo + 1));
+                }
+
+                river = smooth;
             }
 
             river = river.Resample(10);
