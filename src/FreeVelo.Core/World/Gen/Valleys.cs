@@ -68,10 +68,10 @@ namespace FreeVelo.Core.World.Gen
             // Main loop (the valley round), in riding order from Laerchwald: north up the west valley to Kirchbach, down the
             // main valley to Trafon, back west to Laerchwald.
             roads.Add(new PlannedRoad(Laerchwald, Kirchbach, Curve(p[Laerchwald], (-3250, -1250), (-2700, -350), (-2350, 600), (-1350, 1150), (-650, 1950), p[Kirchbach]), RoadKind.Valley, true));
-            roads.Add(new PlannedRoad(Kirchbach, Mitterbach, Curve(p[Kirchbach], (520, 1250), (930, 50), p[Mitterbach]), RoadKind.Valley, true));
-            roads.Add(new PlannedRoad(Mitterbach, Hinterau, Curve(p[Mitterbach], (1180, -2350), (930, -3450), p[Hinterau]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Kirchbach, Mitterbach, Curve(p[Kirchbach], (620, 1750), (430, 1150), (850, 600), (680, 0), (1150, -650), p[Mitterbach]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Mitterbach, Hinterau, Curve(p[Mitterbach], (1350, -1900), (950, -2500), (1280, -3100), (880, -3700), (1120, -4100), p[Hinterau]), RoadKind.Valley, true));
             var stelvioIn = mountain.Stelvio.StartDirection;
-            roads.Add(new PlannedRoad(Hinterau, Trafon, Curve(p[Hinterau], (700, -5550), (720, -6750), p[Trafon]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Hinterau, Trafon, Curve(p[Hinterau], (560, -5050), (920, -5650), (560, -6250), (860, -6850), p[Trafon]), RoadKind.Valley, true));
             roads.Add(new PlannedRoad(Trafon, Laerchwald, Curve(p[Trafon], (300, -7760), (-800, -7600), (-1500, -6900), (-1900, -5800), (-2700, -5100), (-3050, -3900), p[Laerchwald]), RoadKind.Valley, true));
 
             // Over the saddle between the two valleys.
