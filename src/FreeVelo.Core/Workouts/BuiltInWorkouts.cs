@@ -35,7 +35,8 @@ namespace FreeVelo.Core.Workouts
         internal static RampBlock Ramp(int seconds, double fromPct, double toPct) =>
             new RampBlock(seconds, PowerTarget.Percent(fromPct), PowerTarget.Percent(toPct));
 
-        internal static RepeatBlock Repeat(int count, params WorkoutBlock[] blocks) => new RepeatBlock(count, blocks);
+        /// <summary>Intervals of the built-in workouts: the last repetition ends without its recovery (the cool-down or the next set follows).</summary>
+        internal static RepeatBlock Repeat(int count, params WorkoutBlock[] blocks) => new RepeatBlock(count, blocks) { SkipLastBlock = true };
 
         /// <summary>Warm-up including the opener (1 min at 90 %, 2 min easy); built-in workouts use at most 12 minutes.</summary>
         internal static WorkoutBlock[] WarmUp(int minutes = 10) => new WorkoutBlock[]

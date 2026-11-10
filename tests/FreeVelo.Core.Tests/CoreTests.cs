@@ -77,8 +77,9 @@ public class WorkoutModelTests
         var w = BuiltInWorkouts.FortyTwenties();
         var segments = w.Flatten();
 
-        // warm-up (3) + 3 × (10 × 2 + 1) + cool-down (1)
-        Assert.Equal(3 + (3 * 21) + 1, segments.Count);
+        // warm-up (3) + 3 sets of 10 × 40/20 without the last "20 off" (19), the first two with the 5 min rest (+1),
+        // + cool-down (1): the built-in intervals skip their last recovery
+        Assert.Equal(3 + 20 + 20 + 19 + 1, segments.Count);
         Assert.Equal(w.TotalDurationS, segments.Last().EndS);
         Assert.All(segments.Zip(segments.Skip(1)), p => Assert.Equal(p.First.EndS, p.Second.StartS));
     }
