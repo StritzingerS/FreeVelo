@@ -88,6 +88,9 @@ namespace FreeVelo.Core.Plans
         /// <summary>The FTP test at the end (workout id); empty in older plans = ramp test.</summary>
         public string testWorkoutId = "";
 
+        /// <summary>The plan begins with an FTP test (the last one was too long ago, see <see cref="PlanTemplates.NeedsStartTest"/>).</summary>
+        public bool startTest;
+
         /// <summary>Training days as <see cref="DayOfWeek"/> values.</summary>
         public int[] weekdays = new int[0];
         public List<PlannedSession> sessions = new List<PlannedSession>();
@@ -201,8 +204,21 @@ namespace FreeVelo.Core.Plans
         public static TrainingPlan Create(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> weekdays, DateTime today) =>
             Create(template, weeks, weekdays, today, RampTest);
 
+        /// <summary>An FTP test older than this (or none) → the plan starts with a test (book: retest every 6–8 weeks).</summary>
+        public const int FtpFreshDays = 42;
+
+        /// <summary>True if the last FTP test is older than <see cref="FtpFreshDays"/> days, or there was none.</summary>
+        public static bool NeedsStartTest(DateTime? lastTest, DateTime today) => !lastTest.HasValue || (today.Date - lastTest.Value.Date).TotalDays > FtpFreshDays;
+
         /// <summary>Same, with the FTP test the plan ends with (<see cref="RampTest"/>, "ftp-20min" or "ftp-2x8").</summary>
-        public static TrainingPlan Create(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> weekdays, DateTime today, string testWorkoutId)
+        public static TrainingPlan Create(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> weekdays, DateTime today, string testWorkoutId) =>
+            Create(template, weeks, weekdays, today, testWorkoutId, startTest: false);
+
+        /// <summary>
+        /// Same; <paramref name="startTest"/>: the first session is the FTP test (when the last test is too old), so all
+        /// targets of the plan rest on a current FTP.
+        /// </summary>
+        public static TrainingPlan Create(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> weekdays, DateTime today, string testWorkoutId, bool startTest)
         {
             var days = Sorted(weekdays);
             if (days.Count < MinSessions || days.Count > MaxSessions) throw new ArgumentException($"{MinSessions}–{MaxSessions} training days");
@@ -214,9 +230,31 @@ namespace FreeVelo.Core.Plans
                 weeks = weeks,
                 weekdays = days.Select(d => (int)d).ToArray(),
                 testWorkoutId = testWorkoutId,
+                startTest = startTest,
             };
             plan.sessions.AddRange(Generate(template, plan, 0, today.Date));
+            if (startTest) PlaceStartTest(plan);
             return plan;
+        }
+
+        /// <summary>
+        /// The first planned session becomes the FTP test. If it was a key session, the next endurance session of that
+        /// week takes over its workout, so no hard session is lost.
+        /// </summary>
+        internal static void PlaceStartTest(TrainingPlan plan)
+        {
+            var first = plan.sessions.Where(s => s.Status == SessionStatus.Planned).OrderBy(s => s.date).FirstOrDefault();
+            if (first == null || first.Kind == SessionKind.Test) return;
+            if (first.Kind == SessionKind.Key)
+            {
+                var stand = plan.sessions.Where(s => s.Status == SessionStatus.Planned && s.week == first.week && s.Kind == SessionKind.Endurance && s.Date > first.Date)
+                    .OrderBy(s => s.date).FirstOrDefault();
+                if (stand != null) (stand.Kind, stand.workoutId, stand.adjustPercent) = (SessionKind.Key, first.workoutId, first.adjustPercent);
+            }
+
+            first.Kind = SessionKind.Test;
+            first.workoutId = string.IsNullOrEmpty(plan.testWorkoutId) ? RampTest : plan.testWorkoutId;
+            first.adjustPercent = 0;
         }
 
         /// <summary>Sessions from week <paramref name="fromWeek"/> on, only on days not before <paramref name="notBefore"/>.</summary>
@@ -431,6 +469,9 @@ namespace FreeVelo.Core.Plans
             plan.sessions.AddRange(PlanTemplates.Generate(template, plan, week, today.Date)
                 .Where(n => !plan.sessions.Any(o => o.date == n.date)));
             plan.sessions.Sort((a, b) => string.CompareOrdinal(a.date, b.date));
+            // The start test not ridden yet: it stays the first session.
+            bool startTestDone = plan.sessions.Any(s => s.Kind == SessionKind.Test && s.Status == SessionStatus.Done && s.week < plan.weeks - 1);
+            if (plan.startTest && !startTestDone) PlanTemplates.PlaceStartTest(plan);
         }
     }
 }

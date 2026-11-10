@@ -69,9 +69,9 @@ namespace FreeVelo.App
             }
         }
 
-        public static void Start(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> days, string testWorkoutId)
+        public static void Start(PlanTemplate template, int weeks, IEnumerable<DayOfWeek> days, string testWorkoutId, bool startTest)
         {
-            _plan = PlanTemplates.Create(template, weeks, days, DateTime.Now, testWorkoutId);
+            _plan = PlanTemplates.Create(template, weeks, days, DateTime.Now, testWorkoutId, startTest);
             _loaded = true;
             _updatedFor = default;
             Save();

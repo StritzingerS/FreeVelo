@@ -250,6 +250,10 @@ namespace FreeVelo.Core.History
             return days.Count == 0 ? 0 : days[days.Count - 1].Tsb;
         }
 
+        /// <summary>Date of the last accepted FTP test (local time), or null.</summary>
+        public static DateTime? LastFtpTest(IEnumerable<FtpChange> history) =>
+            history.Where(f => f.source == "test").Select(f => (DateTime?)DateTimeOffset.FromUnixTimeSeconds(f.timeUtc).LocalDateTime).Max();
+
         /// <summary>
         /// How much fitness (CTL) changed in each of the last <paramref name="weeks"/> weeks up to <paramref name="today"/>,
         /// newest first (TSS per day, per week; Allen &amp; Coggan recommend 3–7).

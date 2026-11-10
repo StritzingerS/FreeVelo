@@ -67,7 +67,11 @@ namespace FreeVelo.UI
         {
             var view = new Rect(c.x - 8, c.y, c.width + 16, c.height);
             var chosen = PlanTemplates.Find(_planTemplate) ?? PlanTemplates.All[0];
-            float setupH = chosen.EndsWithTest ? 290 : 170;
+            // A test at the start when the last FTP test is too old (or there was none), at the end in build blocks.
+            var lastTest = TrainingLoad.LastFtpTest(HistoryStore.Data.ftpHistory);
+            bool startTest = PlanTemplates.NeedsStartTest(lastTest, DateTime.Now);
+            bool showTests = chosen.EndsWithTest || startTest;
+            float setupH = showTests ? 310 : 170;
             float contentH = 2 * 130 + 16 + 24 + setupH + 24;
             Ui.BeginScroll(3100, view, contentH);
             float x0 = 8, w = c.width;
@@ -106,23 +110,30 @@ namespace FreeVelo.UI
 
             int n = _planDays.Count;
             bool valid = n >= PlanTemplates.MinSessions && n <= PlanTemplates.MaxSessions;
-            if (template.EndsWithTest)
+            if (showTests)
             {
-                // Which FTP test ends the plan, with a recommendation for each.
+                // Which FTP test the plan uses (start and/or end), with a recommendation for each.
                 GUI.Label(new Rect(setup.x + 24, setup.y + 112, 400, 20), L.Get("plan_test").ToUpperInvariant(), Theme.Overline);
                 _planTest = Ui.Segmented(new Rect(setup.x + 24, setup.y + 136, Mathf.Min(460, setup.width - 48), 44),
                     new[] { L.Get("test_20min"), L.Get("test_ramp"), L.Get("test_2x8") }, _planTest);
                 string hint = _planTest == 0 ? "test_hint_20min" : _planTest == 1 ? "test_hint_ramp" : "test_hint_2x8";
                 GUI.Label(new Rect(setup.x + 24, setup.y + 186, setup.width - 48, 40), L.Get(hint), Theme.With(Theme.Caption, Theme.Muted, wrap: true));
+                if (startTest)
+                {
+                    string why = lastTest.HasValue
+                        ? string.Format(L.Get("plan_start_test_old"), (int)((DateTime.Now - lastTest.Value).TotalDays / 7))
+                        : L.Get("plan_start_test_none");
+                    GUI.Label(new Rect(setup.x + 24, setup.y + 226, setup.width - 48, 22), why, Theme.With(Theme.Caption, Theme.Accent));
+                }
             }
 
-            float summaryY = template.EndsWithTest ? setup.yMax - 64 : setup.y + 110;
+            float summaryY = showTests ? setup.yMax - 64 : setup.y + 110;
             GUI.Label(new Rect(setup.x + 24, summaryY, setup.width - 260, 44),
                 valid ? string.Format(L.Get("plan_summary"), _planWeeks, n) : L.Get("plan_days_hint"),
                 Theme.With(Theme.Caption, valid ? Theme.Muted : Theme.Warning, wrap: true));
             if (Ui.Button(new Rect(setup.xMax - 220, setup.yMax - 70, 196, 52), L.Get("plan_start"), ButtonKind.Primary, Icon.Play, valid))
             {
-                PlanStore.Start(template, _planWeeks, _planDays, PlanTests[_planTest]);
+                PlanStore.Start(template, _planWeeks, _planDays, PlanTests[_planTest], startTest);
                 PlanStore.UpdateForToday();
             }
 

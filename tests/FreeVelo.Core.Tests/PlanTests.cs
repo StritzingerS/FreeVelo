@@ -240,4 +240,27 @@ public class PlanTests
         PlanAdapter.ChangeWeekdays(plan, new[] { DayOfWeek.Monday, DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Sunday }, new DateTime(2026, 11, 10));
         Assert.Equal("ftp-20min", plan.sessions.Single(s => s.Kind == SessionKind.Test).workoutId);
     }
+
+    [Fact]
+    public void PlanStartsWithATestWhenTheLastOneIsTooOld()
+    {
+        var today = new DateTime(2026, 11, 9); // Monday
+        Assert.True(PlanTemplates.NeedsStartTest(null, today));
+        Assert.True(PlanTemplates.NeedsStartTest(today.AddDays(-50), today));
+        Assert.False(PlanTemplates.NeedsStartTest(today.AddDays(-30), today));
+
+        var days = new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday };
+        var normal = PlanTemplates.Create(PlanTemplates.Find("base")!, 8, days, today, "ftp-20min");
+        var plan = PlanTemplates.Create(PlanTemplates.Find("base")!, 8, days, today, "ftp-20min", startTest: true);
+
+        var first = plan.sessions.OrderBy(s => s.date).First();
+        Assert.Equal((SessionKind.Test, "ftp-20min"), (first.Kind, first.workoutId));
+        // The key session of that day moved to the next endurance day of the week.
+        var firstKey = normal.sessions.OrderBy(s => s.date).First(s => s.Kind == SessionKind.Key);
+        Assert.Contains(plan.sessions, s => s.week == 0 && s.Kind == SessionKind.Key && s.workoutId == firstKey.workoutId && s.Date > first.Date);
+
+        // Other training days: the test not ridden yet stays the first session.
+        PlanAdapter.ChangeWeekdays(plan, new[] { DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Sunday }, today);
+        Assert.Equal(SessionKind.Test, plan.sessions.Where(s => s.Status == SessionStatus.Planned).OrderBy(s => s.date).First().Kind);
+    }
 }
