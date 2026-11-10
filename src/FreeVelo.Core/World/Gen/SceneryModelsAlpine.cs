@@ -37,6 +37,7 @@ namespace FreeVelo.Core.World.Gen
                 case SceneryKind.Maypole: Maypole(near, far, random); return true;
                 case SceneryKind.Fence: Fence(near); return true;
                 case SceneryKind.VillageSign: VillageSign(near); return true;
+                case SceneryKind.DirectionSign: DirectionSign(near, v); return true;
                 case SceneryKind.PathStone: near.Of(WorldMaterial.Stone).Box(new Vector3(0, 0.04f, 0), new Vector3(1.5f, 0.2f, 4.0f), Rot.Identity); return true;
                 case SceneryKind.Yard: near.Of(WorldMaterial.Gravel).Box(new Vector3(0, 0.03f, 0), new Vector3(7f, 0.2f, 6f), Rot.Identity); return true;
                 case SceneryKind.GardenFence: GardenFence(near); return true;
@@ -77,6 +78,7 @@ namespace FreeVelo.Core.World.Gen
             SceneryKind.Maypole => 1,
             SceneryKind.Fence => 0.5,
             SceneryKind.VillageSign => 1,
+            SceneryKind.DirectionSign => 1,
             SceneryKind.Yard => 4,
             SceneryKind.BeerTable => 1.5,
             SceneryKind.Sawmill => 19,
@@ -177,21 +179,30 @@ namespace FreeVelo.Core.World.Gen
                 bark.Tube(fork + new Vector3(0, 0.3f * s, 0), tip, 0.2f * s, 0.07f * s, 6, false);
             }
 
-            var foliage = near.Of(leaves);
-            Blob(foliage, crown, shell * 0.8f * s, 0.12f, random.Next(), 12, 8);
-            for (int i = 0; i < clumps; i++)
-            {
-                float y = 1f - (1.6f * (i + 0.5f) / clumps);
-                float ring = (float)Math.Sqrt(Math.Max(0, 1 - (y * y)));
-                double a = i * 2.39996;
-                var dir = new Vector3((float)Math.Cos(a) * ring, y, (float)Math.Sin(a) * ring);
-                var c = crown + (dir * shell * s * (0.85f + ((float)random.NextDouble() * 0.15f)));
-                float r = (1.4f + ((float)random.NextDouble() * 0.7f)) * s;
-                Blob(foliage, c, new Vector3(r, r * 0.85f, r), 0.18f, random.Next(), 8, 6);
-            }
+            LobedCrown(near.Of(leaves), crown, shell * s, 7 + (clumps / 4), random);
 
             far.Of(barkMaterial).Tube(Vector3.Zero, crown, 0.45f * s, 0.25f * s, 4, false);
             Blob(far.Of(leaves), crown, shell * 1.12f * s, 0.12f, 7, 8, 5);
+        }
+
+        /// <summary>
+        /// A natural crown: several big irregular lobes of different sizes, overlapping inside the crown's volume and
+        /// bulging out of it unevenly (no core ball with little balls on it).
+        /// </summary>
+        private static void LobedCrown(MeshBuilder foliage, Vector3 center, Vector3 shell, int lobes, Random random)
+        {
+            for (int i = 0; i < lobes; i++)
+            {
+                // Spread round the crown (golden angle), more of them up and to the sides than underneath.
+                float y = 0.75f - (1.25f * (i + 0.5f) / lobes);
+                float ring = (float)Math.Sqrt(Math.Max(0, 1 - (y * y)));
+                double a = (i * 2.39996) + (random.NextDouble() * 0.6);
+                float reach = 0.32f + ((float)random.NextDouble() * 0.28f);
+                var c = center + new Vector3((float)Math.Cos(a) * ring * shell.X * reach, y * shell.Y * reach, (float)Math.Sin(a) * ring * shell.Z * reach);
+                float k = 0.55f + ((float)random.NextDouble() * 0.25f);
+                var radii = new Vector3(shell.X * k * (0.85f + ((float)random.NextDouble() * 0.3f)), shell.Y * k * (0.7f + ((float)random.NextDouble() * 0.25f)), shell.Z * k * (0.85f + ((float)random.NextDouble() * 0.3f)));
+                Blob(foliage, c, radii, 0.26f, random.Next(), 9, 6);
+            }
         }
 
         /// <summary>Grey alder: grey trunk, narrow oval crown, dark leaves (along rivers and lakes).</summary>
@@ -230,16 +241,8 @@ namespace FreeVelo.Core.World.Gen
                 bark.Tube(lean * 0.2f, top, 0.26f, 0.1f, 6, false);
             }
 
-            // A wide, rounded, loose crown reaching down the sides.
-            Blob(foliage, crown, new Vector3(3.4f, 2.6f, 3.4f), 0.2f, random.Next(), 10, 7);
-            for (int k = 0; k < 12; k++)
-            {
-                double a = k * 2.39996;
-                float y = 0.8f - (1.5f * k / 12f);
-                float ring = (float)Math.Sqrt(Math.Max(0, 1 - (y * y)));
-                var c = crown + new Vector3((float)Math.Cos(a) * ring * 3.6f, y * 2.6f, (float)Math.Sin(a) * ring * 3.6f);
-                Blob(foliage, c, new Vector3(1.5f, 1.3f, 1.5f) * (0.8f + ((float)random.NextDouble() * 0.4f)), 0.25f, random.Next(), 7, 5);
-            }
+            // A wide, loose crown of lobes reaching down the sides.
+            LobedCrown(foliage, crown - new Vector3(0, h * 0.08f, 0), new Vector3(3.8f, 3.6f, 3.8f), 9, random);
 
             far.Of(WorldMaterial.Bark).Tube(Vector3.Zero, new Vector3(0, h * 0.4f, 0), 0.3f, 0.2f, 4, false);
             Blob(far.Of(WorldMaterial.WillowLeaves), new Vector3(0, h * 0.7f, 0), new Vector3(3.8f, 2.6f, 3.8f), 0.15f, 5, 8, 5);
@@ -260,15 +263,7 @@ namespace FreeVelo.Core.World.Gen
                 bark.Tube(fork, crown + new Vector3((float)Math.Cos(a) * 1.8f * s, -0.3f, (float)Math.Sin(a) * 1.8f * s), 0.13f * s, 0.05f * s, 5, false);
             }
 
-            var foliage = near.Of(WorldMaterial.AppleLeaves);
-            Blob(foliage, crown, shell * 0.85f, 0.15f, random.Next(), 10, 7);
-            for (int i = 0; i < 9; i++)
-            {
-                double a = i * 2.39996;
-                float y = 0.6f - (1.2f * i / 9f);
-                float ring = (float)Math.Sqrt(Math.Max(0, 1 - (y * y)));
-                Blob(foliage, crown + (new Vector3((float)Math.Cos(a) * ring, y, (float)Math.Sin(a) * ring) * shell), new Vector3(1.1f, 0.9f, 1.1f) * s, 0.2f, random.Next(), 7, 5);
-            }
+            LobedCrown(near.Of(WorldMaterial.AppleLeaves), crown, shell, 6, random);
 
             var apples = near.Of(WorldMaterial.AppleFruit);
             for (int i = 0; i < 14; i++)
@@ -1248,14 +1243,29 @@ namespace FreeVelo.Core.World.Gen
             }
         }
 
+        /// <summary>Junction signpost: a grey pole with 1–3 white boards with a blue border (variant + 1 boards).</summary>
+        private static void DirectionSign(Parts near, int v)
+        {
+            near.Of(WorldMaterial.CarSilver).Tube(Vector3.Zero, new Vector3(0, 2.75f, 0), 0.04f, 0.04f, 8);
+            for (int i = 0; i <= Math.Min(2, v); i++)
+            {
+                float y = 2.4f - (i * 0.42f);
+                near.Of(WorldMaterial.WallWhite).Box(new Vector3(0.75f, y, 0.06f), new Vector3(1.55f, 0.32f, 0.03f), Rot.Identity);
+                near.Of(WorldMaterial.SignBlue).Box(new Vector3(0.75f, y, 0.045f), new Vector3(1.65f, 0.38f, 0.03f), Rot.Identity);
+                near.Of(WorldMaterial.CarSilver).Box(new Vector3(0.75f, y, 0.03f), new Vector3(1.7f, 0.42f, 0.02f), Rot.Identity);
+            }
+        }
+
         private static void VillageSign(Parts near)
         {
             // Two posts and the board; the app writes the name on it.
             var post = near.Of(WorldMaterial.Iron);
             post.Box(new Vector3(-0.9f, 1.05f, 0), new Vector3(0.07f, 2.1f, 0.07f), Rot.Identity);
             post.Box(new Vector3(0.9f, 1.05f, 0), new Vector3(0.07f, 2.1f, 0.07f), Rot.Identity);
-            near.Of(WorldMaterial.SignBlue).Box(new Vector3(0, 1.75f, 0.06f), new Vector3(2.3f, 0.7f, 0.05f), Rot.Identity);
-            near.Of(WorldMaterial.Frame).Box(new Vector3(0, 1.75f, 0.04f), new Vector3(2.42f, 0.82f, 0.04f), Rot.Identity);
+            // Austrian style: white board, blue border (the app writes the name in dark letters)
+            near.Of(WorldMaterial.WallWhite).Box(new Vector3(0, 1.75f, 0.07f), new Vector3(2.2f, 0.62f, 0.04f), Rot.Identity);
+            near.Of(WorldMaterial.SignBlue).Box(new Vector3(0, 1.75f, 0.05f), new Vector3(2.34f, 0.76f, 0.04f), Rot.Identity);
+            near.Of(WorldMaterial.CarSilver).Box(new Vector3(0, 1.75f, 0.03f), new Vector3(2.42f, 0.84f, 0.03f), Rot.Identity);
         }
     }
 }

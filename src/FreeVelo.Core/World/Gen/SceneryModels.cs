@@ -57,6 +57,9 @@ namespace FreeVelo.Core.World.Gen
         LumberStack,
         Car,
 
+        /// <summary>Junction signpost (variant = number of boards − 1); the app writes the names.</summary>
+        DirectionSign,
+
         /// <summary>A 5 m piece of a narrow lane (village side lane: asphalt; farm track: gravel).</summary>
         Lane,
     }

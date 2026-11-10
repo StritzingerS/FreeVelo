@@ -32,6 +32,27 @@ public class LandscapeTests
     }
 
     [Fact]
+    public void JunctionsHaveSignpostsAndTheAlmHasFencedHuts()
+    {
+        var terrain = Ground.Value;
+        var map = terrain.Map;
+        var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
+        Assert.True(l.Signposts.Count >= 8, $"{l.Signposts.Count} signposts");
+        foreach (var (item, boards) in l.Signposts)
+        {
+            Assert.InRange(boards.Length, 1, 3);
+            Assert.All(boards, b => Assert.False(string.IsNullOrWhiteSpace(b.Name)));
+            Assert.All(boards, b => Assert.Contains(b.Arrow, new[] { "←", "↑", "→" }));
+            Assert.True(terrain.DistanceToRoad(item.X, item.Z, 8, out var road, out _, out _) >= (road?.Width ?? 0) / 2, "signpost beside the road");
+        }
+
+        // Huts up on the Alm, away from the villages, each standing in a fenced pasture.
+        var huts = l.Items.Where(i => i.Kind == SceneryKind.AlpineHut && i.Y > 950 && map.Nodes.All(n => Math.Abs(n.X - i.X) + Math.Abs(n.Z - i.Z) > 350)).ToList();
+        int fenced = huts.Count(h => l.Pastures.Any(p => Math.Abs(p.Cx - h.X) < 1 && Math.Abs(p.Cz - h.Z) < 1));
+        Assert.True(fenced >= 6, $"{fenced} alpine huts in fenced pastures");
+    }
+
+    [Fact]
     public void TheMaypoleOnlyStandsInMay()
     {
         var terrain = Ground.Value;

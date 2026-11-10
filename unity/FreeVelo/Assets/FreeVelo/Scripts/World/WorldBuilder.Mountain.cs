@@ -107,7 +107,13 @@ namespace FreeVelo.World
             return new Color(c.X, c.Y, c.Z);
         }
 
-        /// <summary>The village names on the signs at the village entrances (the boards themselves are scenery).</summary>
+        /// <summary>Dark blue letters, as on the white Austrian place-name and direction signs.</summary>
+        private static readonly Color SignInk = new Color(0.08f, 0.12f, 0.3f);
+
+        /// <summary>
+        /// The writing on the signs (the boards themselves are scenery): the village names at the village entrances
+        /// and, on the signposts before each junction, an arrow and where each road leads.
+        /// </summary>
         private void BuildVillageSigns()
         {
             var landscape = _terrain.Landscape;
@@ -115,26 +121,48 @@ namespace FreeVelo.World
             var font = Resources.Load<Font>("Fonts/Inter-Bold");
             foreach (var place in landscape.Signs)
             {
-                var item = place.Item;
-                var sign = new GameObject($"Sign {place.Name}");
-                sign.transform.SetParent(_root.transform, false);
-                sign.transform.SetPositionAndRotation(new Vector3(item.X, item.Y, item.Z), Quaternion.Euler(0, item.RotationDeg, 0));
-                var text = new GameObject("Text");
-                text.transform.SetParent(sign.transform, false);
-                text.transform.localPosition = new Vector3(0, 1.75f, 0.1f);
-                text.transform.localRotation = Quaternion.Euler(0, 180, 0); // a TextMesh reads from its −Z side
-                var mesh = text.AddComponent<TextMesh>();
-                mesh.text = place.Name;
-                mesh.anchor = TextAnchor.MiddleCenter;
-                mesh.alignment = TextAlignment.Center;
-                mesh.characterSize = 0.045f;
-                mesh.fontSize = 64;
-                mesh.color = Color.white;
-                if (font != null)
+                var sign = SignRoot($"Sign {place.Name}", place.Item);
+                SignText(sign.transform, place.Name, new Vector3(0, 1.75f, 0.1f), 0.045f, font);
+            }
+
+            foreach (var (item, boards) in landscape.Signposts)
+            {
+                var post = SignRoot("Signpost", item);
+                for (int i = 0; i < boards.Length; i++)
                 {
-                    mesh.font = font;
-                    text.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+                    var (arrow, name) = boards[i];
+                    string line = arrow == "→" ? name + " →" : arrow + " " + name;
+                    float size = 0.026f * Mathf.Min(1, 15f / Mathf.Max(1, line.Length));
+                    SignText(post.transform, line, new Vector3(0.75f, 2.4f - (i * 0.42f), 0.09f), size, font);
                 }
+            }
+        }
+
+        private GameObject SignRoot(string name, SceneryItem item)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(_root.transform, false);
+            go.transform.SetPositionAndRotation(new Vector3(item.X, item.Y, item.Z), Quaternion.Euler(0, item.RotationDeg, 0));
+            return go;
+        }
+
+        private static void SignText(Transform parent, string value, Vector3 at, float characterSize, Font font)
+        {
+            var text = new GameObject("Text");
+            text.transform.SetParent(parent, false);
+            text.transform.localPosition = at;
+            text.transform.localRotation = Quaternion.Euler(0, 180, 0); // a TextMesh reads from its −Z side
+            var mesh = text.AddComponent<TextMesh>();
+            mesh.text = value;
+            mesh.anchor = TextAnchor.MiddleCenter;
+            mesh.alignment = TextAlignment.Center;
+            mesh.characterSize = characterSize;
+            mesh.fontSize = 64;
+            mesh.color = SignInk;
+            if (font != null)
+            {
+                mesh.font = font;
+                text.GetComponent<MeshRenderer>().sharedMaterial = font.material;
             }
         }
 

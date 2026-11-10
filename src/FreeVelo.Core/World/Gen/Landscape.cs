@@ -80,6 +80,9 @@ namespace FreeVelo.Core.World.Gen
 
         public List<VillageSignPlace> Signs { get; } = new List<VillageSignPlace>();
 
+        /// <summary>Junction signposts: the post and, per board, an arrow ("←", "↑", "→") and where the road leads.</summary>
+        public List<(SceneryItem Item, (string Arrow, string Name)[] Boards)> Signposts { get; } = new List<(SceneryItem, (string, string)[])>();
+
         /// <summary>
         /// Lays out villages, farms and huts. <paramref name="today"/> decides about the maypoles: they only stand in May
         /// (the rest is the same every day).
@@ -90,6 +93,7 @@ namespace FreeVelo.Core.World.Gen
             l.PlaceVillages();
             l.PlaceAlm();
             l.PlaceFarms();
+            l.PlaceSignposts();
             l.PlaceFields();
             l.PlaceHayHuts();
             foreach (var item in l.Items) l.Index(item);
@@ -659,10 +663,87 @@ namespace FreeVelo.Core.World.Gen
             BlockPatch(new FieldPatch(c.X, c.Z, halfU, halfV, angle, WorldMaterial.Meadow), 1);
         }
 
+        // ------------------------------------------------------------------ signposts
+
+        /// <summary>
+        /// At every junction, a signpost on the right of each road coming in, 30 m before it: one board per way on,
+        /// with an arrow and the next village (or the climb's name).
+        /// </summary>
+        private void PlaceSignposts()
+        {
+            foreach (var node in _map.Nodes.Where(n => n.Edges.Count >= 3))
+            {
+                foreach (int inId in node.Edges)
+                {
+                    var e = _map.Edges[inId];
+                    bool fromHere = e.From == node.Id;
+                    if (e.Length < 80) continue;
+                    // Coming in: travelling towards the node along e.
+                    var a = Along(e, fromHere ? 30 : e.Length - 30);
+                    double dx = fromHere ? -a.TX : a.TX, dz = fromHere ? -a.TZ : a.TZ;
+                    double x = 0, z = 0;
+                    bool clear = false;
+                    foreach (double off in new[] { 5.6, 7.0, 9.0 })
+                    {
+                        x = a.X + (dz * off); z = a.Z - (dx * off); // right-hand side: (dz, −dx)
+                        double d = _terrain.DistanceToRoad(x, z, 12, out var road, out _, out _);
+                        if (road == null || d >= (road.Width / 2) + 1) { clear = true; break; }
+                    }
+
+                    if (!clear) continue;
+                    var boards = new List<(double Turn, string Arrow, string Name)>();
+                    foreach (int outId in node.Edges.Where(id => id != inId))
+                    {
+                        var o = _map.Edges[outId];
+                        bool outFrom = o.From == node.Id;
+                        var b = Along(o, outFrom ? 40 : o.Length - 40);
+                        double ox = b.X - node.X, oz = b.Z - node.Z, ol = Math.Sqrt((ox * ox) + (oz * oz));
+                        double turn = Math.Atan2((dx * oz) - (dz * ox), (dx * ox) + (dz * oz)) * 180 / Math.PI; // + = left
+                        string arrow = Math.Abs(turn) < 30 ? "↑" : turn > 0 ? "←" : "→";
+                        string name = o.Kind == RoadKind.Climb ? (_map.Mountain?.Find(o.ClimbId!)?.Data.Name ?? "") : _map.Nodes[outFrom ? o.To : o.From].Name;
+                        if (o.Kind == RoadKind.Climb && o.ClimbId == ClimbData.Stelvio) name = "Passo dello Stelvio";
+                        if (string.IsNullOrEmpty(name) || ol < 1) continue;
+                        boards.Add((turn, arrow, name));
+                    }
+
+                    if (boards.Count == 0 || _terrain.IsWater(x, z, 1)) continue;
+                    var ordered = boards.OrderByDescending(b => b.Turn).Take(3).Select(b => (b.Arrow, b.Name)).ToArray(); // left first
+                    var item = new SceneryItem { Kind = SceneryKind.DirectionSign, Variant = ordered.Length - 1, X = (float)x, Y = (float)_terrain.Height(x, z), Z = (float)z, RotationDeg = (float)Facing(-dx, -dz), Scale = 1 };
+                    Items.Add(item);
+                    Signposts.Add((item, ordered));
+                    BlockCircle(x, z, 2);
+                }
+            }
+        }
+
         // ------------------------------------------------------------------ the alm
 
         private void PlaceAlm()
         {
+            // Alpine huts, each in its own fenced yard, scattered over the Alm meadows along the plateau and up the
+            // Valbrune road: the high pastures look different from the farms in the valley.
+            foreach (var e in _map.Edges.Where(e => e.Kind == RoadKind.Pass))
+            {
+                for (double s = 120; s < e.Length - 120; s += 160 + (_random.NextDouble() * 120))
+                {
+                    var pt = Along(e, s);
+                    double h = _terrain.Height(pt.X, pt.Z);
+                    if (h < 950 || _map.Nodes.Any(n => Math.Abs(n.X - pt.X) + Math.Abs(n.Z - pt.Z) < 350)) continue;
+                    if (_random.NextDouble() > 0.6) continue;
+                    int side = _random.NextDouble() < 0.5 ? -1 : 1;
+                    double off = 40 + (_random.NextDouble() * 140);
+                    double cx = pt.X + (pt.NX * side * off), cz = pt.Z + (pt.NZ * side * off);
+                    double angle = Math.Atan2(pt.TX, pt.TZ) + ((_random.NextDouble() - 0.5) * 0.6);
+                    var yard = new FieldPatch(cx, cz, 15 + (_random.NextDouble() * 6), 12 + (_random.NextDouble() * 4), angle, WorldMaterial.Meadow);
+                    if (_terrain.Slope(cx, cz) > 0.28 || !PatchFree(yard, roadClear: 12)) continue;
+                    AddPasture(yard);
+                    double rot = (angle * 180 / Math.PI) + (_random.NextDouble() < 0.5 ? 0 : 180);
+                    Place(SceneryKind.AlpineHut, cx, cz, rot, _random.Next(3));
+                    var (bx, bz) = yard.Point(yard.HalfLength - 4, yard.HalfWidth - 3);
+                    if (_random.NextDouble() < 0.5) Place(SceneryKind.HayHut, bx, bz, rot, _random.Next(3));
+                }
+            }
+
             // The plateau road: an alpine pasture beside it, with a hut and a hay hut.
             var plateau = _map.Edges.FirstOrDefault(e => e.From == Valleys.Oberalm && e.To == Valleys.AlmEnd);
             if (plateau == null) return;

@@ -288,13 +288,16 @@ public static class WorldPreview
             var shots = new List<byte[]>();
             foreach (var kind in kinds)
             {
-                foreach (var t in landscape.Items.Where(i => i.Kind == kind).Take(2))
+                foreach (var t in landscape.Items.Where(i => i.Kind == kind && i.Y >= double.Parse(Environment.GetEnvironmentVariable("MINH") ?? "0") && (Environment.GetEnvironmentVariable("MINH") == null || map.Nodes.All(n => Math.Abs(n.X - i.X) + Math.Abs(n.Z - i.Z) > 350))).Take(4))
                 {
                     double r = t.RotationDeg * Math.PI / 180;
                     var front = new Vector3((float)Math.Sin(r), 0, (float)Math.Cos(r));
                     var side = new Vector3(front.Z, 0, -front.X);
                     var at = new Vector3(t.X, t.Y, t.Z);
-                    var cam = new Camera { Name = kind.ToString(), Position = at + (front * 34) + (side * 18) + new Vector3(0, 14, 0), Target = at + new Vector3(0, 3, 0), FieldOfView = 55 };
+                    bool small = kind is SceneryKind.DirectionSign or SceneryKind.VillageSign;
+                    var cam = small
+                        ? new Camera { Name = kind.ToString(), Position = at + (front * 7) + (side * 2.5f) + new Vector3(0, 2.2f, 0), Target = at + new Vector3(0, 2.1f, 0), FieldOfView = 50 }
+                        : new Camera { Name = kind.ToString(), Position = at + (front * 34) + (side * 18) + new Vector3(0, 14, 0), Target = at + new Vector3(0, 3, 0), FieldOfView = 55 };
                     var meshes = SceneMeshes(map, terrain, layout, cam.Position, 600);
                     shots.Add(Renderer.ToImage(new Renderer(meshes, shadowCenter: at, shadowRadius: 120).Render(cam, ww * sw2, hh * sw2), ww * sw2, hh * sw2, sw2, out _, out _));
                 }
