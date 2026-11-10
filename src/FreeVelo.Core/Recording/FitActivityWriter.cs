@@ -44,10 +44,11 @@ namespace FreeVelo.Core.Recording
         private const byte SInt32 = 0x85;
 
         /// <summary>
-        /// Where the virtual world lies on the globe (like Zwift's worlds, in the ocean, so the map shows no real roads):
-        /// Austria's latitude, in the middle of the North Atlantic. Strava then takes the elevation from the file.
+        /// Where the virtual world lies on the globe (like Zwift's worlds, on a small island, so the map shows no real
+        /// roads): Ushishir, an uninhabited volcanic island in the Kuril Islands at Austria's latitude (47°31′ N,
+        /// 152°48′ E). Strava then takes the elevation from the file.
         /// </summary>
-        public const double WorldOriginLat = 47.5, WorldOriginLon = -32.0;
+        public const double WorldOriginLat = 47.52, WorldOriginLon = 152.80;
 
         /// <summary>World position (metres east, north) → latitude / longitude in degrees.</summary>
         public static (double Lat, double Lon) ToLatLon(double x, double z)

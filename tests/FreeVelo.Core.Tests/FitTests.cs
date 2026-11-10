@@ -176,7 +176,7 @@ public class FitTests
         Assert.Equal(110, records[10].AltitudeM!.Value, 0);
 
         var (lat, lon) = FitActivityWriter.ToLatLon(1000, -500);
-        Assert.InRange(lat, 47.49, 47.5);
-        Assert.InRange(lon, -32, -31.98); // North Atlantic, at Austria's latitude
+        Assert.InRange(lat, 47.51, 47.52);
+        Assert.InRange(lon, 152.80, 152.82); // Ushishir (Kuril Islands), at Austria's latitude
     }
 }
