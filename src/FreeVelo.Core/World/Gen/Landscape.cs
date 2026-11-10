@@ -55,6 +55,7 @@ namespace FreeVelo.Core.World.Gen
         private readonly bool _may;
         private readonly HashSet<long> _blocked = new HashSet<long>();
         private readonly List<(double X, double Z, double R)> _footprints = new List<(double, double, double)>();
+        private readonly List<(double AX, double AZ, double BX, double BZ)> _lanes = new List<(double, double, double, double)>();
         private readonly Dictionary<long, List<SceneryItem>> _itemsByChunk = new Dictionary<long, List<SceneryItem>>();
         private readonly Dictionary<long, List<FieldPatch>> _fieldsByChunk = new Dictionary<long, List<FieldPatch>>();
 
@@ -89,6 +90,7 @@ namespace FreeVelo.Core.World.Gen
             l.PlaceVillages();
             l.PlaceAlm();
             l.PlaceFarms();
+            l.PlaceFields();
             l.PlaceHayHuts();
             foreach (var item in l.Items) l.Index(item);
             return l;
@@ -218,6 +220,37 @@ namespace FreeVelo.Core.World.Gen
                 if (lot.Item.Z != 0 || lot.Item.X != 0) Place(SceneryKind.Shrine, lot.Item.X + (lot.TowardX * 4), lot.Item.Z + (lot.TowardZ * 4), lot.Item.RotationDeg, 0);
             }
 
+            // Side lanes off the main roads, with a second row of houses along them: the village gets depth.
+            var laneLots = new List<(double X, double Z, double TowardX, double TowardZ, double AlongX, double AlongZ, double Rot)>();
+            if (!plan.Hamlet)
+            {
+                foreach (var e in roads)
+                {
+                    bool outward = e.From == village.Node;
+                    for (double s = plan.Radius * 0.2; s < Math.Min(plan.Radius * 0.8, e.Length - 80); s += 110 + (_random.NextDouble() * 70))
+                    {
+                        var a = Along(e, outward ? s : e.Length - s);
+                        int side = _random.NextDouble() < 0.5 ? -1 : 1;
+                        double turn = (_random.NextDouble() - 0.5) * 0.35;
+                        double lx = (a.NX * side * Math.Cos(turn)) - (a.TX * Math.Sin(turn)), lz = (a.NZ * side * Math.Cos(turn)) - (a.TZ * Math.Sin(turn));
+                        double length = 70 + (_random.NextDouble() * 70);
+                        double sx = a.X + (lx * ((e.Width / 2) + 0.3)), sz = a.Z + (lz * ((e.Width / 2) + 0.3));
+                        if (!AddLane(sx, sz, sx + (lx * length), sz + (lz * length), gravel: false)) continue;
+                        // Houses along the lane, both sides, facing it
+                        double px = -lz, pz = lx;
+                        for (double t = 22; t < length - 6; t += 26 + (_random.NextDouble() * 10))
+                        {
+                            foreach (int ls in new[] { -1, 1 })
+                            {
+                                double off = 1.7 + 5 + 6 + (_random.NextDouble() * 3);
+                                double hx = sx + (lx * t) + (px * ls * off), hz = sz + (lz * t) + (pz * ls * off);
+                                laneLots.Add((hx, hz, -px * ls, -pz * ls, lx, lz, Facing(-px * ls, -pz * ls)));
+                            }
+                        }
+                    }
+                }
+            }
+
             int inns = plan.Inns, shops = plan.Shops;
             foreach (var lot in lots)
             {
@@ -244,6 +277,15 @@ namespace FreeVelo.Core.World.Gen
                     double gx = x - (lot.TowardX * 15) + (lot.AlongX * (_random.NextDouble() - 0.5) * 8), gz = z - (lot.TowardZ * 15) + (lot.AlongZ * (_random.NextDouble() - 0.5) * 8);
                     if (Free(gx, gz, 4, roadClear: 8)) Place(_random.NextDouble() < 0.6 ? SceneryKind.Apple : SceneryKind.Maple, gx, gz, _random.Next(360), _random.Next(3));
                 }
+            }
+
+            foreach (var lot in laneLots)
+            {
+                if (!Free(lot.X, lot.Z, SceneryModels.Radius(SceneryKind.AlpineHouse) + 1.5, roadClear: 12)) continue;
+                int variant = _random.Next(3);
+                if (!FootprintClear(SceneryKind.AlpineHouse, variant, lot.X, lot.Z, lot.Rot)) continue;
+                Place(SceneryKind.AlpineHouse, lot.X, lot.Z, lot.Rot, variant);
+                Plot(SceneryKind.AlpineHouse, variant, lot.X, lot.Z, lot.TowardX, lot.TowardZ, lot.AlongX, lot.AlongZ, lot.Rot);
             }
 
             // Trades on the outskirts: the fire station in every village with a church, a car workshop in the bigger
@@ -381,7 +423,8 @@ namespace FreeVelo.Core.World.Gen
         {
             var (w, d) = Size(kind, variant);
             (double X, double Z) P(double u, double v) => (x + (ax * u) + (tx * v), z + (az * u) + (tz * v)); // v towards the road
-            double roadEdge = _terrain.DistanceToRoad(x, z, 60, out var road, out _, out _) - ((road?.Width ?? 6.5) / 2);
+            // The street in front: the road, or the lane for houses along a side lane.
+            double roadEdge = Math.Min(_terrain.DistanceToRoad(x, z, 60, out var road, out _, out _) - ((road?.Width ?? 6.5) / 2), LaneDistance(x, z) - 1.7);
             double front = (d / 2) + 0.9; // door step
             double gap = roadEdge - front;
             if (gap < 2) return;
@@ -520,8 +563,63 @@ namespace FreeVelo.Core.World.Gen
                 if (_terrain.IsWater(px, pz, 1)) return false;
                 double d = _terrain.DistanceToRoad(px, pz, 12, out var road, out _, out _);
                 if (road != null && d < (road.Width / 2) + 1.5) return false;
+                if (LaneDistance(px, pz) < 2.6) return false;
             }
 
+            return true;
+        }
+
+        // ------------------------------------------------------------------ lanes
+
+        /// <summary>Distance to the nearest lane's centre line (∞ if there are none).</summary>
+        private double LaneDistance(double x, double z)
+        {
+            double best = double.MaxValue;
+            foreach (var (ax, az, bx, bz) in _lanes)
+            {
+                double dx = bx - ax, dz = bz - az, l2 = (dx * dx) + (dz * dz);
+                double t = l2 > 0 ? Math.Max(0, Math.Min(1, (((x - ax) * dx) + ((z - az) * dz)) / l2)) : 0;
+                best = Math.Min(best, Dist(x, z, ax + (dx * t), az + (dz * t)));
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// A narrow lane from (ax, az) – at a road's edge – to (bx, bz): asphalt in the villages, gravel to the farms.
+        /// Only if all of it is dry, not too steep, clear of the river, other roads, lanes and buildings.
+        /// </summary>
+        private bool AddLane(double ax, double az, double bx, double bz, bool gravel)
+        {
+            double length = Dist(ax, az, bx, bz);
+            if (length < 12) return false;
+            double dx = (bx - ax) / length, dz = (bz - az) / length;
+            for (double t = 0; t <= length; t += 4)
+            {
+                double x = ax + (dx * t), z = az + (dz * t);
+                if (_terrain.IsWater(x, z, 3) || _terrain.DistanceToRiver(x, z, 16, out _) < 14 || _terrain.Slope(x, z) > 0.18) return false;
+                if (t > 8 && _terrain.DistanceToRoad(x, z, 12, out _, out _, out _) < 10) return false;
+                if (LaneDistance(x, z) < 12) return false;
+                foreach (var f in _footprints)
+                {
+                    if (Dist(f.X, f.Z, x, z) < f.R + 2) return false;
+                }
+
+                foreach (var p in Fields.Concat(Pastures))
+                {
+                    if (p.Contains(x, z, 3)) return false;
+                }
+            }
+
+            double rot = Facing(dx, dz);
+            for (double t = 2.5; t < length; t += 5)
+            {
+                double x = ax + (dx * t), z = az + (dz * t);
+                Items.Add(new SceneryItem { Kind = SceneryKind.Lane, Variant = gravel ? 1 : 0, X = (float)x, Y = (float)_terrain.Height(x, z), Z = (float)z, RotationDeg = (float)rot, Scale = 1 });
+                BlockCircle(x, z, 3);
+            }
+
+            _lanes.Add((ax, az, bx, bz));
             return true;
         }
 
@@ -549,6 +647,7 @@ namespace FreeVelo.Core.World.Gen
                 if (_terrain.IsWater(x, z, 1)) return false;
                 double d = _terrain.DistanceToRoad(x, z, 12, out var road, out _, out _);
                 if (road != null && d < (road.Width / 2) + 1.0) return false;
+                if (LaneDistance(x, z) < 2.4) return false;
             }
 
             return true;
@@ -585,25 +684,46 @@ namespace FreeVelo.Core.World.Gen
         {
             foreach (var e in _map.Edges.Where(e => e.Kind == RoadKind.Valley))
             {
-                for (double s = 350 + (_random.NextDouble() * 400); s < e.Length - 200; s += 1000 + (_random.NextDouble() * 800))
+                for (double s = 300 + (_random.NextDouble() * 300); s < e.Length - 200; s += 650 + (_random.NextDouble() * 450))
                 {
                     var a = Along(e, s);
                     if (Villages.Any(v => Dist(v.X, v.Z, a.X, a.Z) < v.Radius + 220)) continue;
                     int side = _random.NextDouble() < 0.5 ? -1 : 1;
-                    if (!TryFarm(a, side)) TryFarm(a, -side);
+                    if (!TryFarm(a, side, null)) TryFarm(a, -side, null);
+
+                    // Farms further out on the valley floor, halfway to the next road farm, reached by a gravel track.
+                    double sf = s + 300 + (_random.NextDouble() * 80);
+                    if (sf < e.Length - 200)
+                    {
+                        var af = Along(e, sf);
+                        if (!Villages.Any(v => Dist(v.X, v.Z, af.X, af.Z) < v.Radius + 120))
+                        {
+                            int fside = _random.NextDouble() < 0.5 ? -1 : 1;
+                            double far = 150 + (_random.NextDouble() * 220);
+                            if (!TryFarm(af, fside, far)) TryFarm(af, -fside, far);
+                        }
+                    }
                 }
             }
         }
 
-        private bool TryFarm((double X, double Z, double TX, double TZ, double NX, double NZ) a, int side)
+        private bool TryFarm((double X, double Z, double TX, double TZ, double NX, double NZ) a, int side, double? farSetback)
         {
             // Local frame: u along the road, v away from it.
             double vx = a.NX * side, vz = a.NZ * side;
             (double X, double Z) P(double u, double v) => (a.X + (a.TX * u) + (vx * v), a.Z + (a.TZ * u) + (vz * v));
-            double setback = 45 + (_random.NextDouble() * 25);
+            double setback = farSetback ?? (45 + (_random.NextDouble() * 25));
             var house = P(0, setback);
             if (!Free(house.X, house.Z, SceneryModels.Radius(SceneryKind.Farmhouse) + 4, roadClear: 30) || _terrain.Slope(house.X, house.Z) > 0.12) return false;
-            if (_map.ValleyDistance(house.X, house.Z) > 500) return false;
+            if (_map.ValleyDistance(house.X, house.Z) > (farSetback.HasValue ? 650 : 500) || _map.ValleyFloorFactor(house.X, house.Z) < (farSetback.HasValue ? 0.6 : 0)) return false;
+            if (farSetback.HasValue)
+            {
+                // The track from the road to the farmyard in front of the house
+                var start = P(0, (_terrain.DistanceToRoad(a.X, a.Z, 1, out var r0, out _, out _) * 0) + ((r0?.Width ?? 6.5) / 2) + 0.3);
+                var end = P(0, setback - 21); // stops in front of the farmyard, clear of the house
+                if (!FootprintClear(SceneryKind.Farmhouse, 2, house.X, house.Z, Facing(-vx, -vz))) return false;
+                if (!AddLane(start.X, start.Z, end.X, end.Z, gravel: true)) return false;
+            }
             if (!FootprintClear(SceneryKind.Farmhouse, 2, house.X, house.Z, Facing(-vx, -vz))) return false;
 
             double roadAngle = Math.Atan2(a.TX, a.TZ);
@@ -638,14 +758,41 @@ namespace FreeVelo.Core.World.Gen
             }
 
             var crops = new[] { WorldMaterial.Wheat, WorldMaterial.Crop, WorldMaterial.Plowed };
-            for (int k = 0; k < 2; k++)
+            // Fields beside the farm and behind it (as many as fit)
+            foreach (var (u, v) in new[] { (-across * 92.0, setback + 10.0), (-across * 92.0, setback + 92.0), (0.0, setback + 110.0), (across * 80.0, setback + 100.0) })
             {
-                var fc = P(-across * (92 + (k * 2)), setback + 10 + (k * 82));
-                var field = new FieldPatch(fc.X, fc.Z, 62 + (_random.NextDouble() * 20), 36, roadAngle, crops[_random.Next(crops.Length)]);
+                var fc = P(u, v);
+                var field = new FieldPatch(fc.X, fc.Z, 58 + (_random.NextDouble() * 22), 34, roadAngle, crops[_random.Next(crops.Length)]);
                 if (PatchFree(field, roadClear: 10)) AddField(field);
             }
 
             return true;
+        }
+
+        // ------------------------------------------------------------------ fields
+
+        /// <summary>
+        /// More fields on the valley floors between the farms (the floors are farmland: meadows with a field here and
+        /// there), beside the roads, aligned with them.
+        /// </summary>
+        private void PlaceFields()
+        {
+            var crops = new[] { WorldMaterial.Wheat, WorldMaterial.Crop, WorldMaterial.Crop, WorldMaterial.Plowed };
+            foreach (var e in _map.Edges.Where(e => e.Kind == RoadKind.Valley))
+            {
+                for (double s = 120; s < e.Length - 120; s += 180 + (_random.NextDouble() * 120))
+                {
+                    if (_random.NextDouble() > 0.45) continue;
+                    var a = Along(e, s);
+                    if (Villages.Any(v => Dist(v.X, v.Z, a.X, a.Z) < v.Radius + 60)) continue;
+                    int side = _random.NextDouble() < 0.5 ? -1 : 1;
+                    double off = 45 + (_random.NextDouble() * 160);
+                    double x = a.X + (a.NX * side * off), z = a.Z + (a.NZ * side * off);
+                    if (_map.ValleyFloorFactor(x, z) < 0.8) continue;
+                    var field = new FieldPatch(x, z, 45 + (_random.NextDouble() * 35), 22 + (_random.NextDouble() * 18), Math.Atan2(a.TX, a.TZ), crops[_random.Next(crops.Length)]);
+                    if (PatchFree(field, roadClear: 10)) AddField(field);
+                }
+            }
         }
 
         // ------------------------------------------------------------------ hay huts
@@ -684,6 +831,7 @@ namespace FreeVelo.Core.World.Gen
             if (_terrain.DistanceToRiver(x, z, r + 20, out _) < r + 18) return false;
             if (_terrain.DistanceToRoad(x, z, roadClear, out _, out _, out _) < roadClear) return false;
             if (_terrain.Slope(x, z) > 0.4) return false;
+            if (LaneDistance(x, z) < r + 2.2) return false;
             foreach (var f in _footprints)
             {
                 if (Dist(f.X, f.Z, x, z) < f.R + r) return false;
@@ -719,7 +867,7 @@ namespace FreeVelo.Core.World.Gen
                 }
             }
 
-            if (hi - lo > 14) return false;
+            if (hi - lo > 20) return false;
             foreach (var p in Fields.Concat(Pastures))
             {
                 if (Dist(p.Cx, p.Cz, patch.Cx, patch.Cz) < Math.Max(p.HalfLength, p.HalfWidth) + Math.Max(patch.HalfLength, patch.HalfWidth)) return false;

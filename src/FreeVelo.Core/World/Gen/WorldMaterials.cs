@@ -77,6 +77,7 @@ namespace FreeVelo.Core.World.Gen
         Tyre,
         Glass,
         Sawdust,
+        LaneAsphalt,
     }
 
     public static class WorldMaterials
@@ -153,6 +154,7 @@ namespace FreeVelo.Core.World.Gen
             [WorldMaterial.Tyre] = (new Vector3(0.07f, 0.07f, 0.07f), 0.1f),
             [WorldMaterial.Glass] = (new Vector3(0.18f, 0.24f, 0.30f), 0.9f),
             [WorldMaterial.Sawdust] = (new Vector3(0.80f, 0.66f, 0.45f), 0f),
+            [WorldMaterial.LaneAsphalt] = (new Vector3(0.33f, 0.33f, 0.34f), 0.1f),
         };
     }
 }

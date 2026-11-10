@@ -35,6 +35,13 @@ public static class WorldPreview
             int i = Array.FindIndex(e.D, d => d >= b.DistanceM);
             return $"{{\"x\":{F(e.X[i])},\"z\":{F(e.Z[i])}}}";
         })) + "]");
+        var land = Landscape.Generate(Terrain.Build(map), new DateTime(2026, 7, 1));
+        var built = land.Items.Where(i => i.Kind is SceneryKind.AlpineHouse or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.Church or SceneryKind.Farmhouse
+            or SceneryKind.Workshop or SceneryKind.Sawmill or SceneryKind.FireStation or SceneryKind.HayHut or SceneryKind.AlpineHut or SceneryKind.Shrine or SceneryKind.Lane);
+        sb.Append(",\"buildings\":[" + string.Join(",", built.Select(i => $"{{\"k\":\"{i.Kind}\",\"x\":{F(i.X)},\"z\":{F(i.Z)},\"r\":{F(i.RotationDeg)}}}")) + "]");
+        string Patch(FieldPatch f) => "[" + string.Join(",", new[] { (-1, -1), (1, -1), (1, 1), (-1, 1) }.Select(c => { var (x, z) = f.Point(c.Item1 * f.HalfLength, c.Item2 * f.HalfWidth); return $"[{F(x)},{F(z)}]"; })) + "]";
+        sb.Append(",\"fields\":[" + string.Join(",", land.Fields.Select(f => $"{{\"c\":\"{f.Crop}\",\"p\":{Patch(f)}}}")) + "]");
+        sb.Append(",\"pastures\":[" + string.Join(",", land.Pastures.Select(Patch)) + "]");
         var routes = new List<(string Name, FreeVelo.Core.World.Route Route)>
         {
             ("valley", map.MainLoop), ("alm", map.AlmLoop()), ("stelvio", map.ClimbLoop(ClimbData.Stelvio)!), ("alpe", map.ClimbLoop(ClimbData.AlpeDHuez)!),

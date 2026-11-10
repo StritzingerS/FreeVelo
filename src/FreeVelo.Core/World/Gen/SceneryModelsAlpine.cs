@@ -49,6 +49,10 @@ namespace FreeVelo.Core.World.Gen
                 case SceneryKind.LogPile: LogPile(near, far, v, random); return true;
                 case SceneryKind.LumberStack: LumberStack(near, far, v); return true;
                 case SceneryKind.Car: Car(near, v); return true;
+                case SceneryKind.Lane:
+                    near.Of(v == 1 ? WorldMaterial.Gravel : WorldMaterial.LaneAsphalt).Box(new Vector3(0, -0.12f, 0), new Vector3(v == 1 ? 3.0f : 3.4f, 0.3f, 5.4f), Rot.Identity);
+                    far.Of(v == 1 ? WorldMaterial.Gravel : WorldMaterial.LaneAsphalt).Box(new Vector3(0, 0.0f, 0), new Vector3(v == 1 ? 3.0f : 3.4f, 0.06f, 5.4f), Rot.Identity);
+                    return true;
                 default: return false;
             }
         }
@@ -81,6 +85,7 @@ namespace FreeVelo.Core.World.Gen
             SceneryKind.LogPile => 4,
             SceneryKind.LumberStack => 3,
             SceneryKind.Car => 2.5,
+            SceneryKind.Lane => 1.7,
             SceneryKind.PathStone or SceneryKind.GardenFence or SceneryKind.FlowerBed or SceneryKind.Bench => 0.5,
             _ => 1.2,
         };
