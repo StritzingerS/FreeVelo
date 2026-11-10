@@ -48,6 +48,9 @@ namespace FreeVelo.Core.History
         /// <summary>Set when the ride was rebuilt from a FIT file (imported).</summary>
         public bool imported;
 
+        /// <summary>Garmin Connect activity id when the ride was imported from Garmin (0 otherwise).</summary>
+        public long garminId;
+
         /// <summary>FTP estimated by an FTP test (0 if none).</summary>
         public int estimatedFtpW;
 
@@ -248,6 +251,24 @@ namespace FreeVelo.Core.History
         {
             var days = Fitness(rides, day, toLocal);
             return days.Count == 0 ? 0 : days[days.Count - 1].Tsb;
+        }
+
+        /// <summary>
+        /// The same ride already in the history: a ride that starts within <see cref="SameRideStartS"/> and lasts about as
+        /// long (±10 %) – e.g. a trainer ride recorded by FreeVelo and on a Garmin at the same time.
+        /// </summary>
+        public static bool IsDuplicate(IEnumerable<RideRecord> rides, DateTime startUtc, double durationS) =>
+            rides.Any(r => Math.Abs((r.StartUtc - startUtc).TotalSeconds) <= SameRideStartS
+                && Math.Abs(r.durationS - durationS) <= Math.Max(60, 0.1 * Math.Max(r.durationS, durationS)));
+
+        public const double SameRideStartS = 120;
+
+        /// <summary>FTP that applied at <paramref name="timeUtc"/> (last change before it), else <paramref name="fallback"/>.</summary>
+        public static int FtpOn(IEnumerable<FtpChange> history, DateTime timeUtc, int fallback)
+        {
+            long t = new DateTimeOffset(DateTime.SpecifyKind(timeUtc, DateTimeKind.Utc)).ToUnixTimeSeconds();
+            var last = history.Where(f => f.timeUtc <= t).OrderBy(f => f.timeUtc).LastOrDefault();
+            return last != null && last.ftpW > 0 ? last.ftpW : fallback;
         }
 
         /// <summary>Date of the last accepted FTP test (local time), or null.</summary>
