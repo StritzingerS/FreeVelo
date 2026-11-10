@@ -149,4 +149,34 @@ public class WorkoutEditorTests
         Assert.True(ahead[ahead.Count - 1].TargetW < 120);
         Assert.Equal(2, engine.TargetsAhead(20).Count); // horizon
     }
+
+    [Fact]
+    public void IntervalsInsideIntervalsCanBeEdited()
+    {
+        // 40/20s: sets (outer repeat) of 10 × 40/20 (inner repeat).
+        var ed = new WorkoutEditor(BuiltInWorkouts.FortyTwenties(), 250);
+        int outer = ed.Blocks.FindIndex(b => b is RepeatBlock);
+        ed.Selected = outer;
+        ed.OpenSelectedRepeat();
+        Assert.Equal(1, ed.OpenDepth);
+
+        int inner = ed.Blocks.FindIndex(b => b is RepeatBlock);
+        ed.Selected = inner;
+        ed.OpenSelectedRepeat();
+        Assert.Equal(2, ed.OpenDepth);
+        Assert.Equal(10, ed.OpenRepeat!.Count);
+        Assert.Equal(40, ed.Blocks[0].TotalDurationS);
+
+        ed.SetDuration(0, 30); // 30/30 instead of 40/20
+        ed.Undo();
+        Assert.Equal(2, ed.OpenDepth); // still inside after undo
+        Assert.Equal(40, ed.Blocks[0].TotalDurationS);
+
+        ed.CloseRepeat();
+        Assert.Equal(1, ed.OpenDepth);
+        Assert.Equal(inner, ed.Selected);
+        ed.CloseRepeat();
+        Assert.Equal(0, ed.OpenDepth);
+        Assert.Equal(outer, ed.Selected);
+    }
 }
