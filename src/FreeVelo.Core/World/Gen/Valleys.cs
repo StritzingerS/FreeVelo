@@ -67,15 +67,15 @@ namespace FreeVelo.Core.World.Gen
 
             // Main loop (the valley round), in riding order from Laerchwald: north up the west valley to Kirchbach, down the
             // main valley to Trafon, back west to Laerchwald.
-            roads.Add(new PlannedRoad(Laerchwald, Kirchbach, Curve(new[] { p[Laerchwald], (-3100, -1800), (-2750, -1500) }.Concat(AroundLake()).Concat(new[] { (-1900, 1150), (-1150, 1250), (-650, 1950), p[Kirchbach] }).ToArray()), RoadKind.Valley, true));
-            roads.Add(new PlannedRoad(Kirchbach, Mitterbach, Curve(p[Kirchbach], (520, 1750), (460, 1200), (720, 600), (660, 50), (960, -500), p[Mitterbach]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Laerchwald, Kirchbach, Curve(Wobble(1, 90, p[Laerchwald], (-3100, -1800), (-2750, -1500)).Concat(AroundLake()).Concat(Wobble(2, 90, (-1900, 1150), (-1150, 1250), (-650, 1950), p[Kirchbach])).ToArray()), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Kirchbach, Mitterbach, Curve(Wobble(3, 55, p[Kirchbach], (520, 1750), (460, 1200), (720, 600), (660, 50), (960, -500), p[Mitterbach])), RoadKind.Valley, true));
             roads.Add(new PlannedRoad(Mitterbach, Hinterau, Curve(p[Mitterbach], (1320, -1750), (1060, -2000), (1180, -2450), (900, -2650), (1300, -3050), (1150, -3500), (880, -3650), (1060, -4050), p[Hinterau]), RoadKind.Valley, true));
             var stelvioIn = mountain.Stelvio.StartDirection;
             roads.Add(new PlannedRoad(Hinterau, Trafon, Curve(p[Hinterau], (560, -4700), (700, -5150), (950, -5300), (600, -5800), (760, -6050), (560, -6400), (900, -6800), (720, -7100), p[Trafon]), RoadKind.Valley, true));
-            roads.Add(new PlannedRoad(Trafon, Laerchwald, Curve(p[Trafon], (300, -7760), (-350, -7450), (-900, -7700), (-1450, -7100), (-1750, -6400), (-2150, -5900), (-2700, -5250), (-2850, -4600), (-3250, -4000), (-3050, -3200), p[Laerchwald]), RoadKind.Valley, true));
+            roads.Add(new PlannedRoad(Trafon, Laerchwald, Curve(Wobble(4, 110, p[Trafon], (300, -7760), (-350, -7450), (-900, -7700), (-1450, -7100), (-1750, -6400), (-2150, -5900), (-2700, -5250), (-2850, -4600), (-3250, -4000), (-3050, -3200), p[Laerchwald])), RoadKind.Valley, true));
 
             // Over the saddle between the two valleys.
-            roads.Add(new PlannedRoad(Mitterbach, Laerchwald, Curve(p[Mitterbach], (500, -1550), (-150, -1300), (-800, -1750), (-1500, -1700), (-2200, -2150), (-2800, -2050), p[Laerchwald]), RoadKind.Valley));
+            roads.Add(new PlannedRoad(Mitterbach, Laerchwald, Curve(Wobble(5, 80, p[Mitterbach], (500, -1550), (-150, -1300), (-800, -1750), (-1500, -1700), (-2200, -2150), (-2800, -2050), p[Laerchwald])), RoadKind.Valley));
 
             // Alm road up: north out of Kirchbach, then six long traverses with hairpins, then to Oberalm.
             // Each traverse and hairpin a little different, like real ones (lengths, angles, bows, radii).
@@ -93,13 +93,13 @@ namespace FreeVelo.Core.World.Gen
             roads.Add(new PlannedRoad(Kirchbach, Oberalm, Curve(up.ToArray()), RoadKind.Pass));
 
             // Over the plateau, and down along the slope above the main valley to Mitterbach.
-            roads.Add(new PlannedRoad(Oberalm, AlmEnd, Curve(nodes[Oberalm], (700, 4450), (1200, 4300), (1700, 4700), (2200, 4600), p[AlmEnd]), RoadKind.Pass));
-            roads.Add(new PlannedRoad(AlmEnd, Mitterbach, Curve(p[AlmEnd], (2900, 4300), (2650, 3700), (2900, 3000), (2550, 2300), (2700, 1600), (2400, 1000), (2550, 350), (2300, -150), (2100, -800), (1600, -1300), p[Mitterbach]), RoadKind.Pass));
+            roads.Add(new PlannedRoad(Oberalm, AlmEnd, Curve(Wobble(6, 60, nodes[Oberalm], (700, 4450), (1200, 4300), (1700, 4700), (2200, 4600), p[AlmEnd])), RoadKind.Pass));
+            roads.Add(new PlannedRoad(AlmEnd, Mitterbach, Curve(Wobble(7, 75, p[AlmEnd], (2900, 4300), (2650, 3700), (2900, 3000), (2550, 2300), (2700, 1600), (2400, 1000), (2550, 350), (2300, -150), (2100, -800), (1600, -1300), p[Mitterbach])), RoadKind.Pass));
 
             // From the plateau up to Valbrune, arriving the way the Alpe d'Huez starts.
             var alpeOut = mountain.Alpe.StartDirection;
             var b = p[Valbrune];
-            roads.Add(new PlannedRoad(Oberalm, Valbrune, Curve(nodes[Oberalm], (550, 4700), (1000, 5300), (1600, 5600), (1900, 6150), (2500, 6400), (3100, 6850), (b.X - (alpeOut.X * 450), b.Z - (alpeOut.Z * 450)), b), RoadKind.Pass));
+            roads.Add(new PlannedRoad(Oberalm, Valbrune, Curve(Wobble(8, 75, nodes[Oberalm], (550, 4700), (1000, 5300), (1600, 5600), (1900, 6150), (2500, 6400), (3100, 6850)).Concat(new[] { (b.X - (alpeOut.X * 450), b.Z - (alpeOut.Z * 450)), b }).ToArray()), RoadKind.Pass));
             _ = stelvioIn;
             return (nodes, roads);
         }
@@ -119,6 +119,35 @@ namespace FreeVelo.Core.World.Gen
         }
 
         // ------------------------------------------------------------------ shapes
+
+        /// <summary>
+        /// The waypoints with extra bends in between: every 300–450 m a point pushed sideways by up to
+        /// <paramref name="amplitude"/> m, mostly alternating sides, at irregular spacing (deterministic per seed).
+        /// </summary>
+        public static (double X, double Z)[] Wobble(int seed, double amplitude, params (double X, double Z)[] pts)
+        {
+            var random = new Random(seed * 7919);
+            var result = new List<(double X, double Z)> { pts[0] };
+            double side = random.NextDouble() < 0.5 ? -1 : 1;
+            for (int i = 0; i < pts.Length - 1; i++)
+            {
+                var a = pts[i];
+                var b = pts[i + 1];
+                double dx = b.X - a.X, dz = b.Z - a.Z, length = Math.Sqrt((dx * dx) + (dz * dz));
+                int n = (int)(length / (300 + (random.NextDouble() * 150)));
+                for (int k = 1; k <= n; k++)
+                {
+                    double f = (k + ((random.NextDouble() - 0.5) * 0.5)) / (n + 1);
+                    side = random.NextDouble() < 0.75 ? -side : side;
+                    double off = amplitude * (0.3 + (0.7 * random.NextDouble())) * side;
+                    result.Add((a.X + (dx * f) - (dz / length * off), a.Z + (dz * f) + (dx / length * off)));
+                }
+
+                result.Add(b);
+            }
+
+            return result.ToArray();
+        }
 
         /// <summary>A smooth road through the points (centripetal Catmull-Rom, no loops), every <see cref="WorldMap.Spacing"/> m.</summary>
         public static Polyline Curve(params (double X, double Z)[] pts)
