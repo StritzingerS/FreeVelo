@@ -7,6 +7,7 @@ using FreeVelo.Core.History;
 using FreeVelo.Core.Plans;
 using FreeVelo.Core.Training;
 using FreeVelo.Core.Ui;
+using FreeVelo.Net;
 using UnityEngine;
 
 namespace FreeVelo.UI
@@ -48,7 +49,12 @@ namespace FreeVelo.UI
             GUI.Label(new Rect(c.x + 68, c.y + 30, c.width - 260, 22), when.ToString("dddd, dd.MM.yyyy · HH:mm") + (r.groupRide ? " · " + L.Get("group") : "") + ClimbsText(r), Clip(Theme.Caption));
 
             string fit = Path.Combine(HistoryStore.RidesFolder, r.id);
-            if (File.Exists(fit))
+            if (r.stravaId != 0)
+            {
+                // Imported from Strava: it is there already.
+                if (Ui.IconButton(new Rect(c.xMax - 50, c.y, 50, 50), Icon.Share, ButtonKind.Secondary)) StravaService.OpenActivity(r.stravaId);
+            }
+            else if (File.Exists(fit))
             {
                 float bx = c.xMax - 166;
                 StravaRideButton(new Rect(bx, c.y, 50, 50), fit, r.title);

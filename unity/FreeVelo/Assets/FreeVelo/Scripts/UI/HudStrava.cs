@@ -17,7 +17,8 @@ namespace FreeVelo.UI
 
         public void InitializeStrava(StravaService strava) => _strava = strava;
 
-        private const float StravaCardH = 150;
+        /// <summary>Connected: a second row for the import of rides.</summary>
+        private float StravaCardH => _strava != null && _strava.Connected ? 222 : 150;
 
         private void DrawStravaCard(Rect card)
         {
@@ -41,6 +42,7 @@ namespace FreeVelo.UI
                 var mode = new Rect(disconnect.x - 16 - 340, text.y, 340, 52);
                 int auto = Ui.Segmented(mode, new[] { L.Get("strava_auto"), L.Get("strava_manual") }, _strava.AutoUpload ? 0 : 1);
                 if ((auto == 0) != _strava.AutoUpload) _strava.AutoUpload = auto == 0;
+                DrawStravaImportRow(new Rect(text.x, text.y + 70, text.width, 52));
             }
             else if (_strava.Connecting)
             {
@@ -58,6 +60,28 @@ namespace FreeVelo.UI
                 GUI.Label(button, L.Get("strava_connect"), Theme.With(Theme.Body, Color.white, 17, TextAnchor.MiddleCenter));
                 if (GUI.Button(button, GUIContent.none, GUIStyle.none)) _strava.Connect();
             }
+        }
+
+        /// <summary>Import of the rider's rides with power: status and "fetch now", or a reconnect for older connections.</summary>
+        private void DrawStravaImportRow(Rect row)
+        {
+            if (!_strava.CanImport)
+            {
+                // Connected before the import existed: Strava only allowed uploads.
+                float rw = Ui.ButtonWidth(L.Get("strava_reconnect"), false);
+                GUI.Label(new Rect(row.x, row.y, row.width - rw - 16, row.height), L.Get("strava_reconnect_hint"), Theme.With(Theme.Caption, Theme.Muted, wrap: true, anchor: TextAnchor.MiddleLeft));
+                if (Ui.Button(new Rect(row.xMax - rw, row.y, rw, 52), L.Get("strava_reconnect"), ButtonKind.Secondary)) _strava.Connect();
+                return;
+            }
+
+            string status = _strava.Importing ? L.Get("strava_importing")
+                : _strava.ImportError.Length > 0 ? _strava.ImportError
+                : _strava.LastImport.HasValue ? string.Format(L.Get("strava_import_status"), _strava.LastImport.Value.ToString("dd.MM. HH:mm"), _strava.LastImported)
+                : L.Get("strava_import_what");
+            var color = _strava.ImportError.Length > 0 && !_strava.Importing ? Theme.Warning : Theme.Muted;
+            float bw = Ui.ButtonWidth(L.Get("strava_import_now"), true);
+            GUI.Label(new Rect(row.x, row.y, row.width - bw - 16, row.height), status, Theme.With(Theme.Caption, color, wrap: true, anchor: TextAnchor.MiddleLeft));
+            if (Ui.Button(new Rect(row.xMax - bw, row.y, bw, 52), L.Get("strava_import_now"), ButtonKind.Secondary, Icon.Download, !_strava.Importing)) _strava.Import();
         }
 
         /// <summary>Short Strava status of a saved ride ("" if Strava is not connected and it was never uploaded).</summary>

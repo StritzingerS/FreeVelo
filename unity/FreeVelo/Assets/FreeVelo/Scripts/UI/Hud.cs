@@ -741,7 +741,7 @@ namespace FreeVelo.UI
                 + sectionH + 280 + gap + zonesH + gap + HrCardH + gap          // profile
                 + sectionH + 280 + gap + ButtonsCardH + gap + (sim ? 160 + gap : 0) // trainer
                 + sectionH + ServerCardH + gap                     // riding together
-                + sectionH + StravaCardH + gap + GarminCardH + gap + BackupCardH + gap // data
+                + sectionH + StravaCardH + gap + BackupCardH + gap // data
                 + sectionH + 160 + gap;                            // app
             Ui.BeginScroll(3000, view, contentH);
             float x0 = 8, y = 8;
@@ -807,8 +807,6 @@ namespace FreeVelo.UI
             y = SettingsSection(x0, y, L.Get("section_data"));
             DrawStravaCard(new Rect(x0, y, c.width, StravaCardH));
             y += StravaCardH + gap;
-            DrawGarminCard(new Rect(x0, y, c.width, GarminCardH));
-            y += GarminCardH + gap;
             DrawBackupCard(new Rect(x0, y, c.width, BackupCardH));
             y += BackupCardH + gap;
 

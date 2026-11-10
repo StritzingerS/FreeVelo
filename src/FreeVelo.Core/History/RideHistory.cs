@@ -48,8 +48,8 @@ namespace FreeVelo.Core.History
         /// <summary>Set when the ride was rebuilt from a FIT file (imported).</summary>
         public bool imported;
 
-        /// <summary>Garmin Connect activity id when the ride was imported from Garmin (0 otherwise).</summary>
-        public long garminId;
+        /// <summary>Strava activity id when the ride was imported from Strava (0 otherwise).</summary>
+        public long stravaId;
 
         /// <summary>FTP estimated by an FTP test (0 if none).</summary>
         public int estimatedFtpW;
@@ -158,6 +158,51 @@ namespace FreeVelo.Core.History
             return record;
         }
 
+        /// <summary>
+        /// One record per second: gaps up to <paramref name="maxGapS"/> (bike computers with "smart recording" store a
+        /// point only every few seconds) are filled with the previous values; longer gaps are pauses and stay gaps.
+        /// </summary>
+        public static List<FitRecord> OneHz(IReadOnlyList<FitRecord> samples, int maxGapS = 10)
+        {
+            var result = new List<FitRecord>(samples.Count);
+            for (int i = 0; i < samples.Count; i++)
+            {
+                var s = samples[i];
+                if (result.Count > 0)
+                {
+                    var prev = result[result.Count - 1];
+                    int gap = (int)Math.Round((s.TimeUtc - prev.TimeUtc).TotalSeconds);
+                    if (gap < 1) continue;
+                    if (gap <= maxGapS)
+                    {
+                        for (int k = 1; k < gap; k++)
+                        {
+                            double f = k / (double)gap;
+                            double? Lerp(double? a, double? b) => a.HasValue && b.HasValue ? a + ((b - a) * f) : a;
+                            result.Add(new FitRecord(prev.TimeUtc.AddSeconds(k), prev.PowerW, prev.HeartRateBpm, prev.CadenceRpm,
+                                Lerp(prev.DistanceM, s.DistanceM), prev.SpeedMps, Lerp(prev.AltitudeM, s.AltitudeM)));
+                        }
+                    }
+                }
+
+                result.Add(s);
+            }
+
+            return result;
+        }
+
+        /// <summary>The records as a recording, to write a FIT file for the ride detail (imported rides).</summary>
+        public static Recording.RideRecording ToRecording(string name, IReadOnlyList<FitRecord> samples)
+        {
+            var ride = new Recording.RideRecording(samples.Count > 0 ? samples[0].TimeUtc : DateTime.UtcNow, name);
+            foreach (var s in samples)
+            {
+                ride.Add(new Recording.RideSample(s.TimeUtc, s.PowerW, s.HeartRateBpm, s.CadenceRpm, s.SpeedMps ?? 0, s.DistanceM ?? 0, s.AltitudeM ?? 0, null));
+            }
+
+            return ride;
+        }
+
         public static string TitleFromFileName(string fileName)
         {
             string name = System.IO.Path.GetFileNameWithoutExtension(fileName);
@@ -255,7 +300,7 @@ namespace FreeVelo.Core.History
 
         /// <summary>
         /// The same ride already in the history: a ride that starts within <see cref="SameRideStartS"/> and lasts about as
-        /// long (±10 %) – e.g. a trainer ride recorded by FreeVelo and on a Garmin at the same time.
+        /// long (±10 %) – e.g. a FreeVelo trainer ride that is also on Strava (uploaded, or recorded by a bike computer too).
         /// </summary>
         public static bool IsDuplicate(IEnumerable<RideRecord> rides, DateTime startUtc, double durationS) =>
             rides.Any(r => Math.Abs((r.StartUtc - startUtc).TotalSeconds) <= SameRideStartS

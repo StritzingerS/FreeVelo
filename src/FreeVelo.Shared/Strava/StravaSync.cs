@@ -49,6 +49,11 @@ namespace FreeVelo.Shared.Strava
         public StravaTokens tokens = new StravaTokens();
         public bool autoUpload = true;
         public List<StravaQueueItem> uploads = new List<StravaQueueItem>();
+
+        /// <summary>Last successful import of the rider's rides (Unix seconds, 0 = never).</summary>
+        public long lastImportUtc;
+        public int lastImported;
+        public string importError = "";
     }
 
     /// <summary>
@@ -87,6 +92,9 @@ namespace FreeVelo.Shared.Strava
         public bool Connected => !string.IsNullOrEmpty(State.tokens?.refreshToken);
 
         public string AthleteName => State.tokens?.athleteName ?? "";
+
+        /// <summary>Connected with permission to read activities (older connections only allowed uploads).</summary>
+        public bool CanRead => Connected && State.tokens.canRead;
 
         /// <summary>A login was started and not yet finished.</summary>
         public bool Connecting => _loginState != null;
@@ -162,6 +170,7 @@ namespace FreeVelo.Shared.Strava
 
             fresh.athleteId = tokens.athleteId;
             fresh.athleteName = tokens.athleteName;
+            fresh.canRead = tokens.canRead;
             State.tokens = fresh;
             _save();
             return fresh.accessToken;

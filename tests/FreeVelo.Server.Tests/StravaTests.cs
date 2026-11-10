@@ -78,7 +78,7 @@ public sealed class StravaTests : IDisposable
 
         Assert.StartsWith("https://www.strava.com/oauth/mobile/authorize?", url);
         Assert.Equal("12345", Query(url, "client_id"));
-        Assert.Equal("activity:write", Query(url, "scope"));
+        Assert.Equal("activity:write,activity:read_all", Query(url, "scope"));
         Assert.Equal(state, Query(url, "state"));
         Assert.EndsWith(ApiRoutes.StravaCallback, Query(url, "redirect_uri"));
         Assert.DoesNotContain("very-secret", url);
@@ -94,6 +94,7 @@ public sealed class StravaTests : IDisposable
         Assert.NotNull(tokens);
         Assert.Equal(("access-1", "refresh-1", 1900000000L, 4242L, "Sami S."),
             (tokens!.accessToken, tokens.refreshToken, tokens.expiresAt, tokens.athleteId, tokens.athleteName));
+        Assert.False(tokens.canRead); // "view activities" was not ticked: uploads only, no import
 
         // Collected once, then forgotten
         var again = await Assert.ThrowsAsync<ApiException>(() => api.StravaClaimAsync(state));
@@ -136,6 +137,16 @@ public sealed class StravaTests : IDisposable
         _server.Time.Advance(TimeSpan.FromMinutes(11));
         var page = await _browser.GetStringAsync($"{ApiRoutes.StravaCallback}?state={state}&code=good&scope=activity:write");
         Assert.Contains("abgelaufen", page);
+    }
+
+    [Fact]
+    public async Task RemembersWhetherReadingWasAllowed()
+    {
+        var api = Api();
+        string state = FreeVeloApi.NewStravaState();
+        await api.StravaStartAsync(state);
+        await _browser.GetStringAsync($"{ApiRoutes.StravaCallback}?state={state}&code=good&scope=read,activity:write,activity:read_all");
+        Assert.True((await api.StravaClaimAsync(state))!.canRead);
     }
 
     [Fact]
