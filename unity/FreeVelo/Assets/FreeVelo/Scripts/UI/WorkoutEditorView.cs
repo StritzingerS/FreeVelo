@@ -98,7 +98,7 @@ namespace FreeVelo.UI
 
             // ---- top bar: close, name, undo/redo, unit, save
             float x = area.x, y = area.y;
-            if (Ui.IconButton(new Rect(x, y, 52, 52), _confirmDiscard ? Icon.Trash : Icon.ChevronLeft, _confirmDiscard ? ButtonKind.Danger : ButtonKind.Secondary))
+            if (Ui.IconButton(new Rect(x, y, 52, 52), _confirmDiscard ? Icon.Undo : Icon.ChevronLeft, _confirmDiscard ? ButtonKind.Danger : ButtonKind.Secondary))
             {
                 if (!ed.IsDirty || _confirmDiscard)
                 {
@@ -657,7 +657,18 @@ namespace FreeVelo.UI
                     GUI.Label(new Rect(r.x + 24, rowY, 140, 50), L.Get("repeats"), Theme.Body);
                     int count = Ui.Stepper(new Rect(r.x + 164, rowY, rowW - 140, 50), rep.Count, "×", 1, 1, 1, 50);
                     if (count != rep.Count) ed.SetRepeatCount(i, count);
-                    GUI.Label(new Rect(r.x + 24, rowY + 60, rowW, 40), $"{rep.Blocks.Count} {L.Get("blocks")} · {Ui.Clock(rep.TotalDurationS)}", Theme.BodyMuted);
+                    // Checkbox: the last repetition without its last block (e.g. no recovery after the last interval).
+                    var check = new Rect(r.x + 24, rowY + 58, 40, 40);
+                    bool clicked = rep.SkipLastBlock
+                        ? Ui.IconButton(check, Icon.Check, ButtonKind.Primary, rep.Blocks.Count > 1)
+                        : Ui.Button(check, string.Empty, ButtonKind.Secondary, null, rep.Blocks.Count > 1); // empty box
+                    if (clicked)
+                    {
+                        ed.SetSkipLast(i, !rep.SkipLastBlock);
+                    }
+
+                    GUI.Label(new Rect(check.xMax + 12, check.y, rowW - 52, check.height), L.Get("skip_last_block"), Theme.With(Theme.Body, size: 15, anchor: TextAnchor.MiddleLeft));
+                    GUI.Label(new Rect(r.x + 24, rowY + 106, rowW, 30), $"{rep.Blocks.Count} {L.Get("blocks")} · {Ui.Clock(rep.TotalDurationS)}", Theme.BodyMuted);
                     break;
             }
 

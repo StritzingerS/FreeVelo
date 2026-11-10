@@ -261,7 +261,7 @@ namespace FreeVelo.UI
             {
                 (Icon.Trainer, L.Get("trainer"), hub.TrainerAddress),
                 (Icon.Bolt, L.Get("power_meter"), hub.PowerMeterAddress),
-                (Icon.Heart, L.Get("heart_rate"), hub.HeartRateAddress),
+                (Icon.Heart, L.Get("heart_rate"), hub.HeartRateSource),
             };
             float rw = (dev.width - 150) / 3f;
             for (int i = 0; i < roles.Length; i++)
@@ -317,7 +317,14 @@ namespace FreeVelo.UI
         /// change). Heights are interpolated from samples tied to the road, so the outline glides smoothly when it scrolls.
         /// </summary>
         private static void ProfileColumns(Rect r, double from, double to, double[] e, double start, double step, double min, double span,
-            double rider, System.Func<double, float> alphaAt)
+            double rider, System.Func<double, float> alphaAt) =>
+            ProfileColumns(r, from, to, e, start, step, min, span, rider, d => Color.Lerp(Theme.Background, Theme.Info, alphaAt(d)), null);
+
+        /// <summary>
+        /// Same with a colour per distance; the ridden part orange, or (<paramref name="dimRidden"/>) its own colour dimmed.
+        /// </summary>
+        private static void ProfileColumns(Rect r, double from, double to, double[] e, double start, double step, double min, double span,
+            double rider, System.Func<double, Color> colorAt, float? dimRidden)
         {
             int cols = Mathf.Max(1, Mathf.FloorToInt(r.width / ProfileColumnW));
             float cw = r.width / cols;
@@ -330,9 +337,9 @@ namespace FreeVelo.UI
                 double d = from + ((to - from) * (c + 0.5) / cols);
                 float h = 8 + (float)((SampleAt(e, start, step, d) - min) / span) * (r.height - 8);
                 float x0 = r.x + (c * cw), x1 = x0 + cw;
-                var ahead = Color.Lerp(bg, Theme.Info, alphaAt(d));
+                var ahead = colorAt(d);
                 float split = Mathf.Clamp(px, x0, x1);
-                if (split > x0) Ui.Rect(new Rect(x0, r.yMax - h, split - x0, h), done, 0);
+                if (split > x0) Ui.Rect(new Rect(x0, r.yMax - h, split - x0, h), dimRidden.HasValue ? Color.Lerp(bg, ahead, dimRidden.Value) : done, 0);
                 if (split < x1) Ui.Rect(new Rect(split, r.yMax - h, x1 - split, h), ahead, 0);
             }
         }
@@ -340,8 +347,8 @@ namespace FreeVelo.UI
         /// <summary>Height range a whole-round profile shows at least, so small hills don't look like mountains.</summary>
         private const double MinRoundSpanM = 100;
 
-        /// <summary>Same for the "next 3 km" profile.</summary>
-        private const double MinAheadSpanM = 60;
+        /// <summary>Same for the climb view (next 500 m).</summary>
+        private const double MinAheadSpanM = 40;
 
         /// <summary>Metres up and down between two distances (sampled every 10 m).</summary>
         private static (double Up, double Down) Climbing(FreeVelo.Core.World.Route route, double from, double to)
@@ -603,7 +610,7 @@ namespace FreeVelo.UI
             {
                 (Icon.Trainer, L.Get("trainer"), hub.TrainerAddress, hub.TrainerAddress != null ? ProtocolName(hub.TrainerProtocol.ToString()) : null),
                 (Icon.Bolt, L.Get("power_meter"), hub.PowerMeterAddress, null),
-                (Icon.Heart, L.Get("heart_rate"), hub.HeartRateAddress, null),
+                (Icon.Heart, L.Get("heart_rate"), hub.HeartRateSource, null),
             };
             float rw = (c.width - 48) / 4f;
             DrawControllerCard(new Rect(c.x + (3 * (rw + 16)), c.y + 86, rw, 96));
@@ -907,14 +914,11 @@ namespace FreeVelo.UI
             if (Ui.IconButton(new Rect(24, 24, 60, 60), _ride.IsPaused ? Icon.Play : Icon.Pause)) _ride.TogglePause();
             if (Ui.IconButton(new Rect(92, 24, 60, 60), Icon.Stop)) _confirmEnd = true;
 
-            // Metrics bar (top centre). The side cards (320 wide + margins) go next to it when there is room,
-            // otherwise below the distance/grade chips.
-            const float sideSpace = 344 + 16;
-            bool sidesBeside = _w - (2 * sideSpace) >= 640;
-            float barW = sidesBeside ? Mathf.Min(900, _w - (2 * sideSpace)) : Mathf.Min(900, _w - 48);
-            var bar = new Rect((_w - barW) / 2f, 20, barW, 112);
+            // Metrics bar (top centre, as wide as the pause / stop buttons allow); the side cards go below it.
+            float barW = Mathf.Min(1080, _w - (2 * 172));
+            var bar = new Rect((_w - barW) / 2f, 16, barW, 124);
             Ui.Card(bar, Theme.Alpha(Theme.Background, 0.88f));
-            float powerW = barW * 0.24f;
+            float powerW = barW * 0.2f;
             float side = (barW - powerW) / 6f;
 
             // Left: the ride so far (time, distance, elevation gained); right: live values (speed, cadence, heart rate).
@@ -940,21 +944,21 @@ namespace FreeVelo.UI
             Color powerColor = Theme.Text;
             if (workout && state.TargetW.HasValue && state.TargetW.Value > 0)
             {
-                double ratio = _ride.Power3s / state.TargetW.Value;
+                double ratio = _ride.PowerShown / state.TargetW.Value;
                 powerColor = ratio < 0.94 ? Theme.Warning : ratio > 1.06 ? Theme.Danger : Theme.Success;
             }
 
             GUI.Label(new Rect(p.x, p.y + 10, p.width, 18), L.Get("power").ToUpperInvariant(), Theme.With(Theme.Overline, anchor: TextAnchor.MiddleCenter));
-            GUI.Label(new Rect(p.x, p.y + 26, p.width, 70), $"{_ride.Power3s:0}<size=24><color=#B3BECA> W</color></size>", Theme.With(Theme.Display, powerColor, 60));
-            string sub = workout && state.TargetW.HasValue ? $"{L.Get("target")} {state.TargetW} W" : $"{_ride.Power3s / Mathf.Max(1f, AppSettings.RiderWeightKg):0.0} W/kg";
+            GUI.Label(new Rect(p.x, p.y + 26, p.width, 70), $"{_ride.PowerShown:0}<size=24><color=#B3BECA> W</color></size>", Theme.With(Theme.Display, powerColor, 60));
+            string sub = workout && state.TargetW.HasValue ? $"{L.Get("target")} {state.TargetW} W" : $"{_ride.PowerShown / Mathf.Max(1f, AppSettings.RiderWeightKg):0.0} W/kg";
             GUI.Label(new Rect(p.x, p.yMax - 32, p.width, 22), sub, Theme.With(Theme.Caption, anchor: TextAnchor.MiddleCenter));
 
             for (int i = 3; i < 6; i++) Metric(new Rect(p.xMax + ((i - 3) * side), bar.y, side, bar.height), metrics[i].Icon, metrics[i].Value, metrics[i].Unit, metrics[i].Color, metricStyle);
 
             // Chips under the bar: gradient (and braking)
             float cy = bar.yMax + 16;
-            _sideTop = sidesBeside ? 24 : cy + 54;
-            _leftTop = sidesBeside ? 100 : cy + 54;
+            _sideTop = cy + 54;
+            _leftTop = cy + 54;
             string grade = $"{pos.GradePercent:+0.0;-0.0;0.0} %";
             var gradeColor = pos.GradePercent > 4 ? Theme.Danger : pos.GradePercent > 1.5 ? Theme.Warning : pos.GradePercent < -1.5 ? Theme.Info : Theme.Muted;
             var chipStyle = Theme.With(Theme.H3, size: 17, anchor: TextAnchor.MiddleLeft);
@@ -988,8 +992,8 @@ namespace FreeVelo.UI
             if (workout) DrawWorkoutPanel();
             else DrawRideStrip();
             if (!_ride.IsGroupRide) DrawJunctionCard(workout);
-            DrawClimbTimer(workout);
-            if (_ride.GearsActive) DrawGearControl();
+            DrawClimbTimer();
+            if (_ride.GearsActive) DrawGearControl(rowHeight: workout ? 112 : 96);
             if (_ride.IsGroupRide && _group != null) DrawGroupOverlay();
 
             // Cue
@@ -1022,7 +1026,7 @@ namespace FreeVelo.UI
         private int MetricFontSize(float width)
         {
             if (Mathf.Abs(width - _metricFontWidth) < 0.5f) return _metricFontSize;
-            var style = Theme.With(Theme.Value, anchor: TextAnchor.MiddleCenter);
+            var style = Theme.With(Theme.Value, size: 48, anchor: TextAnchor.MiddleCenter);
             foreach (var (value, unit) in WidestMetrics)
             {
                 while (style.fontSize > 18 && style.CalcSize(new GUIContent(MetricText(value, unit))).x > width - 8) style.fontSize -= 1;
@@ -1039,7 +1043,7 @@ namespace FreeVelo.UI
         private static void Metric(Rect r, Icon icon, string value, string unit, Color iconColor, GUIStyle style)
         {
             Ui.DrawIcon(new Rect(r.center.x - 10, r.y + 16, 20, 20), icon, iconColor);
-            GUI.Label(new Rect(r.x, r.y + 40, r.width, 56), MetricText(value, unit), style);
+            GUI.Label(new Rect(r.x, r.y + 38, r.width, 72), MetricText(value, unit), style);
         }
 
         private static void InfoChip(Rect r, Icon icon, string text, Color iconColor, GUIStyle style)
@@ -1132,7 +1136,7 @@ namespace FreeVelo.UI
             }
 
             // Workout profile (bottom)
-            var graph = new Rect(24, _h - 136, _w - 48, 112);
+            var graph = new Rect(24, _h - 136, BottomRowWidth, 112);
             Ui.Card(graph, Theme.Alpha(Theme.Background, 0.85f));
             WorkoutProfile(new Rect(graph.x + 16, graph.y + 30, graph.width - 32, graph.height - 42), engine.Workout, false, engine.ElapsedS);
             GUI.Label(new Rect(graph.x + 18, graph.y + 6, 300, 22), $"{Ui.Clock(engine.ElapsedS)} / {Ui.Clock(engine.TotalDurationS)}", Theme.Caption);
@@ -1146,7 +1150,7 @@ namespace FreeVelo.UI
             Ui.Rect(_full, new Color(0, 0, 0, 0.45f), 0);
             float cw = Mathf.Min(900, _w - 80);
             const int tileCount = 6, cols = 3; // always two full rows
-            float contentH = 108 + (((tileCount + cols - 1) / cols) * 92) + 8 + (s.PowerCurve != null && s.PowerCurve.Count > 0 ? 146 : 0) + (s.EstimatedFtpW.HasValue ? 88 : 0) + SummaryClimbsH(s) + 104;
+            float contentH = 108 + (((tileCount + cols - 1) / cols) * 92) + 8 + (s.PowerCurve != null && s.PowerCurve.Count > 0 ? 146 : 0) + (s.EstimatedFtpW.HasValue ? 88 : 0) + SummaryClimbsH(s) + 104 + 68; // + 68: "Done" on its own line
             float ch = Mathf.Min(_h - 56, contentH);
             var r = new Rect((_w - cw) / 2f, (_h - ch) / 2f, cw, ch);
             Ui.Card(r, Theme.Surface, 24);
@@ -1217,7 +1221,8 @@ namespace FreeVelo.UI
             }
 
             // Actions
-            var actions = new Rect(x, r.yMax - 88, w, 56);
+            // File actions on one line, "Done" on the line below (the Strava button can be wide).
+            var actions = new Rect(x, r.yMax - 156, w, 56);
             if (!string.IsNullOrEmpty(s.FitPath))
             {
                 float w1 = Ui.ButtonWidth(L.Get("share"), true, 56), w2 = Ui.ButtonWidth(L.Get("save_downloads"), true, 56);
@@ -1227,7 +1232,7 @@ namespace FreeVelo.UI
                 DrawSummaryStravaButton(new Rect(actions.x + w1 + w2 + 24, actions.y, w3, 56), s.FitPath, s.Title);
             }
 
-            if (Ui.Button(new Rect(actions.xMax - 180, actions.y, 180, 56), L.Get("done"), ButtonKind.Primary))
+            if (Ui.Button(new Rect(x, r.yMax - 88, 180, 56), L.Get("done"), ButtonKind.Primary))
             {
                 _ride.Close();
                 Navigate(Page.Home);

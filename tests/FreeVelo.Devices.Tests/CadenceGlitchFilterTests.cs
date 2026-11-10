@@ -38,4 +38,16 @@ public class CadenceGlitchFilterTests
         Assert.Equal(95, filter.Next(15_000, 50, 250));
         Assert.Equal(50, filter.Next(1000 + CadenceGlitchFilter.MaxHoldMs, 50, 250)); // too long for a glitch
     }
+
+    [Fact]
+    public void DropInTwoStepsIsAlsoAGlitch()
+    {
+        var f = new CadenceGlitchFilter();
+        long t = 0;
+        for (int i = 0; i < 8; i++) f.Next(t += 250, 93, 238);
+        Assert.Equal(68, f.Next(t += 250, 68, 240)); // first step: 73 % of 93, within normal
+        Assert.Equal(93, f.Next(t += 250, 50, 239)); // second step
+        for (int i = 0; i < 40; i++) Assert.Equal(93, f.Next(t += 250, 50, 238));
+        Assert.Equal(94, f.Next(t += 250, 94, 240)); // back: never shown
+    }
 }

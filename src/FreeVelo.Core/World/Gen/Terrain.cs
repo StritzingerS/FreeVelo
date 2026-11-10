@@ -82,6 +82,103 @@ namespace FreeVelo.Core.World.Gen
             return terrain;
         }
 
+        // ------------------------------------------------------------------ prepared worlds
+
+        /// <summary>Bump when the terrain generation changes (old saved worlds are then regenerated).</summary>
+        public const int FormatVersion = 1;
+        private const uint Magic = 0x4C565646; // "FVVL"
+
+        /// <summary>
+        /// Fingerprint of the map the terrain belongs to: format version, seed, cell size and the roads (every 4th
+        /// point). A saved terrain is only used for exactly this map.
+        /// </summary>
+        public static ulong Fingerprint(WorldMap map, double cell = 4)
+        {
+            ulong h = 1469598103934665603UL;
+            void Add(double v)
+            {
+                long bits = BitConverter.DoubleToInt64Bits(Math.Round(v, 3));
+                for (int i = 0; i < 8; i++)
+                {
+                    h ^= (byte)(bits >> (8 * i));
+                    h *= 1099511628211UL;
+                }
+            }
+
+            Add(FormatVersion);
+            Add(map.Seed);
+            Add(cell);
+            Add(map.Edges.Count);
+            foreach (var e in map.Edges)
+            {
+                for (int i = 0; i < e.X.Length; i += 4)
+                {
+                    Add(e.X[i]);
+                    Add(e.Z[i]);
+                    Add(e.E[i]);
+                }
+            }
+
+            return h;
+        }
+
+        /// <summary>
+        /// Saves the generated ground (home grid and mountain shape), compressed – about 10 MB for the default world.
+        /// Loading it with <see cref="TryLoad"/> skips the slow part of <see cref="Build"/>.
+        /// </summary>
+        public void Save(System.IO.Stream stream)
+        {
+            using var zip = new System.IO.Compression.GZipStream(stream, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true);
+            using var w = new System.IO.BinaryWriter(zip);
+            w.Write(Magic);
+            w.Write(Fingerprint(_map, Cell));
+            w.Write(Nx);
+            w.Write(Nz);
+            foreach (float f in _heights) w.Write(f);
+            w.Write(Mountain != null);
+            Mountain?.Write(w);
+        }
+
+        /// <summary>True if <paramref name="stream"/> holds a terrain saved for exactly this map (reads only the header).</summary>
+        public static bool IsSavedFor(WorldMap map, System.IO.Stream stream, double cell = 4)
+        {
+            try
+            {
+                using var zip = new System.IO.Compression.GZipStream(stream, System.IO.Compression.CompressionMode.Decompress, leaveOpen: true);
+                using var r = new System.IO.BinaryReader(zip);
+                return r.ReadUInt32() == Magic && r.ReadUInt64() == Fingerprint(map, cell);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>A terrain saved with <see cref="Save"/> for exactly this map, or null (other map, version or damaged).</summary>
+        public static Terrain? TryLoad(WorldMap map, System.IO.Stream stream, double cell = 4)
+        {
+            try
+            {
+                using var zip = new System.IO.Compression.GZipStream(stream, System.IO.Compression.CompressionMode.Decompress, leaveOpen: true);
+                using var r = new System.IO.BinaryReader(new System.IO.BufferedStream(zip, 1 << 16));
+                if (r.ReadUInt32() != Magic || r.ReadUInt64() != Fingerprint(map, cell)) return null;
+                var terrain = new Terrain(map, cell);
+                if (r.ReadInt32() != terrain.Nx || r.ReadInt32() != terrain.Nz) return null;
+                for (int i = 0; i < terrain._heights.Length; i++) terrain._heights[i] = r.ReadSingle();
+                if (r.ReadBoolean())
+                {
+                    terrain.Mountain = MountainTerrain.Read(map, (terrain.MinX, terrain.MinZ, terrain.MaxX, terrain.MaxZ), r);
+                    if (terrain.Mountain == null) return null;
+                }
+
+                return terrain;
+            }
+            catch (Exception)
+            {
+                return null; // damaged or cut off: generate instead
+            }
+        }
+
         /// <summary>Grid height at a grid point.</summary>
         public float At(int x, int z) => _heights[(Math.Max(0, Math.Min(Nz - 1, z)) * Nx) + Math.Max(0, Math.Min(Nx - 1, x))];
 

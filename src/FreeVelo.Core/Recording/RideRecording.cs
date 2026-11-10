@@ -7,8 +7,11 @@ namespace FreeVelo.Core.Recording
     /// <summary>One recorded second.</summary>
     public readonly struct RideSample
     {
-        public RideSample(DateTime timeUtc, int? powerW, int? heartRateBpm, int? cadenceRpm, double speedMps, double distanceM, double altitudeM, int? targetW)
+        public RideSample(DateTime timeUtc, int? powerW, int? heartRateBpm, int? cadenceRpm, double speedMps, double distanceM, double altitudeM, int? targetW,
+            double? worldX = null, double? worldZ = null)
         {
+            WorldX = worldX;
+            WorldZ = worldZ;
             TimeUtc = timeUtc;
             PowerW = powerW;
             HeartRateBpm = heartRateBpm;
@@ -20,6 +23,11 @@ namespace FreeVelo.Core.Recording
         }
 
         public DateTime TimeUtc { get; }
+
+        /// <summary>Position in the virtual world (metres east / north), written to FIT as GPS in the ocean.</summary>
+        public double? WorldX { get; }
+
+        public double? WorldZ { get; }
 
         public int? PowerW { get; }
 

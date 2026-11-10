@@ -35,8 +35,10 @@ namespace FreeVelo.Core.Workouts
         internal static RampBlock Ramp(int seconds, double fromPct, double toPct) =>
             new RampBlock(seconds, PowerTarget.Percent(fromPct), PowerTarget.Percent(toPct));
 
-        internal static RepeatBlock Repeat(int count, params WorkoutBlock[] blocks) => new RepeatBlock(count, blocks);
+        /// <summary>Intervals of the built-in workouts: the last repetition ends without its recovery (the cool-down or the next set follows).</summary>
+        internal static RepeatBlock Repeat(int count, params WorkoutBlock[] blocks) => new RepeatBlock(count, blocks) { SkipLastBlock = true };
 
+        /// <summary>Warm-up including the opener (1 min at 90 %, 2 min easy); built-in workouts use at most 12 minutes.</summary>
         internal static WorkoutBlock[] WarmUp(int minutes = 10) => new WorkoutBlock[]
         {
             Ramp((minutes - 3) * 60, 45, 70),
@@ -98,7 +100,7 @@ namespace FreeVelo.Core.Workouts
         public static Workout Threshold2x20() => Create(
             "threshold-2x20", "Threshold 2×20", "Schwelle 2×20", WorkoutCategory.Threshold,
             "The classic: 2 × 20 min at 95–100 % FTP.", "Der Klassiker: 2 × 20 min bei 95–100 % FTP.",
-            Concat(WarmUp(15), new WorkoutBlock[]
+            Concat(WarmUp(12), new WorkoutBlock[]
             {
                 Repeat(2, Steady(20 * 60, 97, "Threshold – find your rhythm", "Schwelle – finde deinen Rhythmus"), Steady(5 * 60, 50)),
                 CoolDown(),
@@ -108,7 +110,7 @@ namespace FreeVelo.Core.Workouts
             "over-unders-3x10", "Over-Unders 3×10", "Over-Unders 3×10", WorkoutCategory.Threshold,
             "3 × 10 min alternating 2 min at 95 % and 1 min at 105 % FTP.",
             "3 × 10 min im Wechsel 2 min bei 95 % und 1 min bei 105 % FTP.",
-            Concat(WarmUp(15), new WorkoutBlock[]
+            Concat(WarmUp(12), new WorkoutBlock[]
             {
                 Repeat(
                     3,
@@ -127,7 +129,7 @@ namespace FreeVelo.Core.Workouts
             "vo2max-4x4", "4×4 VO2max", "4×4 VO2max", WorkoutCategory.Vo2Max,
             "4 × 4 min at 110 % FTP with 3 min recovery – the well-known 4×4 protocol.",
             "4 × 4 min bei 110 % FTP mit 3 min Erholung – das bekannte 4×4-Protokoll.",
-            Concat(WarmUp(15), new WorkoutBlock[]
+            Concat(WarmUp(12), new WorkoutBlock[]
             {
                 Repeat(4, Steady(240, 110, "Go hard!", "Jetzt hart!", new CadenceRange(90, 105)), Steady(180, 50, "Recover", "Erholen")),
                 CoolDown(),
@@ -136,7 +138,7 @@ namespace FreeVelo.Core.Workouts
         public static Workout Vo2Max5x5() => Create(
             "vo2max-5x5", "VO2max 5×5", "VO2max 5×5", WorkoutCategory.Vo2Max,
             "5 × 5 min at 108 % FTP with 5 min recovery.", "5 × 5 min bei 108 % FTP mit 5 min Erholung.",
-            Concat(WarmUp(15), new WorkoutBlock[]
+            Concat(WarmUp(12), new WorkoutBlock[]
             {
                 Repeat(5, Steady(300, 108, "VO2max", "VO2max", new CadenceRange(90, 105)), Steady(300, 50)),
                 CoolDown(),
@@ -146,7 +148,7 @@ namespace FreeVelo.Core.Workouts
             "40-20s", "40/20s", "40/20s", WorkoutCategory.Vo2Max,
             "3 sets of 10 × (40 s at 120 % / 20 s at 50 % FTP), 5 min between sets.",
             "3 Sätze à 10 × (40 s bei 120 % / 20 s bei 50 % FTP), 5 min zwischen den Sätzen.",
-            Concat(WarmUp(15), new WorkoutBlock[]
+            Concat(WarmUp(12), new WorkoutBlock[]
             {
                 Repeat(
                     3,
@@ -159,7 +161,7 @@ namespace FreeVelo.Core.Workouts
             "sprints-8x15", "Sprints 8×15 s", "Sprints 8×15 s", WorkoutCategory.Sprint,
             "8 all-out sprints of 15 s with long recovery (free ride: sprint as hard as you can).",
             "8 maximale Sprints à 15 s mit langer Erholung (freie Fahrt: so hart du kannst).",
-            Concat(WarmUp(15), new WorkoutBlock[]
+            Concat(WarmUp(12), new WorkoutBlock[]
             {
                 Repeat(8, SprintBlock(), Steady(285, 50)),
                 CoolDown(),

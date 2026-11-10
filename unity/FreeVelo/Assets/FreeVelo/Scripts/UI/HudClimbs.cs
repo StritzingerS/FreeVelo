@@ -68,12 +68,12 @@ namespace FreeVelo.UI
         // ------------------------------------------------------------------ riding
 
         /// <summary>Climb timer: time on the climb, distance to the summit and the gap to the best time.</summary>
-        private void DrawClimbTimer(bool workout)
+        private void DrawClimbTimer()
         {
             var c = _ride.ActiveClimb;
             if (c == null) return;
-            float top = workout ? _sideTop + (_ride.WorkoutComplete ? 150 : 330) + 16 : _leftTop;
-            var card = new Rect(workout ? _w - 344 : 24, top, 320, 204);
+            // Left side (the right side has the junction card, or the workout card).
+            var card = new Rect(24, _leftTop, 320, 204);
             Ui.Card(card, Theme.Alpha(Theme.Background, 0.88f));
             GUI.Label(new Rect(card.x + 22, card.y + 16, card.width - 44, 18), L.Get("climb").ToUpperInvariant(), Theme.With(Theme.Overline, Theme.Accent));
             GUI.Label(new Rect(card.x + 22, card.y + 34, card.width - 44, 28), c.Name, Clip(Theme.With(Theme.H3, size: 20)));

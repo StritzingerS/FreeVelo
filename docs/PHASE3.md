@@ -52,7 +52,17 @@ to wake up.
       the right unit works on its own (+ harder, B easier). The devices page shows the controller next to trainer, power meter and heart rate, with "locked" for a locked unit.
 - [x] Controller settings (Settings → Trainer & shifting): what each Click V2 button does (harder / easier / nothing),
       number of virtual gears (12–30), ERG step per press (1–5 %)
-- [ ] Test with the real Click V2 (both units, keep-alive, locked left unit)
+- [x] Trainers with the Zwift service (KICKR CORE, Neo 2 …) stay trainers; trainers / power meters with a heart rate
+      service only provide heart rate while they send values (a heart rate sensor always wins)
+- [x] ERG and cadence glitches: trainers sometimes report half or a third of the cadence while the power stays on
+      target. Low-cadence protection now also needs the power to show it (swinging > 15 % in 4 s or < 85 % of the
+      target); the cadence filter catches drops in two steps and holds a glitch up to 45 s
+- [x] Workout editor: intervals inside intervals can be opened (e.g. 40/20s); interval blocks can skip their last
+      block in the last repetition (all built-in workouts do: no recovery before the cool-down); discarding shows
+      a revert arrow. Built-in warm-ups at most 12 min including the opener (FTP tests keep 15 min)
+- [x] Quick start on the home page: a workout that suits the form (TSB), then the workouts ridden last
+- [ ] Test with the real Click V2 (both units, keep-alive, locked left unit; the log of 2026-11-07 had the
+      handshake and battery but no button messages)
 - [ ] Test built-in virtual shifting on the Neo 2 (it offers the Zwift service): handshake, gear changes, feel of
       the 42×14 reference ratio; needs the Android plugin from `main` (subscribes to the Zwift characteristics)
 
@@ -76,7 +86,20 @@ to wake up.
       rider brakes early (4 m/s²) to reach it. Only the virtual speed is limited, the trainer keeps simulating
       the road. While braking the rider freewheels and the HUD shows "Braking for the bend". Group rides: the
       server's Keep Together group brakes so every rider (±25 m around the anchor) takes the bend safely.
+- [x] Ride HUD: big main values (time, distance, elevation gained | power | speed, cadence, heart rate) in a wide
+      top bar, power shown as a 1 s average; side cards below it; gear control as a pill above the strip;
+      gradient chip only uphill from 3 %
+- [x] Climb view (ClimbPro style): next 500 m coloured by gradient, only on climbs in free rides; whole-round
+      overview on rounds otherwise. Climbs smoothed ±150 m (fewer gradient changes, times within ~1 %)
+- [x] Smooth riding: the rider follows a smoothed path through corners (no drifting), brakes before bends,
+      terrain kept below the roads at every level of detail
+- [x] Start-up: loading screen until the world is built; the world (terrain) is prepared at build time
+      (FreeVelo → Prepare world, Resources/FreeVeloWorld.bytes, not in git) or kept on the phone after the first
+      start – loading ~0.2 s instead of ~2.3 s generating (desktop). The 3D meshes are still built at start-up
+- [x] FIT files carry virtual GPS: the world lies on Ushishir (Kuril Islands, 47.52° N 152.80° E, Austria's
+      latitude), so Strava takes the elevation from the file
 - [ ] Look at the mountain on a phone: far tiles, fog, colours, frame rate of the streamed near tiles
+- [ ] Check on Strava that a new ride shows its elevation; first build with the "Prepare world" build step
 
 ### Done when
 - A plan runs for weeks, rides upload to Strava automatically.

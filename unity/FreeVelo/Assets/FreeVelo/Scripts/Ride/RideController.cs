@@ -165,6 +165,9 @@ namespace FreeVelo.Ride
         /// <summary>Power averaged over the last 3 seconds (for display).</summary>
         public double Power3s { get; private set; }
 
+        /// <summary>Power for the display: 1 s average (reacts quickly, still steady).</summary>
+        public double PowerShown { get; private set; }
+
         private readonly Queue<(float T, double P)> _powerWindow = new Queue<(float, double)>();
 
         /// <summary>Group rides (set by the app; null = solo only).</summary>
@@ -514,7 +517,9 @@ namespace FreeVelo.Ride
                         _physics.SpeedMps,
                         RideDistanceM,
                         position.Y,
-                        WorkoutState?.TargetW));
+                        WorkoutState?.TargetW,
+                        position.X,
+                        position.Z));
                 }
             }
 
@@ -729,7 +734,7 @@ namespace FreeVelo.Ride
 
                 time = time.AddSeconds(1);
                 if (samples.Count > 0 && time <= samples[samples.Count - 1].TimeUtc) time = samples[samples.Count - 1].TimeUtc.AddSeconds(1);
-                _recording.Add(new RideSample(time, (int)Math.Round(power), heartRate, cadence, _physics.SpeedMps, RideDistanceM, position.Y, WorkoutState?.TargetW));
+                _recording.Add(new RideSample(time, (int)Math.Round(power), heartRate, cadence, _physics.SpeedMps, RideDistanceM, position.Y, WorkoutState?.TargetW, position.X, position.Z));
             }
 
             Debug.Log($"FreeVelo: caught up {seconds:0} s after the app was in the background");
@@ -752,6 +757,7 @@ namespace FreeVelo.Ride
             _powerWindow.Enqueue((now, power));
             while (_powerWindow.Count > 0 && now - _powerWindow.Peek().T > 3f) _powerWindow.Dequeue();
             Power3s = _powerWindow.Average(x => x.P);
+            PowerShown = _powerWindow.Where(x => now - x.T <= 1f).Select(x => x.P).DefaultIfEmpty(power).Average();
         }
 
         private void ShowCue(string text)

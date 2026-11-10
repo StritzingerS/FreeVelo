@@ -160,4 +160,23 @@ public class FitTests
             return result;
         }
     }
+
+    [Fact]
+    public void VirtualPositionIsWrittenAsGpsInTheOcean()
+    {
+        var start = new DateTime(2026, 11, 10, 18, 0, 0, DateTimeKind.Utc);
+        var ride = new RideRecording(start, "GPS test");
+        for (int i = 0; i < 60; i++) ride.Add(new RideSample(start.AddSeconds(i + 1), 200, 130, 90, 8, 8 * i, 100 + i, null, 1000 + (8 * i), -500));
+        byte[] fit = FitActivityWriter.Write(ride);
+
+        // Read back like any other file; power / altitude unaffected by the extra fields.
+        var records = FreeVelo.Core.History.FitReader.ReadRecords(fit);
+        Assert.Equal(60, records.Count);
+        Assert.Equal(200, records[10].PowerW);
+        Assert.Equal(110, records[10].AltitudeM!.Value, 0);
+
+        var (lat, lon) = FitActivityWriter.ToLatLon(1000, -500);
+        Assert.InRange(lat, 47.51, 47.52);
+        Assert.InRange(lon, 152.80, 152.82); // Ushishir (Kuril Islands), at Austria's latitude
+    }
 }

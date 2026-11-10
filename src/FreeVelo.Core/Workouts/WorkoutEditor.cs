@@ -41,7 +41,27 @@ namespace FreeVelo.Core.Workouts
         public int FtpW { get; set; }
 
         /// <summary>Repeat block whose children are being edited (null = top level).</summary>
-        public RepeatBlock? OpenRepeat { get; private set; }
+        public RepeatBlock? OpenRepeat => Resolve(_openPath);
+
+        /// <summary>Indices of the opened repeat blocks, from the top level down (intervals inside intervals).</summary>
+        private readonly List<int> _openPath = new List<int>();
+
+        /// <summary>How deep the editor is inside repeat blocks (0 = top level).</summary>
+        public int OpenDepth => _openPath.Count;
+
+        private RepeatBlock? Resolve(List<int> path)
+        {
+            RepeatBlock? r = null;
+            var blocks = Workout.Blocks;
+            foreach (int i in path)
+            {
+                if (i < 0 || i >= blocks.Count || !(blocks[i] is RepeatBlock next)) return null;
+                r = next;
+                blocks = next.Blocks;
+            }
+
+            return r;
+        }
 
         /// <summary>The blocks currently shown: the workout's top level or the children of <see cref="OpenRepeat"/>.</summary>
         public List<WorkoutBlock> Blocks => OpenRepeat?.Blocks ?? Workout.Blocks;
@@ -167,6 +187,14 @@ namespace FreeVelo.Core.Workouts
             r.Count = count;
         }
 
+        /// <summary>The last repetition of an interval block ends without its last block (e.g. no final recovery).</summary>
+        public void SetSkipLast(int index, bool skip)
+        {
+            if (!(Get(index) is RepeatBlock r) || r.SkipLastBlock == skip) return;
+            Record();
+            r.SkipLastBlock = skip;
+        }
+
         /// <summary>Switches all targets of the workout to watts (true) or % FTP (false), keeping the power at the current FTP.</summary>
         public void SetUnit(bool watts)
         {
@@ -208,18 +236,20 @@ namespace FreeVelo.Core.Workouts
 
         public void OpenSelectedRepeat()
         {
-            if (OpenRepeat == null && SelectedBlock is RepeatBlock r)
+            // Also inside intervals (e.g. the 40/20 sets of the 40/20s).
+            if (SelectedBlock is RepeatBlock)
             {
-                OpenRepeat = r;
+                _openPath.Add(Selected);
                 Selected = 0;
             }
         }
 
+        /// <summary>Back up one level (from the intervals to the block that contains them).</summary>
         public void CloseRepeat()
         {
-            if (OpenRepeat == null) return;
-            int index = Workout.Blocks.IndexOf(OpenRepeat);
-            OpenRepeat = null;
+            if (_openPath.Count == 0) return;
+            int index = _openPath[_openPath.Count - 1];
+            _openPath.RemoveAt(_openPath.Count - 1);
             Selected = index;
         }
 
@@ -259,12 +289,12 @@ namespace FreeVelo.Core.Workouts
         private void Restore(List<string> from, List<string> to)
         {
             if (from.Count == 0) return;
-            int openIndex = OpenRepeat != null ? Workout.Blocks.IndexOf(OpenRepeat) : -1;
             to.Add(Snapshot());
             string state = from[from.Count - 1];
             from.RemoveAt(from.Count - 1);
             Workout = WorkoutFiles.FromZwo(state, Workout.Id);
-            OpenRepeat = openIndex >= 0 && openIndex < Workout.Blocks.Count ? Workout.Blocks[openIndex] as RepeatBlock : null;
+            // Stay in the opened intervals if they still exist, else go up as far as needed.
+            while (_openPath.Count > 0 && Resolve(_openPath) == null) _openPath.RemoveAt(_openPath.Count - 1);
             Selected = Math.Min(Selected, Blocks.Count - 1);
         }
 
