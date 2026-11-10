@@ -109,7 +109,8 @@ namespace FreeVelo.UI
         /// <summary>Bottom strip in free rides: elevation of the next 3 km (or of the main loop in group rides).</summary>
         /// <summary>Name of a round shown over the elevation strip: the main loop or the round over a climb.</summary>
         private static string RouteLabel(FreeVelo.Core.World.Route route) =>
-            route.Climbs != null && route.Climbs.Count > 0 ? string.Format(L.Get("climb_loop"), route.Climbs[0].Name) : L.Get("main_loop");
+            route.Climbs != null && route.Climbs.Count > 0 ? string.Format(L.Get("climb_loop"), route.Climbs[0].Name)
+            : route.Name == FreeVelo.Core.World.Gen.WorldMap.AlmRouteName ? L.Get("alm_loop") : L.Get("main_loop");
 
         private FreeVelo.Core.World.Route _aheadRoute;
         private long _aheadFirst;

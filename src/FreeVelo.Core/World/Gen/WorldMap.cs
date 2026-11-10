@@ -226,7 +226,9 @@ namespace FreeVelo.Core.World.Gen
         }
 
         /// <summary>The Alm round (looping, from Kirchbach).</summary>
-        public Route AlmLoop() => BuildRoute(Valleys.Names[Valleys.Oberalm], AlmLoopSteps, isLoop: true, 0);
+        public Route AlmLoop() => BuildRoute(AlmRouteName, AlmLoopSteps, isLoop: true, 0);
+
+        public const string AlmRouteName = "Alm";
 
         /// <summary>Natural ground without the river channel: the valley floor and its slopes (±a few metres of meadow).</summary>
         public double Hills(double x, double z)

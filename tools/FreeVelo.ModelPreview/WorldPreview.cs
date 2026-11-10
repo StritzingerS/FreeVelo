@@ -158,7 +158,7 @@ public static class WorldPreview
         int tris = 0;
         foreach (var kind in kinds)
         {
-            float spacing = kind is SceneryKind.House or SceneryKind.Barn ? 22 : kind is SceneryKind.Bush or SceneryKind.Rock or SceneryKind.Reed ? 4 : 11;
+            float spacing = Math.Max(4, (float)SceneryModels.Radius(kind) * 2.6f);
             for (int v = 0; v < SceneryModels.Variants; v++)
             {
                 var model = SceneryModels.Get(kind, v);
