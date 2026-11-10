@@ -51,6 +51,27 @@ namespace FreeVelo.Core.World.Gen
 
         private static readonly Dictionary<string, ClimbData> Cache = new Dictionary<string, ClimbData>();
 
+        /// <summary>
+        /// Extra smoothing of the climb's elevation: ±150 m (30 points) moving average, so the gradient changes about a
+        /// third less often (fewer gear changes) while elevation stays within ~5 m of the GPX. The window shrinks towards
+        /// the ends: foot, summit and total gain stay exact.
+        /// </summary>
+        public const int SmoothHalfWindow = 30;
+
+        internal static double[] Smooth(double[] e, int half)
+        {
+            var s = new double[e.Length];
+            var prefix = new double[e.Length + 1];
+            for (int i = 0; i < e.Length; i++) prefix[i + 1] = prefix[i] + e[i];
+            for (int i = 0; i < e.Length; i++)
+            {
+                int w = Math.Min(half, Math.Min(i, e.Length - 1 - i));
+                s[i] = (prefix[i + w + 1] - prefix[i - w]) / ((2 * w) + 1);
+            }
+
+            return s;
+        }
+
         public static ClimbData Load(string id)
         {
             lock (Cache)
@@ -79,7 +100,7 @@ namespace FreeVelo.Core.World.Gen
                     e.Add(double.Parse(parts[2], CultureInfo.InvariantCulture));
                 }
 
-                var climb = new ClimbData(id, name, x.ToArray(), z.ToArray(), e.ToArray());
+                var climb = new ClimbData(id, name, x.ToArray(), z.ToArray(), Smooth(e.ToArray(), SmoothHalfWindow));
                 Cache[id] = climb;
                 return climb;
             }

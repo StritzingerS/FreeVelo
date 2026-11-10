@@ -940,13 +940,13 @@ namespace FreeVelo.UI
             Color powerColor = Theme.Text;
             if (workout && state.TargetW.HasValue && state.TargetW.Value > 0)
             {
-                double ratio = _ride.Power3s / state.TargetW.Value;
+                double ratio = _ride.PowerShown / state.TargetW.Value;
                 powerColor = ratio < 0.94 ? Theme.Warning : ratio > 1.06 ? Theme.Danger : Theme.Success;
             }
 
             GUI.Label(new Rect(p.x, p.y + 10, p.width, 18), L.Get("power").ToUpperInvariant(), Theme.With(Theme.Overline, anchor: TextAnchor.MiddleCenter));
-            GUI.Label(new Rect(p.x, p.y + 26, p.width, 70), $"{_ride.Power3s:0}<size=24><color=#B3BECA> W</color></size>", Theme.With(Theme.Display, powerColor, 60));
-            string sub = workout && state.TargetW.HasValue ? $"{L.Get("target")} {state.TargetW} W" : $"{_ride.Power3s / Mathf.Max(1f, AppSettings.RiderWeightKg):0.0} W/kg";
+            GUI.Label(new Rect(p.x, p.y + 26, p.width, 70), $"{_ride.PowerShown:0}<size=24><color=#B3BECA> W</color></size>", Theme.With(Theme.Display, powerColor, 60));
+            string sub = workout && state.TargetW.HasValue ? $"{L.Get("target")} {state.TargetW} W" : $"{_ride.PowerShown / Mathf.Max(1f, AppSettings.RiderWeightKg):0.0} W/kg";
             GUI.Label(new Rect(p.x, p.yMax - 32, p.width, 22), sub, Theme.With(Theme.Caption, anchor: TextAnchor.MiddleCenter));
 
             for (int i = 3; i < 6; i++) Metric(new Rect(p.xMax + ((i - 3) * side), bar.y, side, bar.height), metrics[i].Icon, metrics[i].Value, metrics[i].Unit, metrics[i].Color, metricStyle);
