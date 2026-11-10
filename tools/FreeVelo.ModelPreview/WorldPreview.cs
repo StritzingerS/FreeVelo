@@ -185,7 +185,9 @@ public static class WorldPreview
         var cameras = new[]
         {
             new Camera { Name = "front", Position = new Vector3(cx, 6, -dist), Target = new Vector3(cx, 5, 0), FieldOfView = 50 },
-            new Camera { Name = "angle", Position = new Vector3(cx + (dist * 0.5f), dist * 0.35f, -dist * 0.7f), Target = new Vector3(cx, 3, 0), FieldOfView = 50 },
+            Environment.GetEnvironmentVariable("CAMCLOSE") == "1"
+                ? new Camera { Name = "angle", Position = new Vector3(cx + (dist * 0.35f), dist * 0.18f, -dist * 0.55f), Target = new Vector3(cx, 0.8f, 0), FieldOfView = 40 }
+                : new Camera { Name = "angle", Position = new Vector3(cx + (dist * 0.5f), dist * 0.35f, -dist * 0.7f), Target = new Vector3(cx, 3, 0), FieldOfView = 50 },
         };
         const int ss = 2, w = 1400, h = 700;
         var sheet = new byte[w * h * 2 * 3];
