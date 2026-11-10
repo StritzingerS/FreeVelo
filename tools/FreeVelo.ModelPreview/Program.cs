@@ -30,6 +30,12 @@ if (args.Length > 2 && args[0] == "--places")
     return;
 }
 
+if (args.Length > 1 && args[0] == "--start")
+{
+    WorldPreview.Start(args[1]);
+    return;
+}
+
 if (args.Length > 1 && args[0] == "--export")
 {
     WorldPreview.Export(args[1]);

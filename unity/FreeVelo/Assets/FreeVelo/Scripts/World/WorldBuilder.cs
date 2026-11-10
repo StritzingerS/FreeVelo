@@ -916,10 +916,11 @@ namespace FreeVelo.World
                 for (int i = 0; i < rim.Length; i++)
                 {
                     int a = c + 1 + i, b = c + 1 + ((i + 1) % rim.Length);
-                    // Up-facing whatever the rim direction.
+                    // Up-facing whatever the rim direction: the same winding as the road strips (front face when
+                    // Cross(v1 − v0, v2 − v0) points up). The other way round, pads and lakes were culled as back faces.
                     var n = Vector3.Cross(_v[a] - _v[c], _v[b] - _v[c]);
-                    if (n.y > 0) _t.AddRange(new[] { c, b, a });
-                    else _t.AddRange(new[] { c, a, b });
+                    if (n.y > 0) _t.AddRange(new[] { c, a, b });
+                    else _t.AddRange(new[] { c, b, a });
                 }
             }
 

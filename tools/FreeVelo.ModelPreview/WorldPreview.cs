@@ -382,6 +382,64 @@ public static class WorldPreview
         Console.WriteLine($"top view {extent:0} m wide, {meshes.Sum(m => m.Triangles.Length / 3) / 1000}k triangles -> {output}");
     }
 
+    private static List<(double X, double Z)> Hull(List<(double X, double Z)> points)
+    {
+        var p = points.OrderBy(v => v.X).ThenBy(v => v.Z).ToList();
+        var hull = new List<(double X, double Z)>();
+        if (p.Count < 3) return p;
+        for (int pass = 0; pass < 2; pass++)
+        {
+            int start = hull.Count;
+            foreach (var v in p)
+            {
+                while (hull.Count >= start + 2 && (((hull[^1].X - hull[^2].X) * (v.Z - hull[^2].Z)) - ((hull[^1].Z - hull[^2].Z) * (v.X - hull[^2].X))) <= 0) hull.RemoveAt(hull.Count - 1);
+                hull.Add(v);
+            }
+
+            hull.RemoveAt(hull.Count - 1);
+            p.Reverse();
+        }
+
+        return hull;
+    }
+
+    /// <summary>Eight views orbiting the rider at the start of the default route, like the app's home screen.</summary>
+    public static void Start(string output)
+    {
+        var map = WorldMap.Default;
+        var terrain = Terrain.Build(map);
+        var layout = SceneryLayout.Generate(terrain, new DateTime(2026, 11, 10));
+        var e = map.Edges[map.MainLoopEdges[0]];
+        int node = e.From;
+        var n = map.Nodes[node];
+        double fx = e.X[2] - e.X[0], fz = e.Z[2] - e.Z[0], fl = Math.Sqrt((fx * fx) + (fz * fz));
+        var forward = new Vector3((float)(fx / fl), 0, (float)(fz / fl));
+        var right = new Vector3(forward.Z, 0, -forward.X);
+        var rider = new Vector3((float)e.X[0], (float)e.E[0] + 0.05f, (float)e.Z[0]) + (right * 1.5f);
+        const int ss = 2, w = 640, h = 360;
+        var tiles = new List<byte[]>();
+        var meshes = SceneMeshes(map, terrain, layout, rider, 600);
+        var renderer = new Renderer(meshes, shadowCenter: rider, shadowRadius: 120);
+        for (int k = 0; k < 8; k++)
+        {
+            double a = k * Math.PI / 4;
+            var offset = new Vector3((float)(Math.Sin(a) * -3.6), 1.5f, (float)(Math.Cos(a) * -3.6));
+            var cam = new Camera { Name = $"orbit {k * 45}", Position = rider + offset, Target = rider + new Vector3(0, 1.05f, 0), FieldOfView = 60 };
+            tiles.Add(Renderer.ToImage(renderer.Render(cam, w * ss, h * ss), w * ss, h * ss, ss, out _, out _));
+        }
+
+        int cols = 2, rows = 4;
+        var sheet = new byte[cols * w * rows * h * 3];
+        for (int t = 0; t < tiles.Count; t++)
+        {
+            int ox = (t % cols) * w, oy = (t / cols) * h;
+            for (int y = 0; y < h; y++) Buffer.BlockCopy(tiles[t], y * w * 3, sheet, (((oy + y) * cols * w) + ox) * 3, w * 3);
+        }
+
+        Renderer.WritePng(output, sheet, cols * w, rows * h);
+        Console.WriteLine($"start at node {n.Name} ({rider.X:0},{rider.Z:0}) -> {output}");
+    }
+
     private static List<SceneMesh> SceneMeshes(WorldMap map, Terrain terrain, SceneryLayout layout, Vector3 eye, double radius, double detailRadius = 110)
     {
         var meshes = new List<SceneMesh>();
@@ -458,6 +516,56 @@ public static class WorldPreview
             }
 
             var color = e.Surface == FreeVelo.Core.Physics.RoadSurface.Asphalt ? new Vector3(0.3f, 0.3f, 0.31f) : new Vector3(0.6f, 0.56f, 0.46f);
+            meshes.Add(new SceneMesh { Positions = pos.ToArray(), Normals = Enumerable.Repeat(Vector3.UnitY, pos.Count).ToArray(), Triangles = tri.ToArray(), Albedo = color, CastsShadow = false });
+        }
+
+        // Junctions as the app paves them: rounded corners and the pad between the road ends.
+        {
+            var pos = new List<Vector3>();
+            var tri = new List<int>();
+            void Fan(Vector3 c, IList<Vector3> rim)
+            {
+                int k = pos.Count;
+                pos.Add(c);
+                pos.AddRange(rim);
+                for (int i = 0; i < rim.Count; i++)
+                {
+                    int a2 = k + 1 + i, b2 = k + 1 + ((i + 1) % rim.Count);
+                    var n = Vector3.Cross(pos[a2] - c, pos[b2] - c);
+                    if (n.Y > 0) tri.AddRange(new[] { k, a2, b2 }); else tri.AddRange(new[] { k, b2, a2 });
+                }
+            }
+
+            foreach (var corner in terrain.Corners)
+            {
+                var rim = new List<Vector3>();
+                for (int j = 0; j < corner.X.Length; j++)
+                {
+                    float y = Math.Max((float)corner.Y[j] + 0.05f, (float)terrain.Height(corner.X[j], corner.Z[j]) + 0.06f) + 0.004f;
+                    rim.Add(new Vector3((float)corner.X[j], y, (float)corner.Z[j]));
+                }
+
+                Fan(new Vector3((float)corner.CX, (float)corner.CY + 0.054f, (float)corner.CZ), rim);
+            }
+
+            foreach (var node in map.Nodes)
+            {
+                var pts = new List<(double X, double Z)>();
+                foreach (int id in node.Edges)
+                {
+                    var e = map.Edges[id];
+                    bool start = e.From == node.Id;
+                    foreach (double sd in new[] { 0.0, 2.0 })
+                    {
+                        foreach (int side in new[] { -1, 1 }) { var q = JunctionCorners.Side(e, start, sd, side, 0); pts.Add((q.X, q.Z)); }
+                    }
+                }
+
+                var hull = Hull(pts);
+                if (hull.Count >= 3) Fan(new Vector3((float)node.X, (float)node.Elevation + 0.06f, (float)node.Z), hull.Select(h => new Vector3((float)h.X, (float)node.Elevation + 0.06f, (float)h.Z)).ToList());
+            }
+
+            var color = Environment.GetEnvironmentVariable("MARKJ") == "1" ? new Vector3(0.75f, 0.15f, 0.15f) : new Vector3(0.3f, 0.3f, 0.31f);
             meshes.Add(new SceneMesh { Positions = pos.ToArray(), Normals = Enumerable.Repeat(Vector3.UnitY, pos.Count).ToArray(), Triangles = tri.ToArray(), Albedo = color, CastsShadow = false });
         }
 
