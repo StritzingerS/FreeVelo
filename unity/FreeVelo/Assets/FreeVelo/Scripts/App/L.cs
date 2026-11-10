@@ -246,7 +246,7 @@ namespace FreeVelo.App
             ["strava_auto"] = ("Automatic", "Automatisch"),
             ["strava_manual"] = ("Manual", "Manuell"),
             ["strava_upload"] = ("Upload to Strava", "Auf Strava hochladen"),
-            ["strava_uploading"] = ("Uploading to Strava …", "Wird auf Strava hochgeladen …"),
+            ["strava_uploading"] = ("Uploading to Strava …", "Strava-Upload läuft …"),
             ["strava_uploaded"] = ("Uploaded to Strava.", "Auf Strava hochgeladen."),
             ["strava_view"] = ("View on Strava", "Auf Strava ansehen"),
             ["strava_waiting_short"] = ("Strava: waiting (offline)", "Strava: wartet (offline)"),
