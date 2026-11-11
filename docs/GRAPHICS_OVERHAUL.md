@@ -309,7 +309,25 @@ Still only measurable on the phone: frame rate, heat and battery.
 - Whether the Remote Control folder sharing works on the owner's PC.
 - The Asset Store bike in `Resources/FreeVeloBicycle` and the public repository.
 
-## 11. Sources
+## 11. Notes from the FTP test of 11 November 2026 (to pick up with the overhaul)
+
+- **Start-up on the phone took 8.2 s** (log: world generated 2.8 s, scenery layout 3.1 s, scene build 2.3 s).
+  - The world was generated instead of loaded. Fixed: a generated world is now always saved for the next start
+    (before, a bundled world that did not fit the map meant generating at every start). Check that the next log
+    says "world loaded".
+  - Scenery layout: village and farm placement and the levelling of building plots have grown to about 0.5 s on a
+    PC, several times that on a phone. A spatial lookup for the building pads is in; the rest belongs to the
+    `PlotPlanner` redesign (section 4). Options: faster placement (spatial index for footprints and lanes), or
+    baking the layout like the terrain (keyed by the map fingerprint; date-dependent items stay at runtime).
+- **Recording gaps:** the FIT file had 10 gaps of 2–4 s, each at a moment the log shows the app going to the
+  background ("Background: N trainer commands scheduled"). The trainer keeps its commands, but no samples are
+  recorded while the app is paused. Open: find out what sends the app to the background mid-ride, and whether to
+  fill such gaps.
+- **Valley round:** now completely flat (all valley villages at 627 m, no waves, bridges without ramps). The road
+  network changed, so the terrain is regenerated once and the server must run the same version (it builds the
+  routes itself).
+
+## 12. Sources
 
 Art direction and assets
 - https://forums.unrealengine.com/t/megascans-license/2081542

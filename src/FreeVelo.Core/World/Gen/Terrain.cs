@@ -234,6 +234,25 @@ namespace FreeVelo.Core.World.Gen
         public void SetPads(IReadOnlyList<Pad> pads)
         {
             _pads = pads.ToArray();
+
+            // Which pads can reach a point: looked up by 64 m cell (a height query then checks a few pads, not all).
+            var cells = new Dictionary<long, List<int>>();
+            for (int k = 0; k < _pads.Length; k++)
+            {
+                var pad = _pads[k];
+                double r = Math.Sqrt((pad.HalfX * pad.HalfX) + (pad.HalfZ * pad.HalfZ)) + 1.5 + PadBlend;
+                for (int cx = PadCell(pad.X - r); cx <= PadCell(pad.X + r); cx++)
+                {
+                    for (int cz = PadCell(pad.Z - r); cz <= PadCell(pad.Z + r); cz++)
+                    {
+                        long key = PadKey(cx, cz);
+                        if (!cells.TryGetValue(key, out var list)) cells[key] = list = new List<int>();
+                        list.Add(k);
+                    }
+                }
+            }
+
+            _padCells = cells.ToDictionary(c => c.Key, c => c.Value.ToArray());
             var padded = (float[])_heights.Clone();
             foreach (var pad in _pads)
             {
@@ -256,13 +275,19 @@ namespace FreeVelo.Core.World.Gen
             _padded = _pads.Length > 0 ? padded : null;
         }
 
+        private Dictionary<long, int[]> _padCells = new Dictionary<long, int[]>();
+
+        private static int PadCell(double v) => (int)Math.Floor(v / 64);
+
+        private static long PadKey(int cx, int cz) => ((long)cx << 32) ^ (uint)cz;
+
         private double ApplyPads(double x, double z, double h)
         {
-            if (_pads.Length == 0) return h;
+            if (_pads.Length == 0 || !_padCells.TryGetValue(PadKey(PadCell(x), PadCell(z)), out var near)) return h;
             bool checkedRoad = false;
-            foreach (var pad in _pads)
+            foreach (int k in near) // in the order the pads were set, as when the home grid is levelled
             {
-                if (Math.Abs(pad.X - x) > 40 || Math.Abs(pad.Z - z) > 40) continue;
+                var pad = _pads[k];
                 double w = pad.Weight(x, z);
                 if (w <= 0) continue;
                 if (!checkedRoad)

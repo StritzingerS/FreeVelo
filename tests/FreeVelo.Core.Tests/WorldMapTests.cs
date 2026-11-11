@@ -63,7 +63,7 @@ public class WorldMapTests
         {
             var e = Map.Edges[b.Edge];
             int i = Array.FindIndex(e.D, d => d >= b.DistanceM);
-            Assert.True(e.E[i] - b.WaterLevel >= 3.5, $"bridge on edge {e.Id}: {e.E[i] - b.WaterLevel:0.0} m above the water");
+            Assert.True(e.E[i] - b.WaterLevel >= 2.9, $"bridge on edge {e.Id}: {e.E[i] - b.WaterLevel:0.0} m above the water");
         }
 
         var river = Map.River!;
@@ -87,7 +87,7 @@ public class WorldMapTests
         var loop = Map.MainLoop;
         Assert.True(loop.IsLoop);
         Assert.InRange(loop.LengthM, 24_000, 31_000);
-        Assert.InRange(loop.TotalAscentM, 20, 120); // the valley round is (nearly) flat
+        Assert.InRange(loop.TotalAscentM, 0, 0.5); // the valley round is completely flat (steady efforts, FTP tests)
         Assert.Equal(loop.Points[0].X, loop.Points[^1].X, 3);
         Assert.Equal(loop.Points[0].ElevationM, loop.Points[^1].ElevationM, 3);
         Assert.Same(loop, BuiltInRoutes.Get(BuiltInRoutes.DefaultId));

@@ -95,7 +95,8 @@ namespace FreeVelo.App
 
                 long terrainMs = clock.ElapsedMilliseconds;
                 LoadingStep = "loading_world_scenery";
-                if (prepared == null) SavePreparedWorld(terrain, cache);
+                // Generated (no bundled world, or one that does not fit this version's map): keep it for the next start.
+                if (!loaded) SavePreparedWorld(terrain, cache);
                 // Scenery and the mountain's far tiles in parallel, both off the main thread.
                 clock.Restart();
                 var farClock = System.Diagnostics.Stopwatch.StartNew();
