@@ -91,9 +91,9 @@ namespace FreeVelo.Core.Training
                 Category = WorkoutCategory.FtpTest,
                 Author = "FreeVelo",
                 Description = new LocalizedText(
-                    "The protocol of Allen & Coggan (Training and Racing with a Power Meter): warm-up with fast pedalling, 5 min all-out, " +
+                    "The protocol of Allen & Coggan: warm-up with fast pedalling, 5 min all-out, " +
                     "10 min easy, then 20 minutes as hard as you can sustain. FTP = 95 % of the 20-min average. Repeat every 6–8 weeks under the same conditions.",
-                    "Das Protokoll von Allen & Coggan (Training and Racing with a Power Meter): Aufwärmen mit schnellem Treten, 5 min maximal, " +
+                    "Das Protokoll von Allen & Coggan: Aufwärmen mit schnellem Treten, 5 min maximal, " +
                     "10 min locker, dann 20 Minuten so hart, wie du durchhalten kannst. FTP = 95 % des 20-min-Schnitts. Alle 6–8 Wochen unter gleichen Bedingungen wiederholen."),
             };
 
