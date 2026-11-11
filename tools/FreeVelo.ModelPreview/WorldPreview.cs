@@ -403,6 +403,72 @@ public static class WorldPreview
         return hull;
     }
 
+    /// <summary>
+    /// Writes the standard camera views as a request for the Unity render-shot tooling (RenderShots/request.json in the
+    /// Unity project): the start, Lärchwald, a house and an inn close up, a forest road, a junction, a climb start.
+    /// </summary>
+    public static void Shots(string output)
+    {
+        var map = WorldMap.Default;
+        var terrain = Terrain.Build(map);
+        SceneryLayout.Generate(terrain, DateTime.Now);
+        var landscape = terrain.Landscape!;
+        var shots = new List<string>();
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        void Add(string name, Vector3 pos, Vector3 target, float fov = 60)
+        {
+            // Never below the ground the app draws.
+            pos.Y = Math.Max(pos.Y, (float)terrain.DrawnHeight(pos.X, pos.Z) + 0.6f);
+            string V(Vector3 v) => string.Format(inv, "[{0:0.00},{1:0.00},{2:0.00}]", v.X, v.Y, v.Z);
+            shots.Add($"    {{\"name\":\"{name}\",\"pos\":{V(pos)},\"target\":{V(target)},\"fov\":{fov.ToString(inv)}}}");
+        }
+
+        // The riding camera on an edge: 4.6 m behind the rider, 1.9 m up, looking ahead.
+        void Ride(string name, RoadEdge e, double at)
+        {
+            var (px, py, pz, fx, fz) = JunctionCorners.At(e, at);
+            var f = new Vector3((float)fx, 0, (float)fz);
+            var rider = new Vector3((float)px, (float)py + 0.05f, (float)pz) + (new Vector3(f.Z, 0, -f.X) * 1.4f);
+            Add(name, rider - (f * 4.6f) + new Vector3(0, 1.9f, 0), rider + (f * 20) + new Vector3(0, 1.05f, 0));
+        }
+
+        // A building from its road side, close up (as in the "trade:" preview).
+        void Building(string name, SceneryItem t, float distance = 34, float up = 14)
+        {
+            double r = t.RotationDeg * Math.PI / 180;
+            var front = new Vector3((float)Math.Sin(r), 0, (float)Math.Cos(r));
+            var side = new Vector3(front.Z, 0, -front.X);
+            var at = new Vector3(t.X, t.Y, t.Z);
+            Add(name, at + (front * distance) + (side * (distance * 0.5f)) + new Vector3(0, up, 0), at + new Vector3(0, 3, 0), 55);
+        }
+
+        var first = map.Edges[map.MainLoopEdges[0]];
+        var start = map.Nodes[first.From];
+        var rider0 = new Vector3((float)first.X[0], (float)first.E[0] + 0.05f, (float)first.Z[0]);
+        for (int k = 0; k < 4; k++)
+        {
+            double a = k * Math.PI / 2;
+            Add($"start_orbit_{k * 90}", rider0 + new Vector3((float)(Math.Sin(a) * -3.6), 1.5f, (float)(Math.Cos(a) * -3.6)), rider0 + new Vector3(0, 1.05f, 0));
+        }
+
+        Add("start_above", rider0 + new Vector3(0.5f, 90, 0.5f), rider0, 50);
+        Ride("laerchwald_street", first, 140);
+        Ride("forest_road", first, 700);
+        Ride("kirchbach_junction", first, first.Length - 60);
+        var climb = map.Edges.FirstOrDefault(e => e.Kind == RoadKind.Climb);
+        if (climb != null) Ride("climb_start", climb, 8);
+
+        SceneryItem? Nearest(SceneryKind kind) => landscape.Items.Where(i => i.Kind == kind)
+            .OrderBy(i => Math.Abs(i.X - start.X) + Math.Abs(i.Z - start.Z)).Cast<SceneryItem?>().FirstOrDefault();
+        if (Nearest(SceneryKind.AlpineHouse) is SceneryItem house) Building("house_close", house, 22, 7);
+        if (Nearest(SceneryKind.Inn) is SceneryItem inn) Building("inn_close", inn);
+        if (Nearest(SceneryKind.Church) is SceneryItem church) Building("church", church, 45, 16);
+        if (Nearest(SceneryKind.Farmhouse) is SceneryItem farm) Building("farm", farm, 40, 14);
+
+        File.WriteAllText(output, "{\n  \"width\": 1280,\n  \"height\": 720,\n  \"shots\": [\n" + string.Join(",\n", shots) + "\n  ]\n}\n");
+        Console.WriteLine($"{shots.Count} shots -> {output}");
+    }
+
     /// <summary>Eight views orbiting the rider at the start of the default route, like the app's home screen.</summary>
     public static void Start(string output)
     {

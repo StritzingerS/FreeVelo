@@ -41,6 +41,12 @@ namespace FreeVelo.World
         /// <summary>True once the world has been built (terrain and scenery are generated in the background first).</summary>
         public bool IsBuilt => _root != null;
 
+        /// <summary>The world being shown (for tooling such as the render shots).</summary>
+        public static WorldBuilder Current { get; private set; }
+
+        /// <summary>Detailed ground tiles are still being computed around the camera.</summary>
+        public bool IsStreaming => _tiles.Values.Any(t => t.Building != null);
+
         /// <summary>Set when generating the world failed (the app goes on without it instead of loading forever).</summary>
         public bool Failed { get; set; }
 
@@ -53,6 +59,7 @@ namespace FreeVelo.World
         /// </summary>
         public void Build(WorldMap map, Terrain terrain, SceneryLayout layout, List<FarTileData> far = null)
         {
+            Current = this;
             var clock = System.Diagnostics.Stopwatch.StartNew();
             var times = new System.Text.StringBuilder("World build (ms):");
             void Step(string name)

@@ -212,9 +212,13 @@ namespace FreeVelo.Ride
         /// Starts a ride at the foot of a famous climb (from the menu): round the mountain – up, over the top, down the
         /// other side and back – optionally with a workout.
         /// </summary>
-        public void StartClimb(string climbId, Workout workout = null)
+        public void StartClimb(string climbId, Workout workout = null) =>
+            StartRoute(climbId == ClimbData.Stelvio ? BuiltInRoutes.StelvioId : BuiltInRoutes.AlpeId, workout);
+
+        /// <summary>Starts a ride at the beginning of a built-in route (the Alm round, round a climb), optionally with a workout.</summary>
+        public void StartRoute(string routeId, Workout workout = null)
         {
-            var route = BuiltInRoutes.Get(climbId == ClimbData.Stelvio ? BuiltInRoutes.StelvioId : BuiltInRoutes.AlpeId);
+            var route = BuiltInRoutes.Get(routeId);
             lock (BleService.Sync)
             {
                 Route = route;

@@ -124,6 +124,10 @@ namespace FreeVelo.App
             ["ascent"] = ("Elevation", "Höhenmeter"),
             ["max_power"] = ("Max power", "Max. Leistung"),
             ["new_ftp"] = ("Estimated FTP", "Geschätzte FTP"),
+            ["ftp_before"] = ("was", "bisher"),
+            ["ftp_current"] = ("your current FTP", "deine aktuelle FTP"),
+            ["flat"] = ("flat", "flach"),
+            ["apply_short"] = ("Apply", "Übernehmen"),
             ["apply_ftp"] = ("Apply new FTP", "Neue FTP übernehmen"),
             // Phase 3: training plan, history, controls, backup
             ["training"] = ("Training", "Training"),

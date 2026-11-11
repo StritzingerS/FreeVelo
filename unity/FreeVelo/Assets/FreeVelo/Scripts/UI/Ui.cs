@@ -199,25 +199,34 @@ namespace FreeVelo.UI
         public static void Divider(Rect r) => Rect(new Rect(r.x, r.y, r.width, 1), Theme.Stroke, 0);
 
         private static Texture2D _gradient;
+        private static Texture2D _gradientV;
+
+        /// <summary>A smooth 0..1 fall-off: opaque at index 0, transparent at the last one.</summary>
+        private static Texture2D Gradient(bool vertical)
+        {
+            var tex = new Texture2D(vertical ? 1 : 64, vertical ? 64 : 1, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            for (int i = 0; i < 64; i++)
+            {
+                float t = i / 63f;
+                var c = new Color(1, 1, 1, 1f - (t * t * (3f - (2f * t))));
+                if (vertical) tex.SetPixel(0, i, c);
+                else tex.SetPixel(i, 0, c);
+            }
+
+            tex.Apply();
+            return tex;
+        }
 
         /// <summary>
         /// Smooth fade of <paramref name="color"/>: opaque at the start, transparent at the end. Directions:
-        /// 0 = left→right, 1 = top→bottom, 2 = bottom→top.
+        /// 0 = left→right, 1 = top→bottom, 2 = bottom→top. Drawn without rotating the GUI matrix (a rotation inside
+        /// groups and the UI scaling turned around the wrong point and put the fade in the wrong place).
         /// </summary>
         public static void Fade(Rect r, Color color, int direction)
         {
             if (Event.current.type != EventType.Repaint) return;
-            if (_gradient == null)
-            {
-                _gradient = new Texture2D(64, 1, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
-                for (int i = 0; i < 64; i++)
-                {
-                    float t = i / 63f;
-                    _gradient.SetPixel(i, 0, new Color(1, 1, 1, 1f - (t * t * (3f - (2f * t)))));
-                }
-
-                _gradient.Apply();
-            }
+            if (_gradient == null) _gradient = Gradient(false);
+            if (_gradientV == null) _gradientV = Gradient(true);
 
             var old = GUI.color;
             GUI.color = Theme.Out(color);
@@ -227,21 +236,8 @@ namespace FreeVelo.UI
             }
             else
             {
-                // Rotate the horizontal gradient by drawing it in a rotated GUI matrix.
-                var m = GUI.matrix;
-                var pivot = new Vector2(r.x, r.y);
-                if (direction == 1)
-                {
-                    GUIUtility.RotateAroundPivot(90, pivot);
-                    GUI.DrawTexture(new Rect(r.x, r.y - r.width, r.height, r.width), _gradient, ScaleMode.StretchToFill, true);
-                }
-                else
-                {
-                    GUIUtility.RotateAroundPivot(-90, pivot);
-                    GUI.DrawTexture(new Rect(r.x - r.height, r.y, r.height, r.width), _gradient, ScaleMode.StretchToFill, true);
-                }
-
-                GUI.matrix = m;
+                // Texture row 0 (opaque) is drawn at the bottom of the rect; flipped for top→bottom.
+                GUI.DrawTextureWithTexCoords(r, _gradientV, direction == 2 ? new Rect(0, 0, 1, 1) : new Rect(0, 1, 1, -1), true);
             }
 
             GUI.color = old;

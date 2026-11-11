@@ -541,11 +541,8 @@ namespace FreeVelo.Core.World.Gen
             Nodes[Edges[m.Stelvio.Edge].To].Elevation = m.Stelvio.SummitElevation;
             Nodes[Edges[m.Alpe.Edge].To].Elevation = m.Alpe.SummitElevation;
 
-            // The Alm road's ends follow from its length and gradient.
-            var up = Edges.First(e => e.From == Valleys.Kirchbach && e.To == Valleys.Oberalm);
-            var down = Edges.First(e => e.From == Valleys.AlmEnd && e.To == Valleys.Mitterbach);
-            Nodes[Valleys.Oberalm].Elevation = Nodes[Valleys.Kirchbach].Elevation + (Valleys.AlmGrade * up.Length);
-            Nodes[Valleys.AlmEnd].Elevation = Nodes[Valleys.Mitterbach].Elevation + (Valleys.AlmGrade * down.Length);
+            Nodes[Valleys.Oberalm].Elevation = Valleys.OberalmElevation;
+            Nodes[Valleys.AlmEnd].Elevation = Valleys.AlmEndElevation;
 
             foreach (var e in Edges)
             {
@@ -571,9 +568,8 @@ namespace FreeVelo.Core.World.Gen
                     double h;
                     if (e.Kind == RoadKind.Valley)
                     {
-                        // Gentle waves of a metre or two, none at the villages; the saddle road rises 55 m in the middle.
-                        double wave = 1.6 * Math.Sin(2 * Math.PI * f * Math.Max(1, Math.Round(e.Length / 1800))) * Math.Sin(Math.PI * f);
-                        h = a + ((b - a) * SmoothStep(f)) + wave + (saddle ? 55 * Math.Pow(Math.Sin(Math.PI * f), 2) : 0);
+                        // The valley round is level; only the saddle road (the short cut over the hill) rises 55 m in the middle.
+                        h = a + ((b - a) * SmoothStep(f)) + (saddle ? 55 * Math.Pow(Math.Sin(Math.PI * f), 2) : 0);
                     }
                     else if (e.Kind == RoadKind.Connector)
                     {
@@ -686,7 +682,7 @@ namespace FreeVelo.Core.World.Gen
             double previous = double.MaxValue;
             for (int i = 0; i < count; i++)
             {
-                level[i] = Math.Min(previous, _floor!.Height(river.X[i], river.Z[i]) - 2);
+                level[i] = Math.Min(previous, _floor!.Height(river.X[i], river.Z[i]) - 3);
                 previous = level[i];
             }
 
@@ -710,14 +706,17 @@ namespace FreeVelo.Core.World.Gen
             }
         }
 
-        /// <summary>Valley roads rise gently onto their bridges (deck 4.5 m above the water).</summary>
+        /// <summary>
+        /// Bridge decks are at least 3 m above the water. The river runs 3 m below the valley floor, so the level valley
+        /// roads cross it without a ramp; only roads that come in lower rise gently onto their bridge.
+        /// </summary>
         private void LiftBridges()
         {
             foreach (var b in Bridges)
             {
                 var e = Edges[b.Edge];
                 if (e.Kind == RoadKind.Climb) continue;
-                double deck = b.WaterLevel + 4.5;
+                double deck = b.WaterLevel + 3;
                 for (int i = 0; i < e.E.Length; i++) e.E[i] = Math.Max(e.E[i], deck - (0.03 * Math.Abs(e.D[i] - b.DistanceM)));
             }
         }

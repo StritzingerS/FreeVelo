@@ -37,11 +37,19 @@ namespace FreeVelo.Core.World.Gen
 
         public static readonly string[] Names = { "Lärchwald", "Kirchbach", "Mitterbach", "Hinterau", "Trafon", "Oberalm", "Oberalm", "Valbrune" };
 
-        /// <summary>Valley floor heights of the villages (Oberalm and Valbrune follow from the roads and the climbs).</summary>
-        public static readonly double[] FloorElevation = { 652, 682, 666, 648, 627 };
+        /// <summary>
+        /// Valley floor height of the villages: all the same (the foot of the Stelvio climb at Trafon sets it), so the
+        /// valley round is completely flat – steady efforts such as an FTP test are not disturbed by small gradients.
+        /// </summary>
+        public const double ValleyLevel = 627;
 
-        /// <summary>Gradient of the Alm road (up and down).</summary>
-        public const double AlmGrade = 0.055;
+        public static readonly double[] FloorElevation = { ValleyLevel, ValleyLevel, ValleyLevel, ValleyLevel, ValleyLevel };
+
+        /// <summary>
+        /// The Alm plateau: the roads up from Kirchbach and Mitterbach rise at about 5.9 % and 5.7 %, the plateau is
+        /// almost level and the road on to Valbrune (1351 m) climbs at about 6.3 %.
+        /// </summary>
+        public const double OberalmElevation = 1050, AlmEndElevation = 1054;
 
         public static readonly (double X, double Z)[] Position =
         {

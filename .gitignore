@@ -16,6 +16,9 @@ unity/**/[Mm]emoryCaptures/
 sysinfo.txt
 crashlytics-build.properties
 
+# Render shots (requests and pictures of the editor tooling)
+unity/**/RenderShots/
+
 # .NET
 bin/
 obj/
