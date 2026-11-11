@@ -67,6 +67,41 @@ namespace FreeVelo.Ble
 
         public string LogFilePath => _backend?.LogFilePath ?? string.Empty;
 
+        /// <summary>
+        /// A copy of the BLE log for sharing, with the app's recent messages (start-up times, connections, errors)
+        /// on top as "#" comment lines: the log file itself only records the Bluetooth traffic. Falls back to the
+        /// log file when the copy cannot be written.
+        /// </summary>
+        public string LogFileForSharing()
+        {
+            string path = LogFilePath;
+            if (string.IsNullOrEmpty(path)) return path;
+            try
+            {
+                // In the app's files (the share provider only serves the app's own files and cache folders).
+                string folder = System.IO.Path.Combine(Application.persistentDataPath, "shared-logs");
+                System.IO.Directory.CreateDirectory(folder);
+                string copy = System.IO.Path.Combine(folder, System.IO.Path.GetFileName(path));
+                using (var reader = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite))
+                using (var writer = new System.IO.StreamWriter(copy, false))
+                {
+                    var text = new System.IO.StreamReader(reader).ReadToEnd();
+                    int firstBreak = text.IndexOf('\n');
+                    // Keep the header line first, then the app messages (oldest first), then the rest of the log.
+                    writer.Write(firstBreak >= 0 ? text.Substring(0, firstBreak + 1) : BleLogEntry.Header + "\n");
+                    writer.Write("# App messages (oldest first)\n");
+                    for (int i = _log.Count - 1; i >= 0; i--) writer.Write("# " + _log[i].Replace("\n", " ") + "\n");
+                    writer.Write(firstBreak >= 0 ? text.Substring(firstBreak + 1) : text);
+                }
+
+                return copy;
+            }
+            catch (Exception)
+            {
+                return path;
+            }
+        }
+
         private void Awake()
         {
             Hub = new DeviceHub(this, () => 1000 + Clock.ElapsedMilliseconds);
@@ -206,7 +241,7 @@ namespace FreeVelo.Ble
         public void AddLog(string message)
         {
             _log.Insert(0, DateTime.Now.ToString("HH:mm:ss ") + message);
-            if (_log.Count > 40) _log.RemoveAt(_log.Count - 1);
+            if (_log.Count > 200) _log.RemoveAt(_log.Count - 1);
         }
 
         // ------------------------------------------------------------------ IBleWriter (DeviceHub → backend)

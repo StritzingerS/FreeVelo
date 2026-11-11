@@ -119,8 +119,12 @@ namespace FreeVelo.Core.Plans
     public sealed class PlanTemplate
     {
         public PlanTemplate(string id, LocalizedText name, LocalizedText description, int defaultWeeks, int minWeeks, int maxWeeks,
-            string[] keyWorkouts, bool endsWithTest)
+            string[] keyWorkouts, bool endsWithTest, int recommendedDays, int minRecommendedDays, int maxRecommendedDays, LocalizedText daysReason)
         {
+            RecommendedDays = recommendedDays;
+            MinRecommendedDays = minRecommendedDays;
+            MaxRecommendedDays = maxRecommendedDays;
+            DaysReason = daysReason;
             Id = id;
             Name = name;
             Description = description;
@@ -143,6 +147,19 @@ namespace FreeVelo.Core.Plans
 
         /// <summary>Build block: FTP test at the end (rule 6).</summary>
         public bool EndsWithTest { get; }
+
+        /// <summary>Training days per week this plan works best with (every week has two key sessions).</summary>
+        public int RecommendedDays { get; }
+
+        /// <summary>Still sensible range of training days per week.</summary>
+        public int MinRecommendedDays { get; }
+
+        public int MaxRecommendedDays { get; }
+
+        /// <summary>Why this number of days (shown with the recommendation).</summary>
+        public LocalizedText DaysReason { get; }
+
+        public bool IsRecommendedDays(int days) => days >= MinRecommendedDays && days <= MaxRecommendedDays;
     }
 
     /// <summary>Templates and plan generation (deterministic).</summary>
@@ -163,19 +180,52 @@ namespace FreeVelo.Core.Plans
         {
             new PlanTemplate("base", new LocalizedText("Base", "Grundlage"),
                 new LocalizedText("Aerobic base: endurance rides with tempo and sweet spot.", "Aerobe Grundlage: Ausdauerfahrten mit Tempo und Sweet Spot."),
-                8, 4, 12, new[] { "tempo-2x20", "sweetspot-3x15" }, false),
+                8, 4, 12, new[] { "tempo-2x20", "sweetspot-3x15" }, false,
+                // Base is built through volume: many easy endurance rides around two tempo/sweet-spot sessions. Endurance
+                // (Level 2) can be ridden on most days; the sample plans in Allen & Coggan (3rd ed., ch. 10) ride 6 days.
+                5, 4, 5, new LocalizedText(
+                    "A base is built through volume: many easy endurance rides around two tempo or sweet spot sessions.",
+                    "Grundlage entsteht über Umfang: viele ruhige Ausdauerfahrten rund um zwei Tempo- oder Sweet-Spot-Einheiten.")),
             new PlanTemplate("ftp-build", new LocalizedText("FTP Build", "FTP-Aufbau"),
                 new LocalizedText("Raise your FTP: sweet spot, threshold, crisscross and over-unders, FTP test at the end.", "FTP steigern: Sweet Spot, Schwelle, Crisscross und Over-Unders, FTP-Test am Ende."),
-                8, 4, 12, new[] { "sweetspot-3x15", "threshold-2x20", "sweetspot-crisscross", "over-unders-3x10", "sweetspot-2x20" }, true),
+                8, 4, 12, new[] { "sweetspot-3x15", "threshold-2x20", "sweetspot-crisscross", "over-unders-3x10", "sweetspot-2x20" }, true,
+                // "At least two workouts a week" of sweet spot and threshold to raise FTP (Allen & Coggan, 3rd ed., ch. 10),
+                // with endurance rides in between for recovery and volume.
+                4, 4, 5, new LocalizedText(
+                    "Two sweet spot or threshold sessions a week (Allen & Coggan: at least two) with endurance rides in between.",
+                    "Zwei Sweet-Spot- oder Schwelleneinheiten pro Woche (Allen & Coggan: mindestens zwei), dazwischen Ausdauerfahrten.")),
             new PlanTemplate("vo2max", new LocalizedText("VO2max Block", "VO2max-Block"),
                 new LocalizedText("Short, hard intervals for top-end power, FTP test at the end.", "Kurze, harte Intervalle für die Spitzenleistung, FTP-Test am Ende."),
-                6, 4, 8, new[] { "vo2max-4x4", "vo2max-5x5", "40-20s", "micro-bursts" }, true),
+                6, 4, 8, new[] { "vo2max-4x4", "vo2max-5x5", "40-20s", "micro-bursts" }, true,
+                // Very hard sessions need long recovery: two interval sessions a week (72–96 h apart) improved time-trial
+                // performance where four did not (Sports Performance Bulletin summary of a 12-week study); elite endurance
+                // athletes do 2–3 high-intensity sessions a week (Seiler). Extra days stay easy.
+                3, 3, 4, new LocalizedText(
+                    "Two hard interval days a week with enough recovery in between work better than more; any extra day stays easy.",
+                    "Zwei harte Intervalltage pro Woche mit genug Erholung dazwischen wirken besser als mehr; ein weiterer Tag nur locker.")),
             new PlanTemplate("maintenance", new LocalizedText("Maintenance", "Erhaltung"),
                 new LocalizedText("Keep your fitness with little time: sweet spot, sprints or micro-bursts, and endurance.", "Form halten mit wenig Zeit: Sweet Spot, Sprints oder Micro-Bursts und Grundlage."),
-                4, 4, 12, new[] { "sweetspot-3x15", "sprints-8x15", "sweetspot-crisscross", "micro-bursts" }, false),
+                4, 4, 12, new[] { "sweetspot-3x15", "sprints-8x15", "sweetspot-crisscross", "micro-bursts" }, false,
+                // Fitness is kept with far fewer days as long as the intensity stays: VO2max held for 15 weeks at 2 or 4
+                // days a week (Hickson et al. 1981), but not with lower intensity (Hickson et al. 1985); cut frequency only
+                // moderately and keep the intensity (Mujika & Padilla 2000). 3 days: the two hard sessions and one endurance ride.
+                3, 3, 3, new LocalizedText(
+                    "Fitness is kept with few days as long as the intensity stays: two hard sessions and one endurance ride.",
+                    "Die Form bleibt mit wenigen Tagen erhalten, solange die Intensität bleibt: zwei harte Einheiten und eine Ausdauerfahrt.")),
         };
 
         public static PlanTemplate? Find(string id) => All.FirstOrDefault(t => t.Id == id);
+
+        /// <summary>
+        /// Suggested weekdays for a number of training days: Monday off (as in Allen &amp; Coggan's sample plans), the two
+        /// key sessions at least two days apart, the long endurance ride at the weekend.
+        /// </summary>
+        public static DayOfWeek[] SuggestedDays(int days) => days switch
+        {
+            <= 3 => new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday },
+            4 => new[] { DayOfWeek.Tuesday, DayOfWeek.Thursday, DayOfWeek.Saturday, DayOfWeek.Sunday },
+            _ => new[] { DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday },
+        };
 
         /// <summary>Session kinds of one normal week for 3–5 training days (sorted Monday → Sunday).</summary>
         public static SessionKind[] WeekPattern(int days) => days switch
