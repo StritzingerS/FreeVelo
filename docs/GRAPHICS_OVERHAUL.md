@@ -319,10 +319,9 @@ Still only measurable on the phone: frame rate, heat and battery.
     PC, several times that on a phone. A spatial lookup for the building pads is in; the rest belongs to the
     `PlotPlanner` redesign (section 4). Options: faster placement (spatial index for footprints and lanes), or
     baking the layout like the terrain (keyed by the map fingerprint; date-dependent items stay at runtime).
-- **Recording gaps:** the FIT file had 10 gaps of 2–4 s, each at a moment the log shows the app going to the
-  background ("Background: N trainer commands scheduled"). The trainer keeps its commands, but no samples are
-  recorded while the app is paused. Open: find out what sends the app to the background mid-ride, and whether to
-  fill such gaps.
+- **Recording in the background works:** during the test the rider watched a video in another app for about
+  8 minutes and had the phone locked for 2 minutes. The FIT file lost only about 15 s in total (10 gaps of 2–4 s at
+  the moments of switching; the log shows "Background: N trainer commands scheduled" there). Left as it is.
 - **Valley round:** now completely flat (all valley villages at 627 m, no waves, bridges without ramps). The road
   network changed, so the terrain is regenerated once and the server must run the same version (it builds the
   routes itself).
