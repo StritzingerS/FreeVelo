@@ -261,6 +261,9 @@ namespace FreeVelo.App
             _ble.AddLog("Scene " + _world.BuildTimes.Replace("World build (ms):", "(ms):") + $" · total {_startClock?.ElapsedMilliseconds ?? 0}");
         }
 
+        /// <summary>Set by the render-shot tooling: where the game camera stands and looks instead of following the rider.</summary>
+        public static (Vector3 Position, Vector3 Target)? CameraOverride;
+
         private System.Diagnostics.Stopwatch _startClock;
         private static volatile string BackgroundTimes = "";
 
@@ -312,6 +315,13 @@ namespace FreeVelo.App
             if (_world.IsBuilt) cam.y = Mathf.Max(cam.y, _world.GroundHeight(cam.x, cam.z) + 0.6f);
             _camera.transform.position = cam;
             _camera.transform.LookAt(position + (Vector3.up * 1.05f));
+
+            // Render shots (editor tooling): the camera stands where the shot wants it.
+            if (CameraOverride.HasValue)
+            {
+                _camera.transform.position = CameraOverride.Value.Position;
+                _camera.transform.LookAt(CameraOverride.Value.Target);
+            }
         }
     }
 }
