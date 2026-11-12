@@ -79,6 +79,7 @@ namespace FreeVelo.UI
             _guiScale = scale;
             _guiOffset = new Vector2(offsetX, offsetY);
 
+            UiCheck.Begin(_ride.State == RideState.Riding ? "ride" : _ride.State == RideState.Finished ? "summary" : _page.ToString());
             if (!string.IsNullOrEmpty(WorkoutStore.LastMessage))
             {
                 Ui.Toast(WorkoutStore.LastMessage);
@@ -114,10 +115,13 @@ namespace FreeVelo.UI
                     break;
             }
 
+            UiCheck.Modal();
             DrawLoadingScreen(); // fading out
             Ui.DrawToast(_w, _h);
+            UiCheck.Modal();
             DrawFriendRequests();
             Ui.DrawKeyboardBar(_w);
+            UiCheck.End();
         }
 
         // ------------------------------------------------------------------ navigation
@@ -916,6 +920,20 @@ namespace FreeVelo.UI
 
         // Top of the cards at the right / left side of the ride screen (set by DrawRide).
         private float _sideTop = 24, _leftTop = 100;
+        private float _leftY = 100, _leftBottom = 500;
+
+        /// <summary>
+        /// The next free place in the left column of the ride screen for a card of this size; false if it does not
+        /// fit any more (the card is then left out for now). Cards never choose their own height on the screen, so
+        /// they cannot lie on top of each other.
+        /// </summary>
+        private bool TakeLeft(float width, float height, out Rect card)
+        {
+            card = new Rect(24, _leftY, width, height);
+            if (_leftY + height > _leftBottom + 0.5f) return false;
+            _leftY += height + 12;
+            return true;
+        }
 
         private void DrawRide()
         {
@@ -955,7 +973,7 @@ namespace FreeVelo.UI
 
             // Power (centre), coloured by how well the target is held.
             var p = new Rect(bar.x + (3 * side), bar.y - 8, powerW, bar.height + 16);
-            Ui.Card(p, Theme.Surface2);
+            Ui.Card(p, Theme.Surface2, overlaps: true); // taller than the bar on purpose
             Color powerColor = Theme.Text;
             if (workout && state.TargetW.HasValue && state.TargetW.Value > 0)
             {
@@ -975,7 +993,12 @@ namespace FreeVelo.UI
             // The side cards start right under the bar where the screen is wide enough that the chips and warnings in
             // the middle cannot reach them (phones); on narrow screens they stay below those.
             _sideTop = _w - 344 > (_w / 2f) + 300 ? bar.yMax + 14 : cy + 54;
-            _leftTop = cy + 54;
+            _leftTop = _sideTop;
+
+            // The left column is a stack: each card takes the next free place (TakeLeft), down to the bottom strip
+            // (in group rides to the row of emoji buttons above it).
+            _leftY = _leftTop;
+            _leftBottom = _h - 136 - 12 - (_ride.IsGroupRide ? 70 : 0);
             string grade = $"{pos.GradePercent:+0.0;-0.0;0.0} %";
             var gradeColor = pos.GradePercent > 4 ? Theme.Danger : pos.GradePercent > 1.5 ? Theme.Warning : pos.GradePercent < -1.5 ? Theme.Info : Theme.Muted;
             var chipStyle = Theme.With(Theme.H3, size: 17, anchor: TextAnchor.MiddleLeft);
@@ -1027,7 +1050,11 @@ namespace FreeVelo.UI
                 GUI.color = old;
             }
 
-            if (_confirmEnd) DrawEndConfirm();
+            if (_confirmEnd)
+            {
+                UiCheck.Modal();
+                DrawEndConfirm();
+            }
         }
 
         /// <summary>Metric in the ride bar: icon above, value with unit (no text label, so it fits in every language).</summary>
