@@ -1022,11 +1022,19 @@ namespace FreeVelo.UI
                 : null;
             if (warning != null)
             {
-                var style = Theme.With(Theme.Body, Theme.Background, 18, TextAnchor.MiddleCenter);
-                float ww = style.CalcSize(new GUIContent(warning)).x + 48;
-                var wr = new Rect((_w - ww) / 2f, cy + 48, ww, 44);
-                Ui.Rect(wr, Theme.Warning, 22);
-                GUI.Label(wr, warning, style);
+                // Big enough to read at a glance; shrunk if it would reach the cards at the sides.
+                float maxW = _w - (2 * 376);
+                var style = Theme.With(Theme.Body, Theme.Background, 23, TextAnchor.MiddleCenter);
+                float ww = style.CalcSize(new GUIContent(warning)).x + 56;
+                if (ww > maxW)
+                {
+                    style = Theme.With(Theme.Body, Theme.Background, Mathf.Max(16, Mathf.FloorToInt(23 * (maxW - 56) / (ww - 56))), TextAnchor.MiddleCenter);
+                    ww = Mathf.Min(maxW, style.CalcSize(new GUIContent(warning)).x + 56);
+                }
+
+                var wr = new Rect((_w - ww) / 2f, cy + 48, ww, 54);
+                Ui.Rect(wr, Theme.Warning, 27);
+                GUI.Label(wr, warning, Clip(style));
             }
 
             if (workout) DrawWorkoutPanel();
@@ -1119,7 +1127,7 @@ namespace FreeVelo.UI
             int ftp = engine.FtpW;
 
             // Interval card (right)
-            var card = new Rect(_w - 344, _sideTop, 320, 330);
+            var card = new Rect(_w - 344, _sideTop, 320, 344);
             if (_ride.WorkoutComplete)
             {
                 // Done: the ride continues as a free ride (trainer simulates the road).
@@ -1176,12 +1184,13 @@ namespace FreeVelo.UI
                     GUI.Label(new Rect(card.x + 22, y, card.width - 44, 28), nextLine, infoStyle);
                 }
 
-                // Intensity and skip
-                var row = new Rect(card.x + 22, card.yMax - 70, card.width - 44, 50);
-                if (Ui.IconButton(new Rect(row.x, row.y, 50, 50), Icon.ChevronLeft)) _ride.AdjustBlockIntensity(-0.02);
-                GUI.Label(new Rect(row.x + 50, row.y, 110, 50), $"{state.SegmentIntensity * 100:0} %", Theme.With(Theme.H3, anchor: TextAnchor.MiddleCenter));
-                if (Ui.IconButton(new Rect(row.x + 160, row.y, 50, 50), Icon.ChevronRight)) _ride.AdjustBlockIntensity(0.02);
-                if (Ui.IconButton(new Rect(row.xMax - 50, row.y, 50, 50), Icon.Skip, ButtonKind.Ghost)) _ride.SkipBlock();
+                // Intensity and skip: big targets for a finger while riding; the skip button kept apart from the others.
+                const float bs = 60;
+                var row = new Rect(card.x + 22, card.yMax - 20 - bs, card.width - 44, bs);
+                if (Ui.IconButton(new Rect(row.x, row.y, bs, bs), Icon.ChevronLeft)) _ride.AdjustBlockIntensity(-0.02);
+                GUI.Label(new Rect(row.x + bs, row.y, 80, bs), $"{state.SegmentIntensity * 100:0} %", Theme.With(Theme.H3, size: 22, anchor: TextAnchor.MiddleCenter));
+                if (Ui.IconButton(new Rect(row.x + bs + 80, row.y, bs, bs), Icon.ChevronRight)) _ride.AdjustBlockIntensity(0.02);
+                if (Ui.IconButton(new Rect(row.xMax - bs, row.y, bs, bs), Icon.Skip, ButtonKind.Ghost)) _ride.SkipBlock();
             }
 
             // Workout profile (bottom)

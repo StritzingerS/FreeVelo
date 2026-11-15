@@ -54,6 +54,17 @@ namespace FreeVelo.Ble
         private float _tickTimer;
         private float _scanUntil;
 
+        /// <summary>
+        /// Remembered devices that are not connected are searched for again and again: a short scan every
+        /// <see cref="AutoScanEvery"/> seconds (a trainer or strap switched on after the app still connects by itself).
+        /// </summary>
+        private const float AutoScanEvery = 10f, AutoScanSeconds = 4f;
+
+        private float _autoScanTimer;
+        private string _lastLogMessage;
+        private DateTime _lastLogTime;
+        private bool _autoScanning;
+
         public DeviceHub Hub { get; private set; }
 
         public IEnumerable<DeviceInfo> Devices =>
@@ -123,8 +134,8 @@ namespace FreeVelo.Ble
                 UnityEngine.Debug.LogException(e);
             }
 
-            // Reconnect remembered devices.
-            if (AppSettings.RememberedDevices.Count > 0) StartScan();
+            // Reconnect remembered devices: right away, then every few seconds while one of them is missing.
+            if (AnyRememberedMissing()) AutoScan();
         }
 
         /// <summary>Applies settings that the hub uses (weight, difficulty, power source).</summary>
@@ -184,7 +195,19 @@ namespace FreeVelo.Ble
             if (_scanUntil > 0 && Time.time >= _scanUntil)
             {
                 _scanUntil = 0;
+                _autoScanning = false;
                 _backend?.StopScan();
+            }
+
+            // Automatic reconnection: search while a remembered device is missing; stop an automatic search as soon
+            // as all of them are there (a search started on the devices page runs its full time).
+            bool missing = AnyRememberedMissing();
+            if (_autoScanning && !missing) StopScan();
+            _autoScanTimer += Time.unscaledDeltaTime;
+            if (_autoScanTimer >= AutoScanEvery)
+            {
+                _autoScanTimer = 0;
+                if (missing && !IsScanning) AutoScan();
             }
 
             _tickTimer += Time.unscaledDeltaTime;
@@ -210,6 +233,7 @@ namespace FreeVelo.Ble
 
         public void StartScan(float seconds = 20f)
         {
+            _autoScanning = false;
             _scanUntil = Time.time + seconds;
             _backend?.StartScan();
         }
@@ -217,7 +241,26 @@ namespace FreeVelo.Ble
         public void StopScan()
         {
             _scanUntil = 0;
+            _autoScanning = false;
             _backend?.StopScan();
+        }
+
+        private void AutoScan()
+        {
+            _scanUntil = Time.time + AutoScanSeconds;
+            _autoScanning = true;
+            _backend?.StartScan();
+        }
+
+        /// <summary>A remembered device is not connected (nor connecting).</summary>
+        private bool AnyRememberedMissing()
+        {
+            foreach (string address in AppSettings.RememberedDevices)
+            {
+                if (!_devices.TryGetValue(address, out var d) || !d.IsConnected) return true;
+            }
+
+            return false;
         }
 
         public void Connect(string address)
@@ -240,6 +283,10 @@ namespace FreeVelo.Ble
 
         public void AddLog(string message)
         {
+            // The same message again (e.g. "Bluetooth is switched off" from every automatic search): once is enough.
+            if (message == _lastLogMessage && (DateTime.Now - _lastLogTime).TotalMinutes < 10) return;
+            _lastLogMessage = message;
+            _lastLogTime = DateTime.Now;
             _log.Insert(0, DateTime.Now.ToString("HH:mm:ss ") + message);
             if (_log.Count > 200) _log.RemoveAt(_log.Count - 1);
         }
