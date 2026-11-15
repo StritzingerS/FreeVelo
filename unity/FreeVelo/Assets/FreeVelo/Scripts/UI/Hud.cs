@@ -79,6 +79,7 @@ namespace FreeVelo.UI
             _guiScale = scale;
             _guiOffset = new Vector2(offsetX, offsetY);
 
+            UiCheck.Begin(_ride.State == RideState.Riding ? "ride" : _ride.State == RideState.Finished ? "summary" : _page.ToString());
             if (!string.IsNullOrEmpty(WorkoutStore.LastMessage))
             {
                 Ui.Toast(WorkoutStore.LastMessage);
@@ -114,10 +115,13 @@ namespace FreeVelo.UI
                     break;
             }
 
+            UiCheck.Modal();
             DrawLoadingScreen(); // fading out
             Ui.DrawToast(_w, _h);
+            UiCheck.Modal();
             DrawFriendRequests();
             Ui.DrawKeyboardBar(_w);
+            UiCheck.End();
         }
 
         // ------------------------------------------------------------------ navigation
@@ -916,6 +920,20 @@ namespace FreeVelo.UI
 
         // Top of the cards at the right / left side of the ride screen (set by DrawRide).
         private float _sideTop = 24, _leftTop = 100;
+        private float _leftY = 100, _leftBottom = 500;
+
+        /// <summary>
+        /// The next free place in the left column of the ride screen for a card of this size; false if it does not
+        /// fit any more (the card is then left out for now). Cards never choose their own height on the screen, so
+        /// they cannot lie on top of each other.
+        /// </summary>
+        private bool TakeLeft(float width, float height, out Rect card)
+        {
+            card = new Rect(24, _leftY, width, height);
+            if (_leftY + height > _leftBottom + 0.5f) return false;
+            _leftY += height + 12;
+            return true;
+        }
 
         private void DrawRide()
         {
@@ -955,7 +973,7 @@ namespace FreeVelo.UI
 
             // Power (centre), coloured by how well the target is held.
             var p = new Rect(bar.x + (3 * side), bar.y - 8, powerW, bar.height + 16);
-            Ui.Card(p, Theme.Surface2);
+            Ui.Card(p, Theme.Surface2, overlaps: true); // taller than the bar on purpose
             Color powerColor = Theme.Text;
             if (workout && state.TargetW.HasValue && state.TargetW.Value > 0)
             {
@@ -975,7 +993,12 @@ namespace FreeVelo.UI
             // The side cards start right under the bar where the screen is wide enough that the chips and warnings in
             // the middle cannot reach them (phones); on narrow screens they stay below those.
             _sideTop = _w - 344 > (_w / 2f) + 300 ? bar.yMax + 14 : cy + 54;
-            _leftTop = cy + 54;
+            _leftTop = _sideTop;
+
+            // The left column is a stack: each card takes the next free place (TakeLeft), down to the bottom strip
+            // (in group rides to the row of emoji buttons above it).
+            _leftY = _leftTop;
+            _leftBottom = _h - 136 - 12 - (_ride.IsGroupRide ? 70 : 0);
             string grade = $"{pos.GradePercent:+0.0;-0.0;0.0} %";
             var gradeColor = pos.GradePercent > 4 ? Theme.Danger : pos.GradePercent > 1.5 ? Theme.Warning : pos.GradePercent < -1.5 ? Theme.Info : Theme.Muted;
             var chipStyle = Theme.With(Theme.H3, size: 17, anchor: TextAnchor.MiddleLeft);
@@ -999,11 +1022,19 @@ namespace FreeVelo.UI
                 : null;
             if (warning != null)
             {
-                var style = Theme.With(Theme.Body, Theme.Background, 18, TextAnchor.MiddleCenter);
-                float ww = style.CalcSize(new GUIContent(warning)).x + 48;
-                var wr = new Rect((_w - ww) / 2f, cy + 48, ww, 44);
-                Ui.Rect(wr, Theme.Warning, 22);
-                GUI.Label(wr, warning, style);
+                // Big enough to read at a glance; shrunk if it would reach the cards at the sides.
+                float maxW = _w - (2 * 376);
+                var style = Theme.With(Theme.Body, Theme.Background, 23, TextAnchor.MiddleCenter);
+                float ww = style.CalcSize(new GUIContent(warning)).x + 56;
+                if (ww > maxW)
+                {
+                    style = Theme.With(Theme.Body, Theme.Background, Mathf.Max(16, Mathf.FloorToInt(23 * (maxW - 56) / (ww - 56))), TextAnchor.MiddleCenter);
+                    ww = Mathf.Min(maxW, style.CalcSize(new GUIContent(warning)).x + 56);
+                }
+
+                var wr = new Rect((_w - ww) / 2f, cy + 48, ww, 54);
+                Ui.Rect(wr, Theme.Warning, 27);
+                GUI.Label(wr, warning, Clip(style));
             }
 
             if (workout) DrawWorkoutPanel();
@@ -1027,7 +1058,11 @@ namespace FreeVelo.UI
                 GUI.color = old;
             }
 
-            if (_confirmEnd) DrawEndConfirm();
+            if (_confirmEnd)
+            {
+                UiCheck.Modal();
+                DrawEndConfirm();
+            }
         }
 
         /// <summary>Metric in the ride bar: icon above, value with unit (no text label, so it fits in every language).</summary>
@@ -1092,7 +1127,7 @@ namespace FreeVelo.UI
             int ftp = engine.FtpW;
 
             // Interval card (right)
-            var card = new Rect(_w - 344, _sideTop, 320, 330);
+            var card = new Rect(_w - 344, _sideTop, 320, 344);
             if (_ride.WorkoutComplete)
             {
                 // Done: the ride continues as a free ride (trainer simulates the road).
@@ -1149,12 +1184,13 @@ namespace FreeVelo.UI
                     GUI.Label(new Rect(card.x + 22, y, card.width - 44, 28), nextLine, infoStyle);
                 }
 
-                // Intensity and skip
-                var row = new Rect(card.x + 22, card.yMax - 70, card.width - 44, 50);
-                if (Ui.IconButton(new Rect(row.x, row.y, 50, 50), Icon.ChevronLeft)) _ride.AdjustBlockIntensity(-0.02);
-                GUI.Label(new Rect(row.x + 50, row.y, 110, 50), $"{state.SegmentIntensity * 100:0} %", Theme.With(Theme.H3, anchor: TextAnchor.MiddleCenter));
-                if (Ui.IconButton(new Rect(row.x + 160, row.y, 50, 50), Icon.ChevronRight)) _ride.AdjustBlockIntensity(0.02);
-                if (Ui.IconButton(new Rect(row.xMax - 50, row.y, 50, 50), Icon.Skip, ButtonKind.Ghost)) _ride.SkipBlock();
+                // Intensity and skip: big targets for a finger while riding; the skip button kept apart from the others.
+                const float bs = 60;
+                var row = new Rect(card.x + 22, card.yMax - 20 - bs, card.width - 44, bs);
+                if (Ui.IconButton(new Rect(row.x, row.y, bs, bs), Icon.ChevronLeft)) _ride.AdjustBlockIntensity(-0.02);
+                GUI.Label(new Rect(row.x + bs, row.y, 80, bs), $"{state.SegmentIntensity * 100:0} %", Theme.With(Theme.H3, size: 22, anchor: TextAnchor.MiddleCenter));
+                if (Ui.IconButton(new Rect(row.x + bs + 80, row.y, bs, bs), Icon.ChevronRight)) _ride.AdjustBlockIntensity(0.02);
+                if (Ui.IconButton(new Rect(row.xMax - bs, row.y, bs, bs), Icon.Skip, ButtonKind.Ghost)) _ride.SkipBlock();
             }
 
             // Workout profile (bottom)

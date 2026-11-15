@@ -157,8 +157,10 @@ namespace FreeVelo.UI
         }
 
         /// <summary>Card: shadow and surface.</summary>
-        public static void Card(Rect r, Color? color = null, float radius = Theme.Radius)
+        /// <param name="overlaps">True for a card that sticks out of another on purpose (not checked for overlaps).</param>
+        public static void Card(Rect r, Color? color = null, float radius = Theme.Radius, bool overlaps = false)
         {
+            if (!overlaps) UiCheck.Track(r, UiCheck.Kind.Card);
             Shadow(r, radius);
             Rect(r, color ?? Theme.Surface, radius);
         }
@@ -258,6 +260,7 @@ namespace FreeVelo.UI
         /// <summary>Button with optional icon; returns true when tapped.</summary>
         public static bool Button(Rect r, string text, ButtonKind kind = ButtonKind.Secondary, Icon? icon = null, bool enabled = true)
         {
+            UiCheck.Track(r, UiCheck.Kind.Button);
             bool pressed = enabled && Pressed(r);
             Color bg, fg;
             switch (kind)
@@ -472,6 +475,7 @@ namespace FreeVelo.UI
         /// <summary>While the phone keyboard is open: the text being typed in a bar at the top (the field itself is often under the keyboard).</summary>
         public static void DrawKeyboardBar(float screenW)
         {
+            UiCheck.Modal();
             if (_keyboard == null || _editId == 0 || _keyboard.status != TouchScreenKeyboard.Status.Visible) return;
             var bar = new Rect(0, 0, screenW, 88);
             Rect(new Rect(-200, -200, screenW + 400, 288), Theme.Surface, 0);
@@ -551,6 +555,7 @@ namespace FreeVelo.UI
             }
 
             s.Offset = Mathf.Clamp(s.Offset, 0, max);
+            UiCheck.EnterScroll();
             GUI.BeginGroup(view);
             GUI.BeginGroup(new Rect(0, -s.Offset, view.width, Mathf.Max(contentHeight, view.height)));
         }
@@ -559,6 +564,7 @@ namespace FreeVelo.UI
         {
             GUI.EndGroup();
             GUI.EndGroup();
+            UiCheck.LeaveScroll();
 
             // Scroll indicator
             if (contentHeight > view.height && Scrolls.TryGetValue(key, out var s))
@@ -579,6 +585,7 @@ namespace FreeVelo.UI
 
         public static void DrawToast(float screenW, float screenH)
         {
+            UiCheck.Modal();
             if (string.IsNullOrEmpty(_toast) || Time.realtimeSinceStartup > _toastUntil) return;
             float a = Mathf.Clamp01((_toastUntil - Time.realtimeSinceStartup) / 0.4f);
             var style = Theme.With(Theme.Body, anchor: TextAnchor.MiddleCenter);

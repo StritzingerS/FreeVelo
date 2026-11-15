@@ -72,8 +72,11 @@ namespace FreeVelo.UI
         {
             var c = _ride.ActiveClimb;
             if (c == null) return;
-            // Left side (the right side has the junction card, or the workout card).
-            var card = new Rect(24, _leftTop, 320, 204);
+            // In a group ride without a workout the right side is free (no junction card, no workout card) and the
+            // left has the rider list; otherwise the timer takes the next place in the left column.
+            var card = new Rect(_w - 344, _sideTop, 320, 204);
+            bool right = _ride.IsGroupRide && _ride.Engine == null;
+            if (!right && !TakeLeft(320, 204, out card)) return;
             Ui.Card(card, Theme.Alpha(Theme.Background, 0.88f));
             GUI.Label(new Rect(card.x + 22, card.y + 16, card.width - 44, 18), L.Get("climb").ToUpperInvariant(), Theme.With(Theme.Overline, Theme.Accent));
             GUI.Label(new Rect(card.x + 22, card.y + 34, card.width - 44, 28), c.Name, Clip(Theme.With(Theme.H3, size: 20)));

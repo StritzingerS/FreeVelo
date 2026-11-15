@@ -75,8 +75,9 @@ namespace FreeVelo.UI
             double ahead = junction.DistanceM - _ride.DistanceM;
             if (ahead > 400 || ahead < 0) return;
 
-            var card = workout ? new Rect(24, _leftTop, 320, 0) : new Rect(_w - 344, _sideTop, 320, 0);
-            card.height = 64 + (junction.Options.Count * 62);
+            float cardH = 64 + (junction.Options.Count * 62);
+            var card = new Rect(_w - 344, _sideTop, 320, cardH);
+            if (workout && !TakeLeft(320, cardH, out card)) return; // in workouts the right side has the workout card
             Ui.Card(card, Theme.Alpha(Theme.Background, 0.9f));
             GUI.Label(new Rect(card.x + 20, card.y + 14, card.width - 40, 20), L.Get("junction").ToUpperInvariant(), Theme.Overline);
             GUI.Label(new Rect(card.x + 20, card.y + 30, card.width - 40, 28), $"{L.Get("in")} {ahead:0} m", Theme.With(Theme.H3, size: 20));

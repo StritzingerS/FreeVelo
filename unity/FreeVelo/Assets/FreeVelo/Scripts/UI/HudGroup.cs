@@ -396,12 +396,25 @@ namespace FreeVelo.UI
                 }
             }
 
-            // Rider list (left): who is where, relative to me.
-            var panel = new Rect(24, _leftTop, 300, 44 + (Mathf.Min(riders.Count, 8) * 38));
+            // Status: connecting, or towed at the back (a chip under the list).
+            string status = !_group.IsConnected ? L.Get("connecting")
+                : hasMe && (me.Flags & RiderFlags.Towed) != 0 && _group.Mode == LobbyMode.KeepTogether ? L.Get("towed")
+                : null;
+
+            // Rider list (left): who is where, relative to me. It takes the room that is left in the column: up to 8
+            // riders, fewer when a climb timer or junction card is above it – then those around me.
+            float statusH = status != null ? 44 : 0;
+            int rows = Mathf.Clamp(Mathf.FloorToInt((_leftBottom - _leftY - 44 - statusH) / 38f), 1, Mathf.Min(riders.Count, 8));
+            rows = Mathf.Max(1, Mathf.Min(rows, riders.Count));
+            var ordered = riders.OrderByDescending(r => r.DistanceM).ToList();
+            int mine = Mathf.Max(0, ordered.FindIndex(r => r.IsMe));
+            int first = Mathf.Clamp(mine - (rows / 2), 0, Mathf.Max(0, ordered.Count - rows));
+            var panel = new Rect(24, _leftY, 300, 44 + (rows * 38));
+            _leftY += panel.height + statusH + 12;
             Ui.Card(panel, Theme.Alpha(Theme.Background, 0.85f));
             GUI.Label(new Rect(panel.x + 16, panel.y + 12, panel.width - 32, 20), (_group.Lobby?.name ?? L.Get("group")).ToUpperInvariant(), Clip(Theme.Overline));
             float y = panel.y + 40;
-            foreach (var r in riders.OrderByDescending(r => r.DistanceM).Take(8))
+            foreach (var r in ordered.Skip(first).Take(rows))
             {
                 var row = new Rect(panel.x + 12, y, panel.width - 24, 34);
                 if (r.IsMe) Ui.Rect(row, Theme.Alpha(Theme.Accent, 0.15f), 8);
@@ -417,10 +430,6 @@ namespace FreeVelo.UI
                 y += 38;
             }
 
-            // Status: connecting, or towed at the back.
-            string status = !_group.IsConnected ? L.Get("connecting")
-                : hasMe && (me.Flags & RiderFlags.Towed) != 0 && _group.Mode == LobbyMode.KeepTogether ? L.Get("towed")
-                : null;
             if (status != null)
             {
                 var style = Theme.With(Theme.Caption, Theme.Background, 15, TextAnchor.MiddleCenter);
