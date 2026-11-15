@@ -22,7 +22,7 @@ judgement, not measurements. Verify prices and licence terms again before spendi
 
 | Topic | Decision |
 |---|---|
-| Art direction | **Stylised realism** (recommended, awaiting the owner's final yes): realistic proportions and real PBR textures (wood, plaster, shingles, asphalt, grass), bevelled geometry, detail simplified in a controlled way. Not photoreal, not flat-shaded low-poly. |
+| Art direction | **Stylised realism** (agreed by the owner on 15 November 2026): realistic proportions and real PBR textures (wood, plaster, shingles, asphalt, grass), bevelled geometry, detail simplified in a controlled way. Not photoreal, not flat-shaded low-poly. |
 | Terrain and roads | Stay procedural, generated from the road data. They get matching textures, shading and edge details. |
 | Road data | Frozen "world contract": never changed by graphics work. |
 | Experience-based plans | Not related to graphics; decided separately to leave the training plans as they are. |
@@ -266,6 +266,16 @@ Thermals are the real limit: use about 60 % of the frame time so the phone holds
 
 ## 8. Order of work
 
+Progress:
+- **Safety net, done (15 November 2026):** `WorldContractTests` pins the road data (hash of every road point to a
+  decimetre, node names), every built-in route's length, ascent and climbs, the terrain fingerprint with its
+  `FormatVersion`, and the ways on at every junction. `LandscapeTests.NothingFloats` checks every placed object's
+  feet against the drawn ground. It found one real problem: **fence pieces are rigid, so on slopes one end floats**
+  (737 pasture and 421 garden pieces over 10 cm, up to 1.08 m); `FencesFollowTheGround` is skipped until
+  terrain-following fences are built. Still open from section 7: the server/client contract version, the scenery
+  layout hash, and a play-mode check in Unity.
+
+
 1. **Safety net:** the golden tests (section 7) and the "nothing floats" invariant suite with audit renders
    (section 4).
 2. **Vertical slice of Lärchwald:** one textured house, one tree type, ground and road materials, lighting, the
@@ -303,7 +313,6 @@ Still only measurable on the phone: frame rate, heat and battery.
 
 ## 10. Open questions
 
-- Final yes to stylised realism.
 - Which AI generator (Meshy or Tripo), and an API key through the secure credential form.
 - Houses: upgraded C# generator or Blender-scripted models (decide with the test house).
 - Whether the Remote Control folder sharing works on the owner's PC.

@@ -151,6 +151,60 @@ public class LandscapeTests
         }
     }
 
+    /// <summary>Points under an object's base, in its own frame (x across, z towards its front).</summary>
+    private static (double X, double Z)[] Feet(SceneryItem i) => i.Kind switch
+    {
+        SceneryKind.GardenFence => new[] { (-1.5, 0.0), (1.5, 0.0) },
+        SceneryKind.Fence => new[] { (-2.0, 0.0), (2.0, 0.0) },
+        SceneryKind.Bench => new[] { (-0.75, 0.0), (0.75, 0.0) },
+        SceneryKind.BeerTable => new[] { (-0.6, -0.4), (0.6, -0.4), (-0.6, 0.4), (0.6, 0.4) },
+        _ when IsBuildingKind(i.Kind) => Ring(SceneryModels.Radius(i.Kind) * 0.6),
+        _ => new[] { (0.0, 0.0) }, // trees, rocks, signs, small things: at their foot
+    };
+
+    private static bool IsBuildingKind(SceneryKind k) => k is SceneryKind.AlpineHouse or SceneryKind.Farmhouse or SceneryKind.Church
+        or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.HayHut or SceneryKind.AlpineHut or SceneryKind.Shrine
+        or SceneryKind.Workshop or SceneryKind.Sawmill or SceneryKind.FireStation;
+
+    private static (double X, double Z)[] Ring(double r) =>
+        new[] { (0.0, 0.0) }.Concat(Enumerable.Range(0, 8).Select(k => (Math.Cos(k * Math.PI / 4) * r, Math.Sin(k * Math.PI / 4) * r))).ToArray();
+
+    /// <summary>The highest any foot of the object is above the ground the app draws (positive = a gap).</summary>
+    private static double WorstGap(Terrain terrain, SceneryItem i)
+    {
+        double r = i.RotationDeg * Math.PI / 180, worst = double.MinValue;
+        foreach (var (u, v) in Feet(i))
+        {
+            double x = i.X + (u * Math.Cos(r)) + (v * Math.Sin(r)), z = i.Z - (u * Math.Sin(r)) + (v * Math.Cos(r));
+            worst = Math.Max(worst, i.Y - terrain.DrawnHeight(x, z));
+        }
+
+        return worst;
+    }
+
+    [Fact]
+    public void NothingFloats()
+    {
+        // One rule for everything placed (except fences, below): no foot more than 10 cm above the ground the app
+        // draws (buildings: 0.5 m of their base). Flat plates are checked in YardsAndPathsDoNotFloat, building floors in BuildingsStandOnLevelGround.
+        var terrain = Terrain.Build(WorldMap.Default);
+        var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
+        var floating = l.Items.Where(i => i.Kind is not (SceneryKind.Fence or SceneryKind.GardenFence or SceneryKind.Yard or SceneryKind.PathStone or SceneryKind.Lane))
+            // Buildings stand on a stone base that reaches 2.3 m down: up to half a metre of it may show.
+            .Select(i => (Item: i, Gap: WorstGap(terrain, i))).Where(x => x.Gap > (IsBuildingKind(x.Item.Kind) ? 0.5 : 0.10)).ToList();
+        Assert.True(floating.Count == 0, string.Join("\n", floating.Take(10).Select(x => $"{x.Item.Kind} at ({x.Item.X:0},{x.Item.Z:0}) floats {x.Gap:0.00} m")));
+    }
+
+    [Fact(Skip = "Known: fence pieces are rigid, so on slopes one end floats (737 pasture and 421 garden pieces over 10 cm, up to 1.08 m). Terrain-following fences come with the graphics overhaul (docs/GRAPHICS_OVERHAUL.md, section 4).")]
+    public void FencesFollowTheGround()
+    {
+        var terrain = Terrain.Build(WorldMap.Default);
+        var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
+        var floating = l.Items.Where(i => i.Kind is SceneryKind.Fence or SceneryKind.GardenFence)
+            .Select(i => (Item: i, Gap: WorstGap(terrain, i))).Where(x => x.Gap > 0.10).ToList();
+        Assert.True(floating.Count == 0, $"{floating.Count} fence pieces float, worst {floating.Max(x => x.Gap):0.00} m");
+    }
+
     [Fact]
     public void TheMaypoleOnlyStandsInMay()
     {
