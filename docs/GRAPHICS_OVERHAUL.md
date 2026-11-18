@@ -96,6 +96,16 @@ shows. This must not happen again.
    including behind, before reporting a model as done.
 6. **Time box:** if a check fails after clean-up, one look at the cause; if it is the model, regenerate - never
    iterate on geometry rules.
+7. **Prompts that do not invite extras** (research 18 Nov; Tripo's blog guides block automated reading, so this
+   rests on Tripo's API docs and a third-party guide, docs.3daistudio.com/3d-generation/prompt-tips): 5-20 words,
+   "object + key features + material/style + constraints", one object, no scene; add "one solid piece, single
+   connected mesh, closed walls". The house prompt that produced the funnels had about 90 words listing ten
+   features - too long. Negative prompts are not a reliable way to remove parts.
+8. **Buildings and hero objects: check in 2D before 3D** (Tripo API): reference image -> `image-to-multiview`
+   (four view images: front, left, back, right) -> owner and Claude look at the four views; unwanted elements are
+   removed with `edit-multiview` (`prompts: [{"prompt": "...", "view": "left"}]`) -> `multiview-to-model` with
+   `inputs: [{"task_id": "<multiview task>"}]`. Unwanted parts are then caught before the 3D model exists. To verify
+   on first use: the cost of the multiview steps and how reliably edit-multiview removes elements.
 
 **Fewer models:** one model per kind; variety from the random size and rotation every item already has and from
 material variants (plaster white or cream, tiles or shingles, needle shades); similar species share a model; kinds
