@@ -21,6 +21,13 @@ namespace FreeVelo.World
             mesh.SetVertices(_vertices);
             mesh.SetTriangles(_triangles, 0);
             mesh.RecalculateNormals();
+
+            // Planar texture coordinates (2 m per repeat) and tangents, for textured, normal-mapped materials.
+            var normals = mesh.normals;
+            var uvs = new Vector2[_vertices.Count];
+            for (int i = 0; i < uvs.Length; i++) uvs[i] = SurfaceTextures.UV(_vertices[i], normals[i], 2f);
+            mesh.SetUVs(0, uvs);
+            mesh.RecalculateTangents();
             mesh.RecalculateBounds();
             return mesh;
         }

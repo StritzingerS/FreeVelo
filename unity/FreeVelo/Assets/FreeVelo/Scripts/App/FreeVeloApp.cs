@@ -25,6 +25,13 @@ namespace FreeVelo.App
         private float _lean;
         private float _orbit;
 
+        /// <summary>
+        /// Static state survives between play sessions when "Enter Play Mode Options" skips the domain reload; reset it
+        /// at each start (before the render-shot tooling sets it again in AfterSceneLoad).
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics() => CameraOverride = null;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
         {
@@ -193,6 +200,23 @@ namespace FreeVelo.App
             RenderSettings.fogColor = new Color(0.73f, 0.8f, 0.87f);
             RenderSettings.fogStartDistance = 250f;
             RenderSettings.fogEndDistance = 9000f; // hazy, but the mountain stays visible from the home world
+
+            // Tone curve (graphics overhaul): neutral tonemapping keeps bright plaster and sky from clipping, a little
+            // exposure and contrast give the textured surfaces depth. Cheap on phones (one colour LUT).
+            if (GameObject.Find("FreeVeloLook") == null)
+            {
+                var look = new GameObject("FreeVeloLook").AddComponent<UnityEngine.Rendering.Volume>();
+                look.isGlobal = true;
+                look.priority = 10;
+                var profile = ScriptableObject.CreateInstance<UnityEngine.Rendering.VolumeProfile>();
+                var tonemap = profile.Add<UnityEngine.Rendering.Universal.Tonemapping>(true);
+                tonemap.mode.Override(UnityEngine.Rendering.Universal.TonemappingMode.Neutral);
+                var colour = profile.Add<UnityEngine.Rendering.Universal.ColorAdjustments>(true);
+                colour.postExposure.Override(0.25f);
+                colour.contrast.Override(8f);
+                colour.saturation.Override(6f);
+                look.sharedProfile = profile;
+            }
         }
 
         /// <summary>The world prepared at build time, else the one saved on the phone; null if neither fits the map.</summary>

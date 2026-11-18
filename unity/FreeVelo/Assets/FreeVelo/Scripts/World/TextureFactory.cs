@@ -108,7 +108,34 @@ namespace FreeVelo.World
 
             texture.SetPixels32(pixels);
             texture.Apply(true, true);
+            var heights = new float[size * size];
+            for (int i = 0; i < heights.Length; i++) heights[i] = ((pixels[i].r * 0.3f) + (pixels[i].g * 0.59f) + (pixels[i].b * 0.11f)) / 255f;
+            Heights[texture] = (heights, size);
             return texture;
+        }
+
+        /// <summary>No domain reload between play sessions: drop the old textures' data (Unity has destroyed them).</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            Heights.Clear();
+            Normals.Clear();
+        }
+
+        private static readonly System.Collections.Generic.Dictionary<Texture2D, (float[] Heights, int Size)> Heights = new System.Collections.Generic.Dictionary<Texture2D, (float[], int)>();
+        private static readonly System.Collections.Generic.Dictionary<(Texture2D, float), Texture2D> Normals = new System.Collections.Generic.Dictionary<(Texture2D, float), Texture2D>();
+
+        /// <summary>A normal map for a texture made here, treating its brightness as height (dark = low: cracks, gaps).</summary>
+        public static Texture2D NormalOf(Texture2D texture, float strength)
+        {
+            if (texture == null || !Heights.TryGetValue(texture, out var h)) return null;
+            if (!Normals.TryGetValue((texture, strength), out var normal))
+            {
+                normal = SurfaceTextures.NormalMap(texture.name + "Normal", h.Heights, h.Size, strength);
+                Normals[(texture, strength)] = normal;
+            }
+
+            return normal;
         }
 
         /// <summary>Fractal noise that tiles seamlessly on the unit square (0 … 1).</summary>

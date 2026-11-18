@@ -59,6 +59,9 @@ namespace FreeVelo.App
             go.AddComponent<ShotRunner>();
         }
 
+        /// <summary>An interrupted run (play mode stopped mid-shot) must not leave the camera pinned.</summary>
+        private void OnDestroy() => FreeVeloApp.CameraOverride = null;
+
         private IEnumerator Start()
         {
             var result = new Result { unityVersion = Application.unityVersion, graphicsDevice = SystemInfo.graphicsDeviceName + " / " + SystemInfo.graphicsDeviceType };

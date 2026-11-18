@@ -68,8 +68,11 @@ namespace FreeVelo.UI
         public static void Track(Rect r, Kind kind)
         {
             if (!Active || Event.current.type != EventType.Repaint || _scrollDepth > 0 || r.width <= 0 || r.height <= 0) return;
-            // Screen pixels, so groups and the UI scaling do not matter.
-            Regions.Add(new Region { Rect = GUIUtility.GUIToScreenRect(r), Kind = kind, Layer = _layer });
+            // Screen pixels, so groups and the UI scaling do not matter. Both corners are transformed: GUIToScreenRect
+            // moves the position but keeps the size unscaled, so with a UI scale below 1 neighbours seemed to overlap.
+            var min = GUIUtility.GUIToScreenPoint(r.min);
+            var max = GUIUtility.GUIToScreenPoint(r.max);
+            Regions.Add(new Region { Rect = Rect.MinMaxRect(min.x, min.y, max.x, max.y), Kind = kind, Layer = _layer });
         }
 
         /// <summary>End of the pass: checks, logs new problems and outlines the colliding rectangles.</summary>

@@ -26,7 +26,8 @@ namespace FreeVelo.World
         /// <summary>Chunks closer than this (centre) are drawn item by item; must exceed DetailRadius + half a chunk diagonal.</summary>
         private const float NearChunkRadius = 380f;
 
-        private readonly Dictionary<(Color, Texture), Material> _materials = new Dictionary<(Color, Texture), Material>();
+        private readonly Dictionary<(Color, Texture, Texture), Material> _materials = new Dictionary<(Color, Texture, Texture), Material>();
+        private Material _templateNormal;
         private readonly Dictionary<(SceneryKind, int, int), (Mesh Mesh, Material[] Materials)> _models = new Dictionary<(SceneryKind, int, int), (Mesh, Material[])>();
         private readonly List<SceneryChunkData> _chunks = new List<SceneryChunkData>();
         private readonly Dictionary<(SceneryKind, int, int), List<Matrix4x4>> _instances = new Dictionary<(SceneryKind, int, int), List<Matrix4x4>>();
@@ -85,6 +86,7 @@ namespace FreeVelo.World
             BuildMountains();
             BuildMountain(far);
             Step("mountain");
+            times.Append($" (surface textures {SurfaceTextures.GenerateMs})");
             BuildTimes = times.ToString();
             Debug.Log(BuildTimes);
         }
@@ -100,17 +102,24 @@ namespace FreeVelo.World
         /// <summary>Material based on the URP Lit material in Resources (keeps the shader in builds).</summary>
         public Material Mat(Color color) => Mat(color, null, 0.15f);
 
-        public Material Mat(Color color, Texture texture, float smoothness)
+        public Material Mat(Color color, Texture texture, float smoothness) => Mat(color, texture, smoothness, null);
+
+        /// <summary>
+        /// With <paramref name="normal"/>: a normal-mapped material (the mesh needs UVs and tangents). Its template in
+        /// Resources carries the _NORMALMAP keyword so the shader variant is kept in builds.
+        /// </summary>
+        public Material Mat(Color color, Texture texture, float smoothness, Texture normal, float bumpScale = 1f)
         {
-            var key = (color, texture);
+            var key = (color, texture, normal);
             if (_materials.TryGetValue(key, out var m)) return m;
             if (_template == null)
             {
                 _template = Resources.Load<Material>("FreeVeloLit");
                 if (_template == null) _template = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+                _templateNormal = Resources.Load<Material>("FreeVeloLitNormal") ?? _template;
             }
 
-            m = new Material(_template) { color = color, enableInstancing = true };
+            m = new Material(normal != null ? _templateNormal : _template) { color = color, enableInstancing = true };
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
             if (texture != null)
             {
@@ -118,15 +127,27 @@ namespace FreeVelo.World
                 if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", texture);
             }
 
+            if (normal != null && m.HasProperty("_BumpMap"))
+            {
+                m.SetTexture("_BumpMap", normal);
+                m.SetFloat("_BumpScale", bumpScale);
+                m.EnableKeyword("_NORMALMAP");
+            }
+
             if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smoothness);
             _materials[key] = m;
             return m;
         }
 
+        /// <summary>A model surface: its colour, tinted detail texture and normal map (<see cref="SurfaceTextures"/>).</summary>
         private Material Mat(WorldMaterial material)
         {
             var (c, smoothness) = WorldMaterials.All[material];
-            return Mat(new Color(c.X, c.Y, c.Z), null, smoothness);
+            var set = SurfaceTextures.Get(SurfaceTextures.Of(material));
+            var color = new Color(c.X, c.Y, c.Z);
+            return set == null
+                ? Mat(color, null, smoothness)
+                : Mat(set.Tint(color), set.Albedo, smoothness, set.Normal, set.BumpScale);
         }
 
         // ------------------------------------------------------------------ terrain
@@ -134,8 +155,9 @@ namespace FreeVelo.World
         /// <summary>Terrain chunks of 128 m: full 4 m grid close by, every 4th point far away; skirts hide LOD cracks.</summary>
         private void BuildTerrain()
         {
-            var grass = Mat(Color.white, TextureFactory.Grass(), 0f);
-            int cx = (_terrain.Nx - 1 + TerrainChunkCells - 1) / TerrainChunkCells;
+            var grassTexture = TextureFactory.Grass();
+            var grass = Mat(Color.white, grassTexture, 0f, TextureFactory.NormalOf(grassTexture, 6f));
+            int cx =(_terrain.Nx - 1 + TerrainChunkCells - 1) / TerrainChunkCells;
             int cz = (_terrain.Nz - 1 + TerrainChunkCells - 1) / TerrainChunkCells;
             for (int j = 0; j < cz; j++)
             {
@@ -201,6 +223,7 @@ namespace FreeVelo.World
             mesh.SetNormals(normals);
             mesh.SetUVs(0, uvs);
             mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateTangents();
             mesh.RecalculateBounds();
             return mesh;
         }
@@ -218,9 +241,12 @@ namespace FreeVelo.World
 
         private void BuildRoads()
         {
-            var asphalt = Mat(Color.white, TextureFactory.Asphalt(), 0.12f);
-            var gravelRoad = Mat(Color.white, TextureFactory.GravelRoad(), 0.05f);
-            var gravel = Mat(Color.white, TextureFactory.Gravel(), 0.05f);
+            var asphaltTexture = TextureFactory.Asphalt();
+            var gravelRoadTexture = TextureFactory.GravelRoad();
+            var gravelTexture = TextureFactory.Gravel();
+            var asphalt = Mat(Color.white, asphaltTexture, 0.12f, TextureFactory.NormalOf(asphaltTexture, 5f));
+            var gravelRoad = Mat(Color.white, gravelRoadTexture, 0.05f, TextureFactory.NormalOf(gravelRoadTexture, 6f));
+            var gravel = Mat(Color.white, gravelTexture, 0.05f, TextureFactory.NormalOf(gravelTexture, 6f));
             var paint = Mat(new Color(0.92f, 0.92f, 0.88f), null, 0.3f);
             var road = new Strips();
             var dirt = new Strips();
@@ -631,21 +657,25 @@ namespace FreeVelo.World
         private MeshRenderer BuildSceneryChunkMesh(Transform parent, List<SceneryItem> items)
         {
             // One mesh per chunk, one submesh per material.
-            var parts = new Dictionary<WorldMaterial, (List<Vector3> V, List<Vector3> N, List<int> T)>();
+            var parts = new Dictionary<WorldMaterial, (List<Vector3> V, List<Vector3> N, List<Vector2> UV, List<int> T)>();
             foreach (var item in items)
             {
                 var model = SceneryModels.Get(item.Kind, item.Variant);
                 var m = ItemMatrix(item);
                 foreach (var pair in model.Lod1)
                 {
-                    if (!parts.TryGetValue(pair.Key, out var p)) parts[pair.Key] = p = (new List<Vector3>(), new List<Vector3>(), new List<int>());
+                    if (!parts.TryGetValue(pair.Key, out var p)) parts[pair.Key] = p = (new List<Vector3>(), new List<Vector3>(), new List<Vector2>(), new List<int>());
                     int offset = p.V.Count;
                     var normals = Normals(pair.Key, pair.Value);
+                    float tile = SurfaceTextures.TileM(pair.Key);
                     for (int i = 0; i < pair.Value.Vertices.Count; i++)
                     {
                         var v = pair.Value.Vertices[i];
-                        p.V.Add(m.MultiplyPoint3x4(new Vector3(v.X, v.Y, v.Z)));
-                        p.N.Add(m.MultiplyVector(new Vector3(normals[i].X, normals[i].Y, normals[i].Z)).normalized);
+                        var local = new Vector3(v.X, v.Y, v.Z);
+                        var normal = new Vector3(normals[i].X, normals[i].Y, normals[i].Z);
+                        p.V.Add(m.MultiplyPoint3x4(local));
+                        p.N.Add(m.MultiplyVector(normal).normalized);
+                        p.UV.Add(SurfaceTextures.UV(local, normal, tile)); // in model space, as in the near models
                     }
 
                     foreach (int t in pair.Value.Triangles) p.T.Add(t + offset);
@@ -656,6 +686,7 @@ namespace FreeVelo.World
             var mesh = new Mesh { name = "Scenery", indexFormat = IndexFormat.UInt32 };
             var vertices = new List<Vector3>();
             var allNormals = new List<Vector3>();
+            var allUvs = new List<Vector2>();
             var materials = new List<Material>();
             var submeshes = new List<List<int>>();
             foreach (var pair in parts)
@@ -663,6 +694,7 @@ namespace FreeVelo.World
                 int offset = vertices.Count;
                 vertices.AddRange(pair.Value.V);
                 allNormals.AddRange(pair.Value.N);
+                allUvs.AddRange(pair.Value.UV);
                 var tris = new List<int>(pair.Value.T.Count);
                 foreach (int t in pair.Value.T) tris.Add(t + offset);
                 submeshes.Add(tris);
@@ -671,8 +703,10 @@ namespace FreeVelo.World
 
             mesh.SetVertices(vertices);
             mesh.SetNormals(allNormals);
+            mesh.SetUVs(0, allUvs);
             mesh.subMeshCount = submeshes.Count;
             for (int s = 0; s < submeshes.Count; s++) mesh.SetTriangles(submeshes[s], s);
+            mesh.RecalculateTangents();
             mesh.RecalculateBounds();
 
             var go = new GameObject("Scenery");
@@ -708,8 +742,14 @@ namespace FreeVelo.World
                     if (!near) continue;
                     foreach (var item in chunk.Items)
                     {
-                        float dx = item.X - eye.x, dz = item.Z - eye.z;
-                        int lod = (dx * dx) + (dz * dz) < DetailRadius * DetailRadius ? 0 : 1;
+                        float dx = item.X - eye.x, dz = item.Z - eye.z, d2 = (dx * dx) + (dz * dz);
+                        // Close: the Blender model where there is one (small props all the way to DetailRadius, big ones
+                        // like houses only within BakedRadius); otherwise the coded model; beyond, low detail.
+                        var baked = BakedModels.Get(item.Kind, item.Variant);
+                        float bakedRange = BakedModels.Triangles(baked) <= SmallBakedTriangles ? DetailRadius : BakedRadius;
+                        int lod = d2 >= DetailRadius * DetailRadius ? 1
+                            : baked != null && d2 < bakedRange * bakedRange ? 0
+                            : 2;
                         var key = (item.Kind, item.Variant, lod);
                         if (!_instances.TryGetValue(key, out var list)) _instances[key] = list = new List<Matrix4x4>();
                         list.Add(ItemMatrix(item));
@@ -722,7 +762,7 @@ namespace FreeVelo.World
                 if (pair.Value.Count == 0) continue;
                 var (mesh, materials) = Model(pair.Key.Item1, pair.Key.Item2, pair.Key.Item3);
                 if (mesh == null) continue;
-                var shadows = pair.Key.Item3 == 0 ? ShadowCastingMode.On : ShadowCastingMode.Off;
+                var shadows = pair.Key.Item3 != 1 ? ShadowCastingMode.On : ShadowCastingMode.Off;
                 for (int start = 0; start < pair.Value.Count; start += _batch.Length)
                 {
                     int count = Mathf.Min(_batch.Length, pair.Value.Count - start);
@@ -735,13 +775,51 @@ namespace FreeVelo.World
         private static Matrix4x4 ItemMatrix(SceneryItem item) =>
             Matrix4x4.TRS(new Vector3(item.X, item.Y, item.Z), Quaternion.Euler(0, item.RotationDeg, 0), Vector3.one * item.Scale);
 
+        /// <summary>Close range of the Blender-built models (<see cref="BakedModels"/>); the coded model takes over beyond.</summary>
+        private const float BakedRadius = 70f;
+
+        /// <summary>
+        /// Baked models up to this size are cheap enough to be shown all the way to <see cref="DetailRadius"/> (no jump to
+        /// a differently shaped coded model at <see cref="BakedRadius"/>).
+        /// </summary>
+        private const int SmallBakedTriangles = 4000;
+
+        /// <summary>
+        /// The instanced mesh of a model: <paramref name="lod"/> 0 = the Blender-built model, 2 = the coded near model,
+        /// 1 = the coded far model.
+        /// </summary>
         private (Mesh Mesh, Material[] Materials) Model(SceneryKind kind, int variant, int lod)
         {
             var key = (kind, variant, lod);
             if (_models.TryGetValue(key, out var cached)) return cached;
-            var model = SceneryModels.Get(kind, variant);
-            var parts = lod == 0 ? model.Lod0 : model.Lod1;
-            if (parts.Count == 0)
+
+            // Collect (material, positions, normals, triangles) from the baked or the coded model.
+            var source = new List<(WorldMaterial Material, Vector3[] Positions, Vector3[] Normals, int[] Triangles)>();
+            var baked = lod == 0 ? BakedModels.Get(kind, variant) : null;
+            if (baked != null)
+            {
+                foreach (var part in baked) source.Add((part.Material, part.Positions, part.Normals, part.Triangles));
+            }
+            else
+            {
+                var model = SceneryModels.Get(kind, variant);
+                foreach (var pair in lod == 1 ? model.Lod1 : model.Lod0)
+                {
+                    var n = Normals(pair.Key, pair.Value);
+                    var positions = new Vector3[pair.Value.Vertices.Count];
+                    var normalsOut = new Vector3[positions.Length];
+                    for (int i = 0; i < positions.Length; i++)
+                    {
+                        var v = pair.Value.Vertices[i];
+                        positions[i] = new Vector3(v.X, v.Y, v.Z);
+                        normalsOut[i] = new Vector3(n[i].X, n[i].Y, n[i].Z);
+                    }
+
+                    source.Add((pair.Key, positions, normalsOut, pair.Value.Triangles.ToArray()));
+                }
+            }
+
+            if (source.Count == 0)
             {
                 _models[key] = (null, null);
                 return (null, null);
@@ -749,30 +827,33 @@ namespace FreeVelo.World
 
             var vertices = new List<Vector3>();
             var normals = new List<Vector3>();
+            var uvs = new List<Vector2>();
             var materials = new List<Material>();
             var submeshes = new List<List<int>>();
-            foreach (var pair in parts)
+            foreach (var part in source)
             {
                 int offset = vertices.Count;
-                var n = Normals(pair.Key, pair.Value);
-                for (int i = 0; i < pair.Value.Vertices.Count; i++)
+                float tile = SurfaceTextures.TileM(part.Material);
+                for (int i = 0; i < part.Positions.Length; i++)
                 {
-                    var v = pair.Value.Vertices[i];
-                    vertices.Add(new Vector3(v.X, v.Y, v.Z));
-                    normals.Add(new Vector3(n[i].X, n[i].Y, n[i].Z));
+                    vertices.Add(part.Positions[i]);
+                    normals.Add(part.Normals[i]);
+                    uvs.Add(SurfaceTextures.UV(part.Positions[i], part.Normals[i], tile));
                 }
 
-                var tris = new List<int>();
-                foreach (int t in pair.Value.Triangles) tris.Add(t + offset);
+                var tris = new List<int>(part.Triangles.Length);
+                foreach (int t in part.Triangles) tris.Add(t + offset);
                 submeshes.Add(tris);
-                materials.Add(Mat(pair.Key));
+                materials.Add(Mat(part.Material));
             }
 
             var mesh = new Mesh { name = $"{kind} {variant} LOD{lod}", indexFormat = vertices.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16 };
             mesh.SetVertices(vertices);
             mesh.SetNormals(normals);
+            mesh.SetUVs(0, uvs);
             mesh.subMeshCount = submeshes.Count;
             for (int s = 0; s < submeshes.Count; s++) mesh.SetTriangles(submeshes[s], s);
+            mesh.RecalculateTangents();
             mesh.RecalculateBounds();
             var result = (mesh, materials.ToArray());
             _models[key] = result;
@@ -967,6 +1048,7 @@ namespace FreeVelo.World
                 mesh.SetUVs(0, _uv);
                 mesh.SetTriangles(_t, 0);
                 mesh.RecalculateNormals();
+                mesh.RecalculateTangents();
                 mesh.RecalculateBounds();
                 return mesh;
             }

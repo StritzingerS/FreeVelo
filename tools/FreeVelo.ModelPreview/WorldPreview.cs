@@ -464,6 +464,11 @@ public static class WorldPreview
         if (Nearest(SceneryKind.Inn) is SceneryItem inn) Building("inn_close", inn);
         if (Nearest(SceneryKind.Church) is SceneryItem church) Building("church", church, 45, 16);
         if (Nearest(SceneryKind.Farmhouse) is SceneryItem farm) Building("farm", farm, 40, 14);
+        if (Nearest(SceneryKind.Shrine) is SceneryItem shrine)
+        {
+            Building("shrine", shrine, 7, 1.2f);
+            Building("shrine_far", shrine, 60, 4);
+        }
 
         File.WriteAllText(output, "{\n  \"width\": 1280,\n  \"height\": 720,\n  \"shots\": [\n" + string.Join(",\n", shots) + "\n  ]\n}\n");
         Console.WriteLine($"{shots.Count} shots -> {output}");
