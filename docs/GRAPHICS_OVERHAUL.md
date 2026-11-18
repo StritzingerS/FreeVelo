@@ -71,6 +71,32 @@ FreeVelo materials and the shared CC0 textures instead of Tripo's 2048 px maps, 
 `docs/THIRD_PARTY_ASSETS.md`. Lessons: leave `smart_low_poly` off (it gave a blank texture once); say what must not
 be there in the negative prompt (an unwanted crucifix came with the first shrine); Tripo's front faces +X.
 
+## 3b. Acceptance rules for generated models (decided 18 November 2026)
+
+Why: the approved house candidate B had funnel-like pieces at its back corners. Instead of regenerating it
+(20 credits), they were "repaired" in many rounds of guessed geometry rules (cutting, hole filling, turning faces);
+each round fixed a symptom and caused the next, cost far more in tokens than new candidates, and the result still
+shows. This must not happen again.
+
+1. **No geometry surgery.** Allowed clean-up: scale, turn, materials or Tripo's texture, the far version, deleting
+   whole detached loose parts. Not allowed: cutting off attached pieces, filling holes, turning faces round. A
+   candidate that would need that is rejected and regenerated.
+2. **Automatic check before approval:** `tools/blender/inspect_candidate.py <glb> <building|tree|prop> <limit>
+   <out.png>` on every candidate. It marks in red and lists: attachments sticking out of a building's walls
+   (compact pieces; a balcony along a wall does not count), loose floating parts, holes (open edges above the
+   ground; for trees only noted), inside-out faces (you would see through), triangles over the limit. Tested on
+   18 November: it marks exactly the two funnels of house B; house A had holes and 21 inside-out faces; the
+   shrine is clean.
+3. **Approval sheet:** the owner sees each candidate textured from four sides plus the grey view with the red
+   marks and the findings. Candidates with findings are shown as such, with the recommendation to reject them.
+4. **Better generation:** three candidates for buildings (60 credits) instead of two. Standard negative prompt for
+   buildings: "gutter, downpipe, drainpipe, lamp, light fixture, satellite dish, antenna, sign, attached objects,
+   floating parts, crucifix, religious figure, people, cars, fence, ground, grass".
+5. **After export:** `check_fvm.py` (back-face culled renders, open edges) and a render in Unity from all sides
+   including behind, before reporting a model as done.
+6. **Time box:** if a check fails after clean-up, one look at the cause; if it is the model, regenerate - never
+   iterate on geometry rules.
+
 **Fewer models:** one model per kind; variety from the random size and rotation every item already has and from
 material variants (plaster white or cream, tiles or shingles, needle shades); similar species share a model; kinds
 that are never placed are dropped. About 33 models instead of about 85:
