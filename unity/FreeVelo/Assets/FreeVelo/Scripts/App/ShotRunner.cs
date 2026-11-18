@@ -59,11 +59,23 @@ namespace FreeVelo.App
             go.AddComponent<ShotRunner>();
         }
 
+        /// <summary>The project's "Run in background" while a render run is going on (restored afterwards).</summary>
+        private bool _runInBackground;
+
         /// <summary>An interrupted run (play mode stopped mid-shot) must not leave the camera pinned.</summary>
-        private void OnDestroy() => FreeVeloApp.CameraOverride = null;
+        private void OnDestroy()
+        {
+            FreeVeloApp.CameraOverride = null;
+            Application.runInBackground = _runInBackground;
+        }
 
         private IEnumerator Start()
         {
+            // The project has "Run in background" off (right for the phone): in the editor that pauses or slows play
+            // mode whenever the window is not focused. Render runs happen without anyone at the editor, so keep
+            // running for the duration of the run only.
+            _runInBackground = Application.runInBackground;
+            Application.runInBackground = true;
             var result = new Result { unityVersion = Application.unityVersion, graphicsDevice = SystemInfo.graphicsDeviceName + " / " + SystemInfo.graphicsDeviceType };
             float started = Time.realtimeSinceStartup;
             Request request = null;

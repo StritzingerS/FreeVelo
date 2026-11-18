@@ -1,6 +1,7 @@
 # Graphics overhaul: research, decisions and plan
 
-Status: **planned, not started** (November 2026). This document keeps everything researched and decided about the
+Status: **vertical slice in progress** (since 15 November 2026; see section 3a for the model list and the rules
+decided on 18 November). This document keeps everything researched and decided about the
 new approach to 3D models, their integration into the map, animations, phone performance and the link to the game
 logic, so the work can be picked up later.
 
@@ -27,7 +28,8 @@ judgement, not measurements. Verify prices and licence terms again before spendi
 | Road data | Frozen "world contract": never changed by graphics work. |
 | Experience-based plans | Not related to graphics; decided separately to leave the training plans as they are. |
 | Checking the look | Renders come from the real Unity on the owner's PC (render-shot tooling, section 9), not from guesses. |
-| Budget | About $20–60 in total *(estimate)*, for one or two months of an AI model generator. Everything else is free. |
+| Models | **Generated with Tripo** (decided 18 November 2026, after comparing with Blender-scripted models: those "look like you made it"). Every model is shown to the owner for approval before it is built into the game. Blender stays the clean-up and export tool. See section 3a. |
+| Budget | About 2,000 Tripo credits (≈ $20) for the reduced list of section 3a; bought in steps. Everything else is free. |
 
 ### Why not photoreal
 
@@ -56,6 +58,43 @@ a paid plan (check the terms) can be committed.
 | Props (benches, signs, fences, log piles) | AI image-to-3D (Meshy or Tripo) or CC0 | $10–20 | small–medium |
 | Cars | CC0 or AI-generated generic cars, no real brands | $0–10 | small |
 | Rider and bike | Rigged CC0 or AI character; scripted bike | $0–20 | medium–large |
+
+(The table above is the research state; for models it is superseded by section 3a.)
+
+## 3a. Model list and rules (decided 18 November 2026)
+
+**Workflow:** generate candidates with Tripo (API key in the user environment variable `TRIPO_API_KEY`), show them
+with a textured render, triangle count and proportions, wait for the owner's approval, then clean up in Blender
+(`tools/blender/generated_*.py`: scale to the coded model's size so the placement does not change, front to +Z,
+FreeVelo materials and the shared CC0 textures instead of Tripo's 2048 px maps, a reduced far version) and export to
+`Resources/Models/{Kind}_{Variant}.bytes` (+ `_lod1`). Sources are kept in `tools/blender/sources/` and listed in
+`docs/THIRD_PARTY_ASSETS.md`. Lessons: leave `smart_low_poly` off (it gave a blank texture once); say what must not
+be there in the negative prompt (an unwanted crucifix came with the first shrine); Tripo's front faces +X.
+
+**Fewer models:** one model per kind; variety from the random size and rotation every item already has and from
+material variants (plaster white or cream, tiles or shingles, needle shades); similar species share a model; kinds
+that are never placed are dropped. About 33 models instead of about 85:
+
+| Group | Models |
+|---|---|
+| Nature (10) | Larch (approved 18 Nov), Spruce/Fir (fir darker), Stone pine, Mountain pine, Broadleaf (beech, maple, linden, alder by leaf colour), Willow, Apple, Bush, Rock × 2 |
+| Buildings (11) | Alpine house × 2 meshes (with material looks), Farmhouse, Inn, Shop, Church, Hay hut, Alpine hut, Workshop, Sawmill, Fire station, Shrine (done 18 Nov) |
+| Props (11) | Garden fence, Fence, Flower bed, Bench, Beer table, Log pile, Lumber stack, Car (paint by material), Maypole, Village sign, Direction sign (lettering stays in the app) |
+| Road furniture (3, later) | Guard rail, Kerb, Bridge railing |
+
+Dropped (never placed): Pine, Oak, Birch, Poplar, Reed, House, Barn, Lane. Yard and PathStone become ground surfaces
+(section 4). Placed most often in the home grid: larch 11,696, spruce 7,409, garden fence 1,900, fir 1,633,
+bush 987 (`ModelPreview -- --kinds`).
+
+**Triangle limits per model:** trees 3,000–4,000 close (within 70 m) and at most about 450 for 70–300 m; houses and
+other big buildings at most 5,000 (Tripo `face_limit` 5000); props at most 1,500; the garden fence at most about 200
+(placed 1,900 times). No per-model textures: shared texture set only.
+
+**Measured (18 Nov, `ModelPreview -- --budget`, home grid only):** with the coded models, scenery within 300 m costs
+1.4–2.6 million triangles per frame (the coded larch alone has 8,144 triangles); the phone budget is about 400,000 in
+total. With the approved larch the forest edge drops to 179,000; the village centre stays at 736,000 until the houses
+(Blender test house 15,860 triangles, to be replaced) and the garden fences are replaced. Section 6 (rendering
+path) remains necessary on top.
 
 Notes:
 - **AI generators:** good for props and single hero objects; weak for precise architecture (wobbly edges, melted

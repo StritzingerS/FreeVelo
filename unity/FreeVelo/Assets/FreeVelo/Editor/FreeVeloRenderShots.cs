@@ -9,6 +9,9 @@ namespace FreeVelo.EditorTools
     /// Render shots without anyone at the Game view: when RenderShots/request.json appears next to the Assets folder
     /// (and there is no done.json yet), the editor enters play mode, FreeVelo.App.ShotRunner renders the requested
     /// camera views to RenderShots/out/*.png and writes done.json, and the editor leaves play mode again.
+    /// Before rendering it refreshes the assets and waits for the scripts to compile, so changed files are picked up
+    /// without anyone clicking into the editor (Unity refreshes only on focus otherwise); an empty RenderShots/refresh
+    /// file does just the refresh. Neither happens in play mode.
     /// Works in the open editor (it polls once a second) and from the command line with the editor closed:
     ///   Unity -batchmode -projectPath unity/FreeVelo -executeMethod FreeVelo.EditorTools.FreeVeloRenderShots.RenderBatch
     /// (no -quit and no -nographics; the editor exits by itself when the shots are done).
@@ -74,11 +77,35 @@ namespace FreeVelo.EditorTools
                 return;
             }
 
+            // Without anyone at the editor: Unity only refreshes assets and recompiles scripts when its window gets the
+            // focus. So refresh here (outside play mode only), wait until compiling and importing are done, then render.
+            string refresh = Path.Combine(Folder, "refresh");
+            if (File.Exists(refresh))
+            {
+                File.Delete(refresh);
+                SessionState.SetBool(RefreshedKey, false);
+                AssetDatabase.Refresh();
+                _nextPoll = EditorApplication.timeSinceStartup + 2;
+                return;
+            }
+
             if (File.Exists(request) && !File.Exists(running))
             {
+                if (!SessionState.GetBool(RefreshedKey, false))
+                {
+                    SessionState.SetBool(RefreshedKey, true);
+                    AssetDatabase.Refresh();
+                    _nextPoll = EditorApplication.timeSinceStartup + 2; // compiling starts after the refresh
+                    return;
+                }
+
+                SessionState.SetBool(RefreshedKey, false);
                 File.WriteAllText(running, System.DateTime.Now.ToString("o"));
                 EditorApplication.EnterPlaymode();
             }
         }
+
+        /// <summary>Set once the assets were refreshed for the waiting request (survives the domain reload of a compile).</summary>
+        private const string RefreshedKey = "FreeVelo.RenderShots.Refreshed";
     }
 }

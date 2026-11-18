@@ -11,6 +11,7 @@ model is cleaned up by a script in `tools/blender/` and gets FreeVelo's own mate
 
 | File | Model | Prompt (short) | Cleaned up by | In the game |
 |---|---|---|---|---|
+| `larch_tripo.glb` | text-to-model v3.1-20260211, face limit 4,000, 18 November 2026 (candidate B of two, approved by the owner) | tall slim alpine larch, layered drooping clumps of light-green needles | `generated_tree.py` | `Resources/Models/Larch_{0,1,2}.bytes` + `_lod1` (17, 19.5, 22 m) |
 | `shrine_tripo.glb` | text-to-model v3.1-20260211, face limit 3,000, 18 November 2026 | Tyrolean wayside shrine (Marterl), whitewashed pillar, empty arched niche, shingle roof, no crucifix | `generated_shrine.py` | `Resources/Models/Shrine_0.bytes` |
 
 ## Surface textures (`unity/FreeVelo/Assets/FreeVelo/Resources/Surfaces/`)

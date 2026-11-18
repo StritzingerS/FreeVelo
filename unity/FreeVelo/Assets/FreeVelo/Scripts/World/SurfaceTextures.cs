@@ -352,7 +352,20 @@ namespace FreeVelo.World
             var a = new Texture2D(Size, Size, TextureFormat.RGBA32, true) { name = name, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 4 };
             a.SetPixels32(albedo);
             a.Apply(true, true);
-            return new Set { Albedo = a, Normal = NormalMap(name + "Normal", heights, Size, bump), TileM = tileM };
+
+            // Its average brightness, so that the material colour is compensated as for the scans: the surface comes
+            // out in the palette's colour on average (foliage was about 15 % too dark otherwise).
+            double r = 0, g = 0, b = 0;
+            foreach (var c in albedo)
+            {
+                r += c.r;
+                g += c.g;
+                b += c.b;
+            }
+
+            float n = albedo.Length * 255f;
+            var mean = new Color((float)(r / n), (float)(g / n), (float)(b / n));
+            return new Set { Albedo = a, Normal = NormalMap(name + "Normal", heights, Size, bump), TileM = tileM, Mean = mean };
         }
 
         /// <summary>

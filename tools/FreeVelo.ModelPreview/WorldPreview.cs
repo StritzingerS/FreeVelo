@@ -411,7 +411,7 @@ public static class WorldPreview
     {
         var map = WorldMap.Default;
         var terrain = Terrain.Build(map);
-        SceneryLayout.Generate(terrain, DateTime.Now);
+        var layout = SceneryLayout.Generate(terrain, DateTime.Now);
         var landscape = terrain.Landscape!;
         var shots = new List<string>();
         var inv = System.Globalization.CultureInfo.InvariantCulture;
@@ -470,8 +470,92 @@ public static class WorldPreview
             Building("shrine_far", shrine, 60, 4);
         }
 
+        // Trees come from the nature layout (home grid), not from the villages: a larch with open ground towards the road.
+        var larches = layout.Items.Where(i => i.Kind == SceneryKind.Larch)
+            .OrderBy(i => Math.Abs(i.X - start.X) + Math.Abs(i.Z - start.Z)).ToList();
+        if (larches.Count > 0 && larches[0] is var larch)
+        {
+            Building("larch", larch, 32, 6);
+            Building("larch_far", larch, 120, 12);
+        }
+
         File.WriteAllText(output, "{\n  \"width\": 1280,\n  \"height\": 720,\n  \"shots\": [\n" + string.Join(",\n", shots) + "\n  ]\n}\n");
         Console.WriteLine($"{shots.Count} shots -> {output}");
+    }
+
+    /// <summary>
+    /// Triangle budget of the scenery along the valley round, as WorldBuilder draws it: close (within 70 m) the baked
+    /// model where there is one, else the coded near model; 70–300 m the baked "_lod1" if any, else (small baked props
+    /// and) the coded near model; beyond, the merged far chunks (not counted). <paramref name="baked"/> lists the baked
+    /// models as kind:variant:near:far triangles (far 0 = none; variant -1 = all variants).
+    /// </summary>
+    public static void Budget(string[] baked)
+    {
+        // Optional first argument "near=<metres>": full-detail distance of baked models with a far version (trees).
+        double nearM = 70;
+        if (baked.Length > 0 && baked[0].StartsWith("near="))
+        {
+            nearM = double.Parse(baked[0].Substring(5), System.Globalization.CultureInfo.InvariantCulture);
+            baked = baked.Skip(1).ToArray();
+        }
+
+        var map = WorldMap.Default;
+        var terrain = Terrain.Build(map);
+        var layout = SceneryLayout.Generate(terrain, new DateTime(2026, 7, 1));
+        var table = new Dictionary<(SceneryKind, int), (int Near, int Far)>();
+        foreach (var b in baked)
+        {
+            var p = b.Split(':');
+            var kind = Enum.Parse<SceneryKind>(p[0]);
+            for (int v = 0; v < SceneryModels.Variants; v++)
+            {
+                if (p[1] == "-1" || int.Parse(p[1]) == v) table[(kind, v)] = (int.Parse(p[2]), int.Parse(p[3]));
+            }
+        }
+
+        int Cost(SceneryItem i, double d, bool withBaked)
+        {
+            int coded = SceneryModels.Get(i.Kind, i.Variant).Triangles(0);
+            if (!withBaked || !table.TryGetValue((i.Kind, i.Variant % SceneryModels.Variants), out var bk)) return d < 300 ? coded : 0;
+            if (d >= 300) return 0;
+            if (bk.Far > 0) return d < nearM ? bk.Near : bk.Far;
+            if (bk.Near <= 4000) return bk.Near;
+            return d < 70 ? bk.Near : coded;
+        }
+
+        var loop = map.MainLoop;
+        var rows = new List<(double At, int Near, int Mid, int Before, int After, string Top)>();
+        for (double at = 0; at < loop.LengthM; at += 100)
+        {
+            var s = loop.Sample(at);
+            int near = 0, mid = 0, before = 0, after = 0;
+            var byKind = new Dictionary<SceneryKind, int>();
+            foreach (var i in layout.Items)
+            {
+                double d = Math.Sqrt(((i.X - s.X) * (i.X - s.X)) + ((i.Z - s.Z) * (i.Z - s.Z)));
+                if (d >= 300) continue;
+                if (d < 70) near++; else mid++;
+                before += Cost(i, d, false);
+                int c = Cost(i, d, true);
+                after += c;
+                byKind[i.Kind] = byKind.GetValueOrDefault(i.Kind) + c;
+            }
+
+            string top = string.Join(", ", byKind.OrderByDescending(k => k.Value).Take(3).Select(k => $"{k.Key} {k.Value / 1000}k"));
+            rows.Add((at, near, mid, before, after, top));
+        }
+
+        Console.WriteLine($"{rows.Count} points every 100 m on the valley round ({loop.LengthM / 1000:0.0} km); scenery within 300 m, trees in full detail to {nearM} m:");
+        foreach (var (label, pick) in new (string, Func<IEnumerable<(double At, int Near, int Mid, int Before, int After, string Top)>, (double At, int Near, int Mid, int Before, int After, string Top)>)[]
+        {
+            ("median", r => r.OrderBy(x => x.After).ElementAt(r.Count() / 2)),
+            ("90th percentile", r => r.OrderBy(x => x.After).ElementAt((int)(r.Count() * 0.9))),
+            ("worst", r => r.OrderBy(x => x.After).Last()),
+        })
+        {
+            var r = pick(rows);
+            Console.WriteLine($"  {label,-16} at {r.At,6:0} m: {r.Near,4} objects <70 m, {r.Mid,5} at 70-300 m; coded only {r.Before / 1000,4}k, with baked {r.After / 1000,4}k triangles ({r.Top})");
+        }
     }
 
     /// <summary>Eight views orbiting the rider at the start of the default route, like the app's home screen.</summary>

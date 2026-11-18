@@ -24,15 +24,25 @@ namespace FreeVelo.World
             public int[] Triangles;
         }
 
-        private static readonly Dictionary<(SceneryKind, int), Part[]> Cache = new Dictionary<(SceneryKind, int), Part[]>();
+        private static readonly Dictionary<(SceneryKind, int, int), Part[]> Cache = new Dictionary<(SceneryKind, int, int), Part[]>();
 
-        /// <summary>The baked model, or null when this kind and variant has none.</summary>
-        public static Part[] Get(SceneryKind kind, int variant)
+        /// <summary>
+        /// Play mode starts without a domain reload ("Enter Play Mode Options"): without this, a model file replaced
+        /// in the editor would keep showing its old version until Unity restarts.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics() => Cache.Clear();
+
+        /// <summary>
+        /// The baked model, or null when this kind and variant has none. <paramref name="level"/> 0 = close up
+        /// ({Kind}_{Variant}.bytes), 1 = the simplified version for the middle distance ({Kind}_{Variant}_lod1.bytes).
+        /// </summary>
+        public static Part[] Get(SceneryKind kind, int variant, int level = 0)
         {
             variant = ((variant % SceneryModels.Variants) + SceneryModels.Variants) % SceneryModels.Variants;
-            if (Cache.TryGetValue((kind, variant), out var parts)) return parts;
+            if (Cache.TryGetValue((kind, variant, level), out var parts)) return parts;
             parts = null;
-            var asset = Resources.Load<TextAsset>($"Models/{kind}_{variant}");
+            var asset = Resources.Load<TextAsset>(level == 0 ? $"Models/{kind}_{variant}" : $"Models/{kind}_{variant}_lod{level}");
             if (asset != null)
             {
                 try
@@ -47,7 +57,7 @@ namespace FreeVelo.World
                 Resources.UnloadAsset(asset);
             }
 
-            Cache[(kind, variant)] = parts;
+            Cache[(kind, variant, level)] = parts;
             return parts;
         }
 

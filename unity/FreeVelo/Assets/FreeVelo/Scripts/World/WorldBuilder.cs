@@ -743,10 +743,13 @@ namespace FreeVelo.World
                     foreach (var item in chunk.Items)
                     {
                         float dx = item.X - eye.x, dz = item.Z - eye.z, d2 = (dx * dx) + (dz * dz);
-                        // Close: the Blender model where there is one (small props all the way to DetailRadius, big ones
-                        // like houses only within BakedRadius); otherwise the coded model; beyond, low detail.
+                        // Close: the Blender model where there is one. With a baked middle-distance version (trees) the
+                        // switch is at BakedRadius; small props are shown all the way to DetailRadius; big ones like
+                        // houses switch to the coded model at BakedRadius. Beyond DetailRadius, low detail.
                         var baked = BakedModels.Get(item.Kind, item.Variant);
-                        float bakedRange = BakedModels.Triangles(baked) <= SmallBakedTriangles ? DetailRadius : BakedRadius;
+                        bool bakedMiddle = BakedModels.Get(item.Kind, item.Variant, 1) != null;
+                        float bakedRange = bakedMiddle ? TreeDetailRadius
+                            : BakedModels.Triangles(baked) <= SmallBakedTriangles ? DetailRadius : BakedRadius;
                         int lod = d2 >= DetailRadius * DetailRadius ? 1
                             : baked != null && d2 < bakedRange * bakedRange ? 0
                             : 2;
@@ -779,14 +782,21 @@ namespace FreeVelo.World
         private const float BakedRadius = 70f;
 
         /// <summary>
+        /// Models with a baked middle-distance version (trees) stay in full detail up to here (owner's request, 18 November
+        /// 2026: the switch at 70 m was too visible). Measured: the larches at the worst forest point cost about
+        /// 220,000 triangles all round at 130 m (135,000 at 70 m), before culling what is out of view.
+        /// </summary>
+        private const float TreeDetailRadius = 130f;
+
+        /// <summary>
         /// Baked models up to this size are cheap enough to be shown all the way to <see cref="DetailRadius"/> (no jump to
         /// a differently shaped coded model at <see cref="BakedRadius"/>).
         /// </summary>
         private const int SmallBakedTriangles = 4000;
 
         /// <summary>
-        /// The instanced mesh of a model: <paramref name="lod"/> 0 = the Blender-built model, 2 = the coded near model,
-        /// 1 = the coded far model.
+        /// The instanced mesh of a model: <paramref name="lod"/> 0 = the Blender-built model, 2 = the middle distance
+        /// (baked "_lod1" version where there is one, else the coded near model), 1 = the coded far model.
         /// </summary>
         private (Mesh Mesh, Material[] Materials) Model(SceneryKind kind, int variant, int lod)
         {
@@ -795,7 +805,8 @@ namespace FreeVelo.World
 
             // Collect (material, positions, normals, triangles) from the baked or the coded model.
             var source = new List<(WorldMaterial Material, Vector3[] Positions, Vector3[] Normals, int[] Triangles)>();
-            var baked = lod == 0 ? BakedModels.Get(kind, variant) : null;
+            // lod 0: the close-up baked model; lod 2: a baked middle-distance version if there is one, else coded.
+            var baked = lod == 0 ? BakedModels.Get(kind, variant) : lod == 2 ? BakedModels.Get(kind, variant, 1) : null;
             if (baked != null)
             {
                 foreach (var part in baked) source.Add((part.Material, part.Positions, part.Normals, part.Triangles));

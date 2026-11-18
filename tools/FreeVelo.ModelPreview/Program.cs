@@ -36,6 +36,29 @@ if (args.Length > 1 && args[0] == "--shots")
     return;
 }
 
+if (args.Length > 0 && args[0] == "--kinds")
+{
+    // How often each scenery kind (and variant) is placed in the home grid, and which kinds never are.
+    var map = FreeVelo.Core.World.Gen.WorldMap.Default;
+    var terrain = FreeVelo.Core.World.Gen.Terrain.Build(map);
+    var layout = FreeVelo.Core.World.Gen.SceneryLayout.Generate(terrain, new DateTime(2026, 5, 10));
+    var counts = layout.Items.GroupBy(i => i.Kind).ToDictionary(g => g.Key, g => g.GroupBy(i => i.Variant % 3).Count());
+    foreach (var kind in Enum.GetValues<FreeVelo.Core.World.Gen.SceneryKind>())
+    {
+        int n = layout.Items.Count(i => i.Kind == kind);
+        Console.WriteLine($"{kind,-14} {n,6} placed, {(n > 0 ? counts[kind] : 0)} variants used, {FreeVelo.Core.World.Gen.SceneryModels.Get(kind, 0).Triangles(0),6} triangles (coded)");
+    }
+
+    return;
+}
+
+if (args.Length > 0 && args[0] == "--budget")
+{
+    // e.g. --budget Larch:-1:3793:402 AlpineHouse:0:15860:0 Shrine:0:2926:0
+    WorldPreview.Budget(args.Skip(1).ToArray());
+    return;
+}
+
 if (args.Length > 1 && args[0] == "--start")
 {
     WorldPreview.Start(args[1]);
