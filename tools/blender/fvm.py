@@ -22,12 +22,14 @@ COLORS = {
 }
 
 
-def export(objects, path):
-    """Writes the evaluated meshes of <objects> (modifiers applied, world space) to <path>; returns the triangle count."""
+def export(objects, path, uvs=False):
+    """Writes the evaluated meshes of <objects> (modifiers applied, world space) to <path>; returns the triangle count.
+    With <uvs> the format is "FVM2": texture coordinates follow the normals (for models that keep their own texture,
+    material "Textured:<texture stem>")."""
     import bpy
 
     deps = bpy.context.evaluated_depsgraph_get()
-    groups = {}  # material -> (positions, normals, indices, lookup of (pos, normal) -> index)
+    groups = {}  # material -> (positions, normals, uvs, indices, lookup of (pos, normal, uv) -> index)
     for o in objects:
         eo = o.evaluated_get(deps)
         me = eo.to_mesh()
@@ -35,9 +37,10 @@ def export(objects, path):
         mw = o.matrix_world
         nm = mw.to_3x3().inverted().transposed()
         names = [s.material.name if s.material else "Plinth" for s in o.material_slots]
+        uv_layer = me.uv_layers.active.data if uvs and me.uv_layers.active else None
         for tri in me.loop_triangles:
             name = names[tri.material_index] if names else "Plinth"
-            pos, nor, idx, lookup = groups.setdefault(name, ([], [], [], {}))
+            pos, nor, tex, idx, lookup = groups.setdefault(name, ([], [], [], [], {}))
             corner = []
             for k in range(3):
                 p = mw @ me.vertices[tri.vertices[k]].co
@@ -49,12 +52,17 @@ def export(objects, path):
                 # Blender (x, y = front, z = up) -> Unity (x, y = up, z = front): swap y and z.
                 up = (round(p.x, 4), round(p.z, 4), round(p.y, 4))
                 un = (round(n.x, 3), round(n.z, 3), round(n.y, 3))
-                i = lookup.get((up, un))
+                ut = (0.0, 0.0)
+                if uv_layer is not None:
+                    t = uv_layer[tri.loops[k]].uv
+                    ut = (round(t.x, 5), round(t.y, 5))
+                i = lookup.get((up, un, ut))
                 if i is None:
                     i = len(pos)
-                    lookup[(up, un)] = i
+                    lookup[(up, un, ut)] = i
                     pos.append(up)
                     nor.append(un)
+                    tex.append(ut)
                 corner.append(i)
             # Swapping two axes mirrors the mesh: reverse the winding so Unity sees the front faces.
             idx.extend((corner[0], corner[2], corner[1]))
@@ -62,10 +70,10 @@ def export(objects, path):
 
     tris = 0
     with open(path, "wb") as f:
-        f.write(b"FVM1")
+        f.write(b"FVM2" if uvs else b"FVM1")
         f.write(struct.pack("<i", len(groups)))
         for name in sorted(groups):
-            pos, nor, idx, _ = groups[name]
+            pos, nor, tex, idx, _ = groups[name]
             data = name.encode("utf-8")
             f.write(struct.pack("<i", len(data)))
             f.write(data)
@@ -74,6 +82,9 @@ def export(objects, path):
                 f.write(struct.pack("<3f", *p))
             for n in nor:
                 f.write(struct.pack("<3f", *n))
+            if uvs:
+                for t in tex:
+                    f.write(struct.pack("<2f", *t))
             f.write(struct.pack("<i", len(idx)))
             f.write(struct.pack("<%di" % len(idx), *idx))
             tris += len(idx) // 3

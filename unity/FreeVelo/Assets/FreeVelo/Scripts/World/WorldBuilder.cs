@@ -139,6 +139,18 @@ namespace FreeVelo.World
             return m;
         }
 
+        /// <summary>
+        /// A model that keeps its own (generated) texture: Resources/Surfaces/&lt;stem&gt;_diff and _nor, untinted. Falls
+        /// back to plaster white if the texture is missing.
+        /// </summary>
+        private Material OwnTextureMat(string stem)
+        {
+            var albedo = Resources.Load<Texture2D>("Surfaces/" + stem + "_diff");
+            var normal = Resources.Load<Texture2D>("Surfaces/" + stem + "_nor");
+            if (albedo == null) return Mat(WorldMaterial.WallWhite);
+            return Mat(Color.white, albedo, 0.08f, normal);
+        }
+
         /// <summary>A model surface: its colour, tinted detail texture and normal map (<see cref="SurfaceTextures"/>).</summary>
         private Material Mat(WorldMaterial material)
         {
@@ -804,12 +816,12 @@ namespace FreeVelo.World
             if (_models.TryGetValue(key, out var cached)) return cached;
 
             // Collect (material, positions, normals, triangles) from the baked or the coded model.
-            var source = new List<(WorldMaterial Material, Vector3[] Positions, Vector3[] Normals, int[] Triangles)>();
+            var source = new List<(WorldMaterial Material, Vector3[] Positions, Vector3[] Normals, int[] Triangles, Vector2[] Uvs, string Texture)>();
             // lod 0: the close-up baked model; lod 2: a baked middle-distance version if there is one, else coded.
             var baked = lod == 0 ? BakedModels.Get(kind, variant) : lod == 2 ? BakedModels.Get(kind, variant, 1) : null;
             if (baked != null)
             {
-                foreach (var part in baked) source.Add((part.Material, part.Positions, part.Normals, part.Triangles));
+                foreach (var part in baked) source.Add((part.Material, part.Positions, part.Normals, part.Triangles, part.Uvs, part.TextureStem));
             }
             else
             {
@@ -826,7 +838,7 @@ namespace FreeVelo.World
                         normalsOut[i] = new Vector3(n[i].X, n[i].Y, n[i].Z);
                     }
 
-                    source.Add((pair.Key, positions, normalsOut, pair.Value.Triangles.ToArray()));
+                    source.Add((pair.Key, positions, normalsOut, pair.Value.Triangles.ToArray(), null, null));
                 }
             }
 
@@ -849,13 +861,13 @@ namespace FreeVelo.World
                 {
                     vertices.Add(part.Positions[i]);
                     normals.Add(part.Normals[i]);
-                    uvs.Add(SurfaceTextures.UV(part.Positions[i], part.Normals[i], tile));
+                    uvs.Add(part.Uvs != null ? part.Uvs[i] : SurfaceTextures.UV(part.Positions[i], part.Normals[i], tile));
                 }
 
                 var tris = new List<int>(part.Triangles.Length);
                 foreach (int t in part.Triangles) tris.Add(t + offset);
                 submeshes.Add(tris);
-                materials.Add(Mat(part.Material));
+                materials.Add(part.Texture != null ? OwnTextureMat(part.Texture) : Mat(part.Material));
             }
 
             var mesh = new Mesh { name = $"{kind} {variant} LOD{lod}", indexFormat = vertices.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16 };

@@ -460,7 +460,11 @@ public static class WorldPreview
 
         SceneryItem? Nearest(SceneryKind kind) => landscape.Items.Where(i => i.Kind == kind)
             .OrderBy(i => Math.Abs(i.X - start.X) + Math.Abs(i.Z - start.Z)).Cast<SceneryItem?>().FirstOrDefault();
-        if (Nearest(SceneryKind.AlpineHouse) is SceneryItem house) Building("house_close", house, 22, 7);
+        if (Nearest(SceneryKind.AlpineHouse) is SceneryItem house)
+        {
+            Building("house_close", house, 22, 7);
+            Building("house_back", house, -20, 3);   // from behind and the other side (where the funnels were cut off)
+        }
         if (Nearest(SceneryKind.Inn) is SceneryItem inn) Building("inn_close", inn);
         if (Nearest(SceneryKind.Church) is SceneryItem church) Building("church", church, 45, 16);
         if (Nearest(SceneryKind.Farmhouse) is SceneryItem farm) Building("farm", farm, 40, 14);

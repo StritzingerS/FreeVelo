@@ -22,6 +22,15 @@ namespace FreeVelo.World
             public Vector3[] Positions;
             public Vector3[] Normals;
             public int[] Triangles;
+
+            /// <summary>Texture coordinates (format FVM2); null = made from position and normal.</summary>
+            public Vector2[] Uvs;
+
+            /// <summary>
+            /// For material "Textured:&lt;stem&gt;": the model keeps its own texture, Resources/Surfaces/&lt;stem&gt;_diff
+            /// and _nor (instead of a WorldMaterial).
+            /// </summary>
+            public string TextureStem;
         }
 
         private static readonly Dictionary<(SceneryKind, int, int), Part[]> Cache = new Dictionary<(SceneryKind, int, int), Part[]>();
@@ -73,7 +82,9 @@ namespace FreeVelo.World
         public static Part[] Read(byte[] bytes)
         {
             using var reader = new BinaryReader(new MemoryStream(bytes));
-            if (Encoding.ASCII.GetString(reader.ReadBytes(4)) != "FVM1") throw new InvalidDataException("not an FVM1 model");
+            string magic = Encoding.ASCII.GetString(reader.ReadBytes(4));
+            if (magic != "FVM1" && magic != "FVM2") throw new InvalidDataException("not an FVM1/FVM2 model");
+            bool withUvs = magic == "FVM2";
             int count = reader.ReadInt32();
             var parts = new List<Part>(count);
             for (int m = 0; m < count; m++)
@@ -84,15 +95,24 @@ namespace FreeVelo.World
                 var normals = new Vector3[n];
                 for (int i = 0; i < n; i++) positions[i] = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                 for (int i = 0; i < n; i++) normals[i] = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                Vector2[] uvs = null;
+                if (withUvs)
+                {
+                    uvs = new Vector2[n];
+                    for (int i = 0; i < n; i++) uvs[i] = new Vector2(reader.ReadSingle(), reader.ReadSingle());
+                }
+
                 var triangles = new int[reader.ReadInt32()];
                 for (int i = 0; i < triangles.Length; i++) triangles[i] = reader.ReadInt32();
-                if (!Enum.TryParse(name, out WorldMaterial material))
+                string stem = name.StartsWith("Textured:") ? name.Substring("Textured:".Length) : null;
+                var material = WorldMaterial.Plinth;
+                if (stem == null && !Enum.TryParse(name, out material))
                 {
                     Debug.LogWarning($"Baked model: unknown material '{name}', drawn as Plinth");
                     material = WorldMaterial.Plinth;
                 }
 
-                parts.Add(new Part { Material = material, Positions = positions, Normals = normals, Triangles = triangles });
+                parts.Add(new Part { Material = material, Positions = positions, Normals = normals, Triangles = triangles, Uvs = uvs, TextureStem = stem });
             }
 
             return parts.ToArray();

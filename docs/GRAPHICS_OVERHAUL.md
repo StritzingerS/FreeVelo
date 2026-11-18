@@ -340,13 +340,18 @@ GameCI (slower, software rendering, and licence activation for Unity Personal is
 
 Still only measurable on the phone: frame rate, heat and battery.
 
-## 10. Open questions
+## 10. Open questions and to-dos
 
 - Final yes to stylised realism.
-- Which AI generator (Meshy or Tripo), and an API key through the secure credential form.
-- Houses: upgraded C# generator or Blender-scripted models (decide with the test house).
+- ~~Which AI generator~~: Tripo (decided 18 November 2026, section 3a).
+- ~~Houses: C# generator or Blender script~~: Tripo with its own texture (decided 18 November 2026).
 - Whether the Remote Control folder sharing works on the owner's PC.
 - The Asset Store bike in `Resources/FreeVeloBicycle` and the public repository.
+- **TODO (owner, 18 Nov 2026): replace the Alpine house properly.** The approved candidate B
+  (`tools/blender/sources/alpine_house_tripo.glb`) had funnel-like pieces at both back corners. They were cut out
+  by hand-measured regions in `generated_house.py` and the openings patched with plain plaster; up close the two
+  patches still show (smoother, greyer, a diagonal line). Not acceptable as final: generate a new house under the
+  rules of section 3b (no surgery), approve it, and delete the corner-region code.
 
 ## 11. Notes from the FTP test of 11 November 2026 (to pick up with the overhaul)
 
