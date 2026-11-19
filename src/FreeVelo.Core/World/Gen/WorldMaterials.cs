@@ -121,7 +121,7 @@ namespace FreeVelo.Core.World.Gen
             [WorldMaterial.Concrete] = (new Vector3(0.66f, 0.65f, 0.62f), 0.1f),
             [WorldMaterial.Railing] = (new Vector3(0.35f, 0.40f, 0.36f), 0.4f),
             [WorldMaterial.LarchNeedles] = (new Vector3(0.45f, 0.58f, 0.25f), 0f),
-            [WorldMaterial.FirNeedles] = (new Vector3(0.11f, 0.23f, 0.19f), 0f),
+            [WorldMaterial.FirNeedles] = (new Vector3(0.14f, 0.29f, 0.23f), 0f), // owner 19 Nov 2026: 0.11/0.23/0.19 looked almost black
             [WorldMaterial.StonePineNeedles] = (new Vector3(0.15f, 0.29f, 0.17f), 0f),
             [WorldMaterial.BeechBark] = (new Vector3(0.55f, 0.55f, 0.52f), 0.05f),
             [WorldMaterial.BeechLeaves] = (new Vector3(0.31f, 0.49f, 0.16f), 0f),
