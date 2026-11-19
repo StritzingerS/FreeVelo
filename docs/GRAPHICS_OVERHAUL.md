@@ -383,12 +383,11 @@ Still only measurable on the phone: frame rate, heat and battery.
 - ~~Houses: C# generator or Blender script~~: Tripo with its own texture (decided 18 November 2026).
 - Whether the Remote Control folder sharing works on the owner's PC.
 - The Asset Store bike in `Resources/FreeVeloBicycle` and the public repository.
-- **TODO (owner, 18-19 Nov 2026): the Alpine house is not final yet.** It now comes from the 2D-first workflow
-  (section 3b, 8): a front render of candidate B -> four views -> funnels and gable lantern removed with
-  edit-multiview -> multiview-to-model (owner: "the edited house looks good, use it"). Only allowed clean-up, the
-  surgery code is deleted. Known: the 3D step added a dark wooden box on one side wall (not in the views) and the
-  views' flower boxes at the side corners hang loose; the check reports them plus 2 holes and 5 inside-out faces.
-  Next try: remove the corner flower boxes in the views as well and run multiview-to-model again (50 credits).
+- ~~TODO: replace the Alpine house properly~~ - done 19 Nov 2026 with the 2D-first workflow (section 3b, 8): front
+  render of candidate B -> four views -> funnels, gable lantern and the corner flower boxes removed with
+  edit-multiview -> multiview-to-model; approved by the owner. The check leaves only 2 open edges and 1 inside-out
+  face, not visible in the Unity renders from front, back and street. Credits for the whole house: 10 views,
+  3 x 20 edits (one repeat, one more try), 2 x 30 models = 130.
 
 ## 11. Notes from the FTP test of 11 November 2026 (to pick up with the overhaul)
 

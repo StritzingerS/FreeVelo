@@ -169,10 +169,15 @@ def check(o, kind, limit):
             dy = max(p.y for p in pts) - min(p.y for p in pts)
             along = max(dx, dy)
             wall_len = max(max(xs) - min(xs), max(ys) - min(ys))
+            # Ledges belong to the house: window sills measured 0.17-0.22 m high (on a 12 m scale); real attachments
+            # like the funnels of house B 1.05 m. Below 0.3 m it is a ledge.
+            dz = max(p.z for p in pts) - min(p.z for p in pts)
+            if dz < extent * 0.025:
+                continue
             if along < 0.35 * wall_len and len(group) >= 3:
                 c = sum((g.calc_center_median() for g in group), Vector()) / len(group)
-                findings.append(f"attachment: {len(group)} faces, {along / extent * 12:.1f} m wide on a 12 m scale, "
-                                f"at ({c.x:.2f}, {c.y:.2f}, {c.z:.2f})")
+                findings.append(f"attachment: {len(group)} faces, {along / extent * 12:.1f} m wide and "
+                                f"{dz / extent * 12:.2f} m high on a 12 m scale, at ({c.x:.2f}, {c.y:.2f}, {c.z:.2f})")
                 red.update(g.index for g in group)
 
     bm.free()
