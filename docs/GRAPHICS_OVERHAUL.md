@@ -104,7 +104,10 @@ shows. This must not happen again.
 7a. **Very low triangle counts (fences, 19 Nov):** the H series crumples below a few hundred triangles; the P series
    (P1, 30 credits even without texture) builds clean shapes at about 150 triangles, but as separate boards that
    float 3-10 cm apart (three garden fence tries, none accepted). The garden fence stays the coded model for now;
-   simple board props are where the coded models are least noticeable.
+   simple board props are where the coded models are least noticeable. Rocks (19 Nov): at 600 triangles the H
+   series crumpled them into spiky shards; P1 at 500 gave clean faceted boulders. Bushes need Tripo's texture to
+   come out as leaf clumps (untextured H candidates were shards at 800 and at 3,000 reduced); textured at 1,500 one
+   of two was clean.
 8. **Buildings and hero objects: check in 2D before 3D** (Tripo API): reference image -> `image-to-multiview`
    (four view images: front, left, back, right) -> owner and Claude look at the four views; unwanted elements are
    removed with `edit-multiview` (`prompts: [{"prompt": "...", "view": "left"}]`) -> `multiview-to-model` with
@@ -117,7 +120,7 @@ that are never placed are dropped. About 33 models instead of about 85:
 
 | Group | Models |
 |---|---|
-| Nature (10) | Larch (approved 18 Nov), Spruce/Fir (fir darker), Stone pine, Mountain pine, Broadleaf (beech, maple, linden, alder by leaf colour), Willow, Apple, Bush, Rock × 2 |
+| Nature (10) | Larch (approved 18 Nov), Spruce/Fir (fir darker), Stone pine, Mountain pine, Broadleaf (beech, maple, linden, alder by leaf colour), Willow, Apple, Bush (done 19 Nov), Rock × 2 (done 19 Nov: P1 series, see 7a) |
 | Buildings (11) | Alpine house × 2 meshes (with material looks), Farmhouse, Inn, Shop, Church, Hay hut, Alpine hut, Workshop, Sawmill, Fire station, Shrine (done 18 Nov) |
 | Props (11) | Garden fence, Fence, Flower bed, Bench, Beer table, Log pile, Lumber stack, Car (paint by material), Maypole, Village sign, Direction sign (lettering stays in the app) |
 | Road furniture (3, later) | Guard rail, Kerb, Bridge railing |
