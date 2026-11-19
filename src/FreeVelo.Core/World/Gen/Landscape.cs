@@ -509,25 +509,38 @@ namespace FreeVelo.Core.World.Gen
                 return;
             }
 
-            // Stone path from the door to the road edge. The Tripo alpine hut's door is 1.4 m off the middle of its front
-            // (measured on a straight-on render; the sign turns the model's side into this plot's u).
-            double rr = rotationDeg * Math.PI / 180;
-            double doorU = kind == SceneryKind.AlpineHut ? 1.4 * Math.Sign((ax * Math.Cos(rr)) - (az * Math.Sin(rr))) : 0;
-            AddSurface(P, doorU - 0.75, doorU + 0.75, front - 0.3, roadEdge + 0.3, rotationDeg, WorldMaterial.Stone);
-
-            // Flower beds along the front wall, either side of the door (kept 1.9 m from it); a bench away from it
-            foreach (int side in new[] { -1, 1 })
+            double doorU = 0;
+            if (kind == SceneryKind.AlpineHut)
             {
-                double u = side * ((w / 4) + 0.9);
-                if (Math.Abs(u - doorU) < 1.9) u = doorU + (side * 1.9);
-                Item(SceneryKind.FlowerBed, u, (d / 2) + 0.6, rotationDeg, 0);
+                // The Tripo alpine hut stands turned by HutTurnDeg inside its own model (huts are rarely built square to
+                // the road): beds and bench follow the hut's front wall, the path starts at its door and runs straight
+                // to the road. Hut frame: hu along the front wall, hv out of it; s turns the model's x into this
+                // plot's u (the plot frame may be mirrored).
+                double rr = rotationDeg * Math.PI / 180, t = HutTurnDeg * Math.PI / 180;
+                double s = Math.Sign((ax * Math.Cos(rr)) - (az * Math.Sin(rr)));
+                (double U, double V) H(double hu, double hv) => (s * ((hu * Math.Cos(t)) + (hv * Math.Sin(t))), (-hu * Math.Sin(t)) + (hv * Math.Cos(t)));
+                // The path leaves the door square to the hut's front (in the hut's frame) and keeps that line to the
+                // road; it reaches the road edge (plot v) at hv = (v + hu sin t) / cos t.
+                double HvAt(double v) => (v + (HutDoor.U * Math.Sin(t))) / Math.Cos(t);
+                (double X, double Z) HutPoint(double hu, double hv) { var q = H(hu, hv); return P(q.U, q.V); }
+                AddSurface(HutPoint, HutDoor.U - 0.75, HutDoor.U + 0.75, HutDoor.V - 0.3, HvAt(roadEdge + 0.3), rotationDeg + HutTurnDeg, WorldMaterial.Stone);
+                doorU = H(HutDoor.U, HvAt(Math.Min(roadEdge - 1.5, front + 7))).U;   // where the path crosses the fence line
+                // A flower bed either side of the door; on half of the huts a bench instead of the second bed.
+                var left = H(HutDoor.U - 2.4, HutDoor.V + 0.6);
+                Item(SceneryKind.FlowerBed, left.U, left.V, rotationDeg + HutTurnDeg, 0);
+                bool bench = _random.NextDouble() < 0.5;
+                if (bench) _random.NextDouble(); // as many draws as before, so the rest of the landscape stays
+                var right = H(HutDoor.U + 2.2, HutDoor.V + (bench ? 0.55 : 0.6));
+                Item(bench ? SceneryKind.Bench : SceneryKind.FlowerBed, right.U, right.V, rotationDeg + (bench ? 180 : 0) + HutTurnDeg, 0);
             }
-
-            if (_random.NextDouble() < 0.5)
+            else
             {
-                double u = (_random.NextDouble() < 0.5 ? -1 : 1) * (w / 2 - 1.4);
-                if (Math.Abs(u - doorU) < 1.9) u = -u;
-                Item(SceneryKind.Bench, u, (d / 2) + 0.55, rotationDeg + 180, 0);
+                // Stone path from the door to the road edge
+                AddSurface(P, -0.75, 0.75, front - 0.3, roadEdge + 0.3, rotationDeg, WorldMaterial.Stone);
+
+                // Flower beds along the front wall, either side of the door; sometimes a bench
+                foreach (int side in new[] { -1, 1 }) Item(SceneryKind.FlowerBed, side * ((w / 4) + 0.9), (d / 2) + 0.6, rotationDeg, 0);
+                if (_random.NextDouble() < 0.5) Item(SceneryKind.Bench, (_random.NextDouble() < 0.5 ? -1 : 1) * (w / 2 - 1.4), (d / 2) + 0.55, rotationDeg + 180, 0);
             }
 
             // Garden fence: front (with a gap for the path, 1.5 m from the road edge), sides and back
@@ -567,6 +580,12 @@ namespace FreeVelo.Core.World.Gen
         // The Tripo inn's ground floor as modelled (Resources/Models/Inn_0, measured 0.5-1.5 m above its floor): the
         // upper floors overhang it by about a metre on every side.
         private const double InnGroundHalfWidth = 6.1, InnGroundFront = 7.65, InnGroundBack = -1.2;
+
+        // The Tripo alpine hut (Resources/Models/AlpineHut_0): its walls are turned 12.9 degrees inside the model
+        // (area-weighted wall directions); its door in the hut's own frame (along the front wall, out of it), from the
+        // model's centre (0, 1.3) and a front wall 3 m before it, the door 0.4 m to the side.
+        private const double HutTurnDeg = 12.9;
+        private static readonly (double U, double V) HutDoor = (-0.4, 4.3);   // side measured on renders in the game
 
         private void BeerGarden(double w, double d, Func<double, double, (double X, double Z)> p, Action<SceneryKind, double, double, double, int> item, double rotationDeg)
         {
