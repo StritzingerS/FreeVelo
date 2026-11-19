@@ -36,6 +36,20 @@ if (args.Length > 1 && args[0] == "--shots")
     return;
 }
 
+if (args.Length > 1 && args[0] == "--heights")
+{
+    // Height of the coded near model per variant, e.g. --heights Beech Maple (for scaling generated replacements).
+    foreach (var name in args.Skip(1))
+    {
+        var kind = Enum.Parse<FreeVelo.Core.World.Gen.SceneryKind>(name);
+        var hs = Enumerable.Range(0, FreeVelo.Core.World.Gen.SceneryModels.Variants).Select(v =>
+            FreeVelo.Core.World.Gen.SceneryModels.Get(kind, v).Lod0.Values.SelectMany(m => m.Vertices).Max(p => p.Y));
+        Console.WriteLine($"{name}: " + string.Join(", ", hs.Select(h => h.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture))) + " m");
+    }
+
+    return;
+}
+
 if (args.Length > 0 && args[0] == "--kinds")
 {
     // How often each scenery kind (and variant) is placed in the home grid, and which kinds never are.

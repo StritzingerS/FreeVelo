@@ -483,7 +483,7 @@ public static class WorldPreview
             Building("larch_far", larch, 120, 12);
         }
 
-        foreach (var kind in new[] { SceneryKind.Spruce, SceneryKind.Fir })
+        foreach (var kind in new[] { SceneryKind.Spruce, SceneryKind.Fir, SceneryKind.Maple, SceneryKind.Alder })
         {
             var tree = layout.Items.Where(i => i.Kind == kind)
                 .OrderBy(i => Math.Abs(i.X - start.X) + Math.Abs(i.Z - start.Z)).Cast<SceneryItem?>().FirstOrDefault();
