@@ -525,6 +525,28 @@ public static class WorldPreview
         var map = WorldMap.Default;
         var terrain = Terrain.Build(map);
         var layout = SceneryLayout.Generate(terrain, new DateTime(2026, 7, 1));
+        // The layout holds the home grid only; the round runs mostly through the streamed pieces outside it. Count
+        // every 128 m piece within reach, as the app streams them (MountainLook.Items also brings the landscape's own
+        // items: houses, fences, farm trees).
+        int natureSeed = SceneryLayout.NatureSeed(map);
+        var chunks = new Dictionary<(int, int), List<SceneryItem>>();
+        List<SceneryItem> Around(double x, double z)
+        {
+            var result = new List<SceneryItem>();
+            int r = (int)Math.Ceiling(300 / MountainLook.ChunkSize);
+            int cx0 = (int)Math.Floor(x / MountainLook.ChunkSize), cz0 = (int)Math.Floor(z / MountainLook.ChunkSize);
+            for (int cx = cx0 - r; cx <= cx0 + r; cx++)
+            {
+                for (int cz = cz0 - r; cz <= cz0 + r; cz++)
+                {
+                    if (!chunks.TryGetValue((cx, cz), out var list)) chunks[(cx, cz)] = list = MountainLook.Items(terrain, cx, cz, natureSeed);
+                    result.AddRange(list);
+                }
+            }
+
+            return result;
+        }
+
         var table = new Dictionary<(SceneryKind, int), (int Near, int Far)>();
         foreach (var b in baked)
         {
@@ -553,7 +575,7 @@ public static class WorldPreview
             var s = loop.Sample(at);
             int near = 0, mid = 0, before = 0, after = 0;
             var byKind = new Dictionary<SceneryKind, int>();
-            foreach (var i in layout.Items)
+            foreach (var i in Around(s.X, s.Z))
             {
                 double d = Math.Sqrt(((i.X - s.X) * (i.X - s.X)) + ((i.Z - s.Z) * (i.Z - s.Z)));
                 if (d >= 300) continue;
