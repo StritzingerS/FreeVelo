@@ -483,6 +483,13 @@ public static class WorldPreview
             Building("larch_far", larch, 120, 12);
         }
 
+        foreach (var kind in new[] { SceneryKind.Spruce, SceneryKind.Fir })
+        {
+            var tree = layout.Items.Where(i => i.Kind == kind)
+                .OrderBy(i => Math.Abs(i.X - start.X) + Math.Abs(i.Z - start.Z)).Cast<SceneryItem?>().FirstOrDefault();
+            if (tree is SceneryItem t) Building(kind.ToString().ToLowerInvariant(), t, 34, 6);
+        }
+
         File.WriteAllText(output, "{\n  \"width\": 1280,\n  \"height\": 720,\n  \"shots\": [\n" + string.Join(",\n", shots) + "\n  ]\n}\n");
         Console.WriteLine($"{shots.Count} shots -> {output}");
     }
