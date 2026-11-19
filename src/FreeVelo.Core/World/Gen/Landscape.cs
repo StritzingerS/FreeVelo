@@ -509,12 +509,26 @@ namespace FreeVelo.Core.World.Gen
                 return;
             }
 
-            // Stone path from the door to the road edge
-            AddSurface(P, -0.75, 0.75, front - 0.3, roadEdge + 0.3, rotationDeg, WorldMaterial.Stone);
+            // Stone path from the door to the road edge. The Tripo alpine hut's door is 1.4 m off the middle of its front
+            // (measured on a straight-on render; the sign turns the model's side into this plot's u).
+            double rr = rotationDeg * Math.PI / 180;
+            double doorU = kind == SceneryKind.AlpineHut ? 1.4 * Math.Sign((ax * Math.Cos(rr)) - (az * Math.Sin(rr))) : 0;
+            AddSurface(P, doorU - 0.75, doorU + 0.75, front - 0.3, roadEdge + 0.3, rotationDeg, WorldMaterial.Stone);
 
-            // Flower beds along the front wall, either side of the door
-            foreach (int side in new[] { -1, 1 }) Item(SceneryKind.FlowerBed, side * ((w / 4) + 0.9), (d / 2) + 0.6, rotationDeg, 0);
-            if (_random.NextDouble() < 0.5) Item(SceneryKind.Bench, (_random.NextDouble() < 0.5 ? -1 : 1) * (w / 2 - 1.4), (d / 2) + 0.55, rotationDeg + 180, 0);
+            // Flower beds along the front wall, either side of the door (kept 1.9 m from it); a bench away from it
+            foreach (int side in new[] { -1, 1 })
+            {
+                double u = side * ((w / 4) + 0.9);
+                if (Math.Abs(u - doorU) < 1.9) u = doorU + (side * 1.9);
+                Item(SceneryKind.FlowerBed, u, (d / 2) + 0.6, rotationDeg, 0);
+            }
+
+            if (_random.NextDouble() < 0.5)
+            {
+                double u = (_random.NextDouble() < 0.5 ? -1 : 1) * (w / 2 - 1.4);
+                if (Math.Abs(u - doorU) < 1.9) u = -u;
+                Item(SceneryKind.Bench, u, (d / 2) + 0.55, rotationDeg + 180, 0);
+            }
 
             // Garden fence: front (with a gap for the path, 1.5 m from the road edge), sides and back
             double fenceFront = Math.Min(roadEdge - 1.5, front + 7), back = -(d / 2) - 9, half = (w / 2) + 4;
@@ -536,7 +550,9 @@ namespace FreeVelo.Core.World.Gen
             }
 
             double across = rotationDeg + 90; // the fence model runs along X: front and back follow the road
-            Run(-half, fenceFront, half, fenceFront, rotationDeg, -1.8, 1.8);
+            // The gap: no piece across the path (pieces are 3 m long; houses keep their old 3.6 m gap)
+            if (doorU == 0) Run(-half, fenceFront, half, fenceFront, rotationDeg, -1.8, 1.8);
+            else Run(-half, fenceFront, half, fenceFront, rotationDeg, doorU - 2.25, doorU + 2.25);
             Run(-half, back, half, back, rotationDeg);
             Run(-half, back, -half, fenceFront, across);
             Run(half, back, half, fenceFront, across);
