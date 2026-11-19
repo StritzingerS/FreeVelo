@@ -109,7 +109,9 @@ def check(o, kind, limit):
             others = [[v.index for v in f.verts] for j, q in enumerate(parts) if j != i for f in q]
             other_tree = BVHTree.FromPolygons(verts, others)
             gap = min(other_tree.find_nearest(v.co)[3] or 0.0 for f in p for v in f.verts)
-            if gap > extent * 0.005:
+            # A piece standing on the floor (a bench beside its table) does not float.
+            on_floor = min(v.co.z for f in p for v in f.verts) <= lo + extent * 0.01
+            if gap > extent * 0.005 and not on_floor:
                 c = sum((f.calc_center_median() for f in p), Vector()) / len(p)
                 findings.append(f"floating part: {len(p)} faces, {gap / extent * 100:.1f} % of the size away from the rest, "
                                 f"at ({c.x:.2f}, {c.y:.2f}, {c.z:.2f})")
