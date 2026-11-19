@@ -497,7 +497,7 @@ namespace FreeVelo.Core.World.Gen
                 double r = rotationDeg * Math.PI / 180;
                 double door = 0.3 * Math.Sign((ax * Math.Cos(r)) - (az * Math.Sin(r)));
                 AddSurface(P, door - 0.9, door + 0.9, front - 0.3, roadEdge + 0.3, rotationDeg, WorldMaterial.Stone);
-                Item(SceneryKind.Bench, (w / 2) - 2, front + 0.6, rotationDeg + 180, 0);
+                Item(SceneryKind.Bench, (w / 2) - 2, front + 0.6, rotationDeg, 0);   // back to the wall, facing the street
                 BeerGarden(w, d, P, (k, u, v, rot, var) => Item(k, u, v, rot, var), rotationDeg);
                 return;
             }
@@ -531,7 +531,7 @@ namespace FreeVelo.Core.World.Gen
                 bool bench = _random.NextDouble() < 0.5;
                 if (bench) _random.NextDouble(); // as many draws as before, so the rest of the landscape stays
                 var right = H(HutDoor.U + 2.2, HutDoor.V + (bench ? 0.55 : 0.6));
-                Item(bench ? SceneryKind.Bench : SceneryKind.FlowerBed, right.U, right.V, rotationDeg + (bench ? 180 : 0) + HutTurnDeg, 0);
+                Item(bench ? SceneryKind.Bench : SceneryKind.FlowerBed, right.U, right.V, rotationDeg + HutTurnDeg, 0);   // a bench sits with its back to the wall
             }
             else
             {
@@ -540,7 +540,7 @@ namespace FreeVelo.Core.World.Gen
 
                 // Flower beds along the front wall, either side of the door; sometimes a bench
                 foreach (int side in new[] { -1, 1 }) Item(SceneryKind.FlowerBed, side * ((w / 4) + 0.9), (d / 2) + 0.6, rotationDeg, 0);
-                if (_random.NextDouble() < 0.5) Item(SceneryKind.Bench, (_random.NextDouble() < 0.5 ? -1 : 1) * (w / 2 - 1.4), (d / 2) + 0.55, rotationDeg + 180, 0);
+                if (_random.NextDouble() < 0.5) Item(SceneryKind.Bench, (_random.NextDouble() < 0.5 ? -1 : 1) * (w / 2 - 1.4), (d / 2) + 0.55, rotationDeg, 0);   // back to the wall
             }
 
             // Garden fence: front (with a gap for the path, 1.5 m from the road edge), sides and back
