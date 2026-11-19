@@ -11,7 +11,8 @@ docs/THIRD_PARTY_ASSETS.md), made fit for the game:
 
 Run headless:
   blender -b --factory-startup --python tools/blender/generated_tree.py -- <in.glb> <height m> <bark material>
-      <foliage material> <out stem> [preview.png]
+      <foliage material> <out stem> [preview.png] [uv]
+  (uv: own texture coordinates for the close version, so the leaf texture does not break up per facet)
 e.g. ... -- tools/blender/sources/larch_tripo.glb 17 Bark LarchNeedles unity/.../Resources/Models/Larch_0
 """
 
@@ -168,19 +169,53 @@ def far_version(o, height, bark, foliage, target):
     return [crown] + trunk
 
 
+TILE = {"Bark": 1.0}    # metres per repeat of the game's textures (SurfaceTextures: foliage 0.6 m, bark used at 1 m)
+FOLIAGE_TILE = 0.6
+
+
+def own_uvs(o, bark):
+    """Texture coordinates in large islands (close version only): the game's own projection works per face and turns
+    the many small leaf facets into a patchwork. Scaled to metres / the material's repeat, so the texture keeps its
+    real size; the far version (remeshed) keeps the game's projection."""
+    me = o.data
+    bpy.context.view_layer.objects.active = o
+    o.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(70), island_margin=0.02, scale_to_bounds=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    uv = me.uv_layers.active.data
+    area3d, area_uv = 0.0, 0.0
+    for p in me.polygons:
+        pts = [uv[i].uv for i in p.loop_indices]
+        area3d += p.area
+        area_uv += abs(sum(pts[k].x * pts[(k + 1) % len(pts)].y - pts[(k + 1) % len(pts)].x * pts[k].y
+                           for k in range(len(pts)))) / 2
+    metres = math.sqrt(area3d / area_uv)
+    for p in me.polygons:
+        name = o.material_slots[p.material_index].material.name
+        f = metres / (TILE.get(bark, 1.0) if name == bark else FOLIAGE_TILE)
+        for i in p.loop_indices:
+            uv[i].uv = uv[i].uv * f
+    print(f"own texture coordinates ({metres:.2f} m per uv unit)")
+
+
 if __name__ == "__main__":
     args = sys.argv[sys.argv.index("--") + 1:]
     src, height, bark, foliage, stem = args[0], float(args[1]), args[2], args[3], args[4]
-    preview = args[5] if len(args) > 5 else None
+    preview = next((a for a in args[5:] if a.endswith(".png")), None)
+    with_uvs = "uv" in args[5:]   # own texture coordinates for the close version (the bush; trees not yet re-baked)
     for detail in (0, 1):
         tree = load(src)
         normalise(tree, height)
         split_by_texture(tree, bark, foliage)
         slim_trunk(tree, TRUNK_SCALE)
         parts = far_version(tree, height, bark, foliage, FAR_TRIANGLES) if detail == 1 else [tree]
+        if detail == 0 and with_uvs:
+            own_uvs(tree, bark)
         for p in parts:
             soft_crown(p, foliage)
-        fvm.export(parts, f"{stem}_lod1.bytes" if detail else f"{stem}.bytes")
+        fvm.export(parts, f"{stem}_lod1.bytes" if detail else f"{stem}.bytes", uvs=detail == 0 and with_uvs)
         if preview:
             fvm.preview(preview.replace(".png", f"_lod{detail}.png"), (0, 0, height * 0.5), height * 1.6, 0.0,
                         angle_deg=30, size=(600, 740))
