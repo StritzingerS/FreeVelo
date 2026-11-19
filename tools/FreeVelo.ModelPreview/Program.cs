@@ -36,6 +36,12 @@ if (args.Length > 1 && args[0] == "--shots")
     return;
 }
 
+if (args.Length > 0 && args[0] == "--audit")
+{
+    WorldPreview.Audit();
+    return;
+}
+
 if (args.Length > 1 && args[0] == "--heights")
 {
     // Height of the coded near model per variant, e.g. --heights Beech Maple (for scaling generated replacements).

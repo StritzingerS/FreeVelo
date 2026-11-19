@@ -18,6 +18,12 @@ namespace FreeVelo.Core.World.Gen
         public float RotationDeg;
 
         public float Scale;
+
+        /// <summary>
+        /// For pieces that follow the ground along their length (fences): rise per metre along the model's local X.
+        /// The renderer shears the model by it, so the posts stay upright and both ends stand on the ground. 0 = level.
+        /// </summary>
+        public float Slope;
     }
 
     /// <summary>A field: a rotated rectangle draped over the ground.</summary>

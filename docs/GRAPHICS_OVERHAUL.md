@@ -170,6 +170,21 @@ Notes:
 - `GroundKind` has no gravel, paving or yard kinds.
 - There is one test per past symptom in `LandscapeTests`, not one rule for everything.
 
+### Done on 19 November 2026 (first step)
+
+- Measured with `ModelPreview -- --audit` (14,210 items): the placement height (`DrawnHeight`, bilinear, capped at
+  the point) was up to 1.7 m off the ground the app really draws (triangles; in the home grid without road cap).
+  2,385 fence pieces and 65 other items floated (up to 2.5 m), over 1,000 sank.
+- `Terrain.SurfaceHeight`: the drawn ground exactly (same triangle split and corners as the app's meshes).
+- `Landscape.SettleOnSurface`, the last placement step: everything stands on that ground. Fences follow the ground
+  along their length (`SceneryItem.Slope`, the renderer shears the piece; lowered over crests); rigid props on the
+  lowest footprint corner; trees and poles on their foot. Buildings keep their pads (the Tripo house was checked:
+  no gap under its walls on any of its 97 plots).
+- Result: 0 floating items. `LandscapeTests.NothingFloatsAboveTheDrawnGround` keeps it that way (one rule for all
+  items instead of one test per symptom; the old garden-things test is folded into it).
+- Still open from the target design below: plots planned as a whole (`PlotPlanner`), yards and paths as ground
+  surfaces instead of plates (they still sink up to 0.4 m uphill by design), fences as polylines.
+
 ### Target design
 
 - **`AssetDef`** (pure C#, one per kind and variant) replaces the four tables: footprint polygon, floor height,

@@ -483,6 +483,18 @@ public static class WorldPreview
             Building("larch_far", larch, 120, 12);
         }
 
+        // The fence piece on the steepest ground in the home grid: does it follow the slope?
+        var steep = landscape.Items.Where(i => i.Kind is SceneryKind.GardenFence or SceneryKind.Fence && terrain.InGrid(i.X, i.Z))
+            .OrderByDescending(i => Math.Abs(i.Slope)).Cast<SceneryItem?>().FirstOrDefault();
+        if (steep is SceneryItem f)
+        {
+            double fr = f.RotationDeg * Math.PI / 180;
+            var along = new Vector3((float)Math.Cos(fr), 0, -(float)Math.Sin(fr));
+            var at = new Vector3(f.X, f.Y + 0.5f, f.Z);
+            var across = new Vector3(-along.Z, 0, along.X);
+            Add("fence_slope", at + (across * 7) + (along * 3) + new Vector3(0, 1.2f, 0), at, 50);
+        }
+
         foreach (var kind in new[] { SceneryKind.Spruce, SceneryKind.Fir, SceneryKind.Maple, SceneryKind.Alder })
         {
             var tree = layout.Items.Where(i => i.Kind == kind)
@@ -567,6 +579,79 @@ public static class WorldPreview
             var r = pick(rows);
             Console.WriteLine($"  {label,-16} at {r.At,6:0} m: {r.Near,4} objects <70 m, {r.Mid,5} at 70-300 m; coded only {r.Before / 1000,4}k, with baked {r.After / 1000,4}k triangles ({r.Top})");
         }
+    }
+
+    /// <summary>
+    /// Nothing floats, nothing sinks: every placed item of the villages, farms and huts against the ground as the app
+    /// draws it (<see cref="Terrain.SurfaceHeight"/>). Float = at a footprint corner the coded model's lowest point stays
+    /// above the ground; sink = the ground at the centre is above the model's floor (its origin).
+    /// </summary>
+    public static void Audit()
+    {
+        var map = WorldMap.Default;
+        var terrain = Terrain.Build(map);
+        SceneryLayout.Generate(terrain, new DateTime(2026, 5, 10));
+        var items = terrain.Landscape!.Items;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var rows = new List<(string Kind, double Float, double Sink, double DrawnVsSurface, double X, double Z)>();
+        foreach (var it in items)
+        {
+            var model = SceneryModels.Get(it.Kind, it.Variant);
+            var verts = model.Lod0.Values.SelectMany(m => m.Vertices).ToList();
+            if (verts.Count == 0) continue;
+            float minY = verts.Min(v => v.Y) * it.Scale;
+            float x0 = verts.Min(v => v.X), x1 = verts.Max(v => v.X), z0 = verts.Min(v => v.Z), z1 = verts.Max(v => v.Z);
+            // Trees, poles and signs stand on their foot: only that has to touch the ground, not the crown's outline.
+            if (it.Kind is SceneryKind.Apple or SceneryKind.Linden or SceneryKind.Maple or SceneryKind.Beech or SceneryKind.Alder
+                or SceneryKind.Willow or SceneryKind.Maypole or SceneryKind.VillageSign or SceneryKind.DirectionSign)
+            {
+                (x0, x1, z0, z1) = (-0.5f, 0.5f, -0.5f, 0.5f);
+            }
+
+            double r = it.RotationDeg * Math.PI / 180, sin = Math.Sin(r), cos = Math.Cos(r);
+            double worstFloat = 0, worstDiff = 0;
+            var anchors = new List<(float U, float V)> { (x0, z0), (x1, z0), (x0, z1), (x1, z1) };
+            if (it.Slope != 0) anchors.Add((0, 0)); // a sheared fence also in its middle
+            foreach (var (u, v) in anchors)
+            {
+                double wx = it.X + (u * cos) + (v * sin), wz = it.Z - (u * sin) + (v * cos);
+                double ground = terrain.SurfaceHeight(wx, wz);
+                worstFloat = Math.Max(worstFloat, (it.Y + minY + (it.Slope * u)) - ground);
+                worstDiff = Math.Max(worstDiff, Math.Abs(terrain.DrawnHeight(wx, wz) - ground));
+            }
+
+            // Sunk: the ground above the floor at the centre (trees and poles are meant to stand 0.1-0.3 m deep).
+            double meant = it.Kind is SceneryKind.Apple or SceneryKind.Linden or SceneryKind.Maple or SceneryKind.Beech or SceneryKind.Alder
+                or SceneryKind.Willow ? 0.3 : it.Kind is SceneryKind.Maypole or SceneryKind.VillageSign or SceneryKind.DirectionSign ? 0.1 : 0;
+            rows.Add((it.Kind.ToString(), worstFloat, terrain.SurfaceHeight(it.X, it.Z) - it.Y - meant, worstDiff, it.X, it.Z));
+        }
+
+        Console.WriteLine($"{rows.Count} items; floating = lowest point > 5 cm above the drawn ground at a corner; sunk = drawn ground > 15 cm above the floor at the centre");
+        Console.WriteLine($"{"kind",-14}{"n",6}{"float",7}{"max m",7}{"sunk",6}{"max m",7}  drawn-vs-surface max");
+        foreach (var g in rows.GroupBy(x => x.Kind).OrderByDescending(g => g.Count(x => x.Float > 0.05 || x.Sink > 0.15)))
+        {
+            Console.WriteLine(string.Format(inv, "{0,-14}{1,6}{2,7}{3,7:0.00}{4,6}{5,7:0.00}  {6:0.00}", g.Key, g.Count(), g.Count(x => x.Float > 0.05), g.Max(x => x.Float), g.Count(x => x.Sink > 0.15), g.Max(x => x.Sink), g.Max(x => x.DrawnVsSurface)));
+        }
+
+        // The baked Tripo house (AlpineHouse variant 0) is shallower than the coded one: walls 10.5 x 8.3 m, its lowest
+        // point 0.25 m under the floor. Does it float anywhere on its pad?
+        var house = new List<double>();
+        foreach (var it in items.Where(i => i.Kind == SceneryKind.AlpineHouse && i.Variant % 3 == 0))
+        {
+            double r = it.RotationDeg * Math.PI / 180, sin = Math.Sin(r), cos = Math.Cos(r), worst = 0;
+            foreach (var (u, v) in new[] { (-5.25, -4.15), (5.25, -4.15), (-5.25, 4.15), (5.25, 4.15), (0.0, 4.15), (0.0, -4.15), (-5.25, 0.0), (5.25, 0.0) })
+            {
+                worst = Math.Max(worst, (it.Y - 0.25) - terrain.SurfaceHeight(it.X + (u * cos) + (v * sin), it.Z - (u * sin) + (v * cos)));
+            }
+
+            house.Add(worst);
+        }
+
+        if (house.Count > 0) Console.WriteLine(string.Format(inv, "Tripo house: {0} placed, {1} with a gap under the walls > 5 cm, worst {2:0.00} m", house.Count, house.Count(g => g > 0.05), house.Max()));
+        Console.WriteLine("worst floating:");
+        foreach (var w in rows.OrderByDescending(x => x.Float).Take(8)) Console.WriteLine(string.Format(inv, "  {0,-12} {1:0.00} m at ({2:0}, {3:0})", w.Kind, w.Float, w.X, w.Z));
+        Console.WriteLine("worst sunk:");
+        foreach (var w in rows.OrderByDescending(x => x.Sink).Take(8)) Console.WriteLine(string.Format(inv, "  {0,-12} {1:0.00} m at ({2:0}, {3:0})", w.Kind, w.Sink, w.X, w.Z));
     }
 
     /// <summary>Eight views orbiting the rider at the start of the default route, like the app's home screen.</summary>

@@ -6,6 +6,61 @@ public class LandscapeTests
 {
     private static readonly Lazy<Terrain> Ground = new(() => Terrain.Build(WorldMap.Default));
 
+    /// <summary>
+    /// The invariant of docs/GRAPHICS_OVERHAUL.md section 4: nothing floats. Every placed item is checked against the
+    /// ground exactly as the app draws it (Terrain.SurfaceHeight): at the corners of its coded model's footprint (trees,
+    /// poles and signs at their foot; fences also in the middle, sheared by their slope), its lowest point may not be
+    /// more than 5 cm above the ground. Also the Tripo house (10.5 x 8.3 m, 0.25 m under the floor) on its pad.
+    /// Before this rule 2,385 fence pieces and 65 other items floated, up to 2.5 m.
+    /// </summary>
+    [Fact]
+    public void NothingFloatsAboveTheDrawnGround()
+    {
+        var terrain = Terrain.Build(WorldMap.Default); // own copy: the pads change the ground
+        var l = Landscape.Generate(terrain, new DateTime(2026, 5, 10));
+        var floating = new List<string>();
+        foreach (var it in l.Items)
+        {
+            var verts = SceneryModels.Get(it.Kind, it.Variant).Lod0.Values.SelectMany(m => m.Vertices).ToList();
+            if (verts.Count == 0) continue;
+            float minY = verts.Min(v => v.Y) * it.Scale;
+            float x0 = verts.Min(v => v.X), x1 = verts.Max(v => v.X), z0 = verts.Min(v => v.Z), z1 = verts.Max(v => v.Z);
+            if (it.Kind is SceneryKind.Apple or SceneryKind.Linden or SceneryKind.Maple or SceneryKind.Beech or SceneryKind.Alder
+                or SceneryKind.Willow or SceneryKind.Maypole or SceneryKind.VillageSign or SceneryKind.DirectionSign)
+            {
+                (x0, x1, z0, z1) = (-0.5f, 0.5f, -0.5f, 0.5f);
+            }
+
+            double r = it.RotationDeg * Math.PI / 180, sin = Math.Sin(r), cos = Math.Cos(r);
+            var anchors = new List<(float U, float V)> { (x0, z0), (x1, z0), (x0, z1), (x1, z1) };
+            if (it.Slope != 0) anchors.Add((0, 0));
+            foreach (var (u, v) in anchors)
+            {
+                double gap = (it.Y + minY + (it.Slope * u)) - terrain.SurfaceHeight(it.X + (u * cos) + (v * sin), it.Z - (u * sin) + (v * cos));
+                if (gap > 0.05)
+                {
+                    floating.Add($"{it.Kind} at ({it.X:0}, {it.Z:0}): {gap:0.00} m");
+                    break;
+                }
+            }
+
+            if (it.Kind == SceneryKind.AlpineHouse && it.Variant % 3 == 0)
+            {
+                foreach (var (u, v) in new[] { (-5.25, -4.15), (5.25, -4.15), (-5.25, 4.15), (5.25, 4.15) })
+                {
+                    double gap = (it.Y - 0.25) - terrain.SurfaceHeight(it.X + (u * cos) + (v * sin), it.Z - (u * sin) + (v * cos));
+                    if (gap > 0.05)
+                    {
+                        floating.Add($"Tripo house at ({it.X:0}, {it.Z:0}): {gap:0.00} m under a wall");
+                        break;
+                    }
+                }
+            }
+        }
+
+        Assert.True(floating.Count == 0, $"{floating.Count} items float, e.g. {string.Join("; ", floating.Take(5))}");
+    }
+
     [Fact]
     public void VillagesHaveOneChurchInnsShopsAndSigns()
     {
@@ -85,7 +140,7 @@ public class LandscapeTests
     [Fact]
     public void YardsAndPathsDoNotFloat()
     {
-        var terrain = Ground.Value;
+        var terrain = Terrain.Build(WorldMap.Default); // own copy: the pads change the ground
         var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
         foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.Yard or SceneryKind.PathStone))
         {
@@ -94,7 +149,7 @@ public class LandscapeTests
             double r = i.RotationDeg * Math.PI / 180;
             foreach (var (u, v) in new[] { (-hx, -hz), (hx, -hz), (-hx, hz), (hx, hz) })
             {
-                double g = terrain.DrawnHeight(i.X + (u * Math.Cos(r)) + (v * Math.Sin(r)), i.Z - (u * Math.Sin(r)) + (v * Math.Cos(r)));
+                double g = terrain.SurfaceHeight(i.X + (u * Math.Cos(r)) + (v * Math.Sin(r)), i.Z - (u * Math.Sin(r)) + (v * Math.Cos(r)));
                 Assert.True(g >= i.Y - 0.01, $"{i.Kind} at ({i.X:0},{i.Z:0}) floats");
                 Assert.True(g - i.Y <= 0.5, $"{i.Kind} at ({i.X:0},{i.Z:0}) buried");
             }
@@ -136,18 +191,6 @@ public class LandscapeTests
             // Every table stands on a gravel plate (the garden floor) and on level ground.
             Assert.Contains(yards, y => Math.Abs(y.X - t.X) < 4.5 && Math.Abs(y.Z - t.Z) < 4.5);
             Assert.True(Math.Abs(terrain.Height(t.X, t.Z) - terrain.Height(t.X + 1, t.Z + 1)) < 0.1, $"table at ({t.X:0},{t.Z:0}) on a slope");
-        }
-    }
-
-    [Fact]
-    public void GardenThingsStandOnTheGroundTheAppDraws()
-    {
-        var terrain = Terrain.Build(WorldMap.Default);
-        var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
-        foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.BeerTable or SceneryKind.Bench or SceneryKind.FlowerBed or SceneryKind.GardenFence))
-        {
-            double gap = i.Y - terrain.DrawnHeight(i.X, i.Z);
-            Assert.True(gap < 0.15, $"{i.Kind} at ({i.X:0},{i.Z:0}) floats {gap:0.00} m above the ground");
         }
     }
 

@@ -787,8 +787,16 @@ namespace FreeVelo.World
             }
         }
 
-        private static Matrix4x4 ItemMatrix(SceneryItem item) =>
-            Matrix4x4.TRS(new Vector3(item.X, item.Y, item.Z), Quaternion.Euler(0, item.RotationDeg, 0), Vector3.one * item.Scale);
+        private static Matrix4x4 ItemMatrix(SceneryItem item)
+        {
+            var m = Matrix4x4.TRS(new Vector3(item.X, item.Y, item.Z), Quaternion.Euler(0, item.RotationDeg, 0), Vector3.one * item.Scale);
+            if (item.Slope == 0) return m;
+
+            // Pieces that follow the ground (fences): sheared along their length, y += slope * x, posts stay upright.
+            var shear = Matrix4x4.identity;
+            shear.m10 = item.Slope;
+            return m * shear;
+        }
 
         /// <summary>Close range of the Blender-built models (<see cref="BakedModels"/>); the coded model takes over beyond.</summary>
         private const float BakedRadius = 70f;

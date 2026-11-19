@@ -329,6 +329,32 @@ namespace FreeVelo.Core.World.Gen
         /// </summary>
         public double DrawnHeight(double x, double z) => Math.Min(Height(x, z), RoadCap(x, z, Cell));
 
+        /// <summary>
+        /// The ground exactly as the app's close-up mesh draws it: 4 m cells split into two triangles along the diagonal
+        /// from (x+1, z) to (x, z+1). In the home grid the corners are the grid heights (<see cref="At"/>, with the
+        /// building pads); outside, the mountain mesh's corners: <see cref="Height"/> kept under the roads
+        /// (<see cref="RoadCap"/>) on the world-aligned 4 m grid. Unlike <see cref="DrawnHeight"/> (bilinear, capped at
+        /// the point itself) this is the surface a model really stands on.
+        /// </summary>
+        public double SurfaceHeight(double x, double z)
+        {
+            double ox = InGrid(x, z) ? MinX : 0, oz = InGrid(x, z) ? MinZ : 0, cell = InGrid(x, z) ? Cell : 4;
+            double gx = (x - ox) / cell, gz = (z - oz) / cell;
+            int ix = (int)Math.Floor(gx), iz = (int)Math.Floor(gz);
+            double fx = gx - ix, fz = gz - iz;
+            double Corner(int i, int k)
+            {
+                if (InGrid(x, z)) return At(i, k);
+                double cx = ox + (i * cell), cz = oz + (k * cell);
+                return Math.Min(Height(cx, cz), RoadCap(cx, cz, cell));
+            }
+
+            double a = Corner(ix, iz), b = Corner(ix + 1, iz), c = Corner(ix, iz + 1);
+            if (fx + fz <= 1) return a + ((b - a) * fx) + ((c - a) * fz);
+            double d = Corner(ix + 1, iz + 1);
+            return d + ((c - d) * (1 - fx)) + ((b - d) * (1 - fz));
+        }
+
         /// <summary>Slope (rise per metre) at a point.</summary>
         public double Slope(double x, double z)
         {

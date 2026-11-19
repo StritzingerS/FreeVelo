@@ -101,6 +101,7 @@ namespace FreeVelo.Core.World.Gen
             l.PlaceHayHuts();
             l.LevelBuildingPlots();
             l.SeatFlatPlates();
+            l.SettleOnSurface();
             foreach (var item in l.Items) l.Index(item);
             return l;
         }
@@ -698,7 +699,7 @@ namespace FreeVelo.Core.World.Gen
                 double low = double.MaxValue, high = double.MinValue;
                 foreach (var (u, v) in new[] { (-hx, -hz), (hx, -hz), (-hx, hz), (hx, hz), (0.0, 0.0) })
                 {
-                    double g = _terrain.DrawnHeight(item.X + (u * cos) + (v * sin), item.Z - (u * sin) + (v * cos));
+                    double g = _terrain.SurfaceHeight(item.X + (u * cos) + (v * sin), item.Z - (u * sin) + (v * cos));
                     low = Math.Min(low, g);
                     high = Math.Max(high, g);
                 }
@@ -711,6 +712,76 @@ namespace FreeVelo.Core.World.Gen
 
                 item.Y = (float)low;
                 Items[k] = item;
+            }
+        }
+
+        /// <summary>
+        /// Last step, once the ground is final (pads set): every item stands on the ground exactly as the app draws it
+        /// (<see cref="Terrain.SurfaceHeight"/>) - before, heights came from a bilinear estimate that was up to 1.7 m off
+        /// the drawn triangles. Fences follow the ground along their length (<see cref="SceneryItem.Slope"/>); small rigid
+        /// things sit on the lowest point of their footprint, so no corner hangs in the air; trees and poles on their
+        /// foot. Buildings keep their level pad and plates their seat (<see cref="SeatFlatPlates"/>).
+        /// </summary>
+        private void SettleOnSurface()
+        {
+            for (int k = 0; k < Items.Count; k++)
+            {
+                var item = Items[k];
+                if (IsBuilding(item.Kind) || item.Kind is SceneryKind.Yard or SceneryKind.PathStone) continue;
+                double r = item.RotationDeg * Math.PI / 180, sin = Math.Sin(r), cos = Math.Cos(r);
+                double At(double u, double v) => _terrain.SurfaceHeight(item.X + (u * cos) + (v * sin), item.Z - (u * sin) + (v * cos));
+                if (item.Kind is SceneryKind.GardenFence or SceneryKind.Fence)
+                {
+                    // Posts at both ends of the piece on the ground, the piece sheared between them; 5 cm into the ground.
+                    double half = item.Kind == SceneryKind.Fence ? 2.0 : 1.5;
+                    double a = At(-half, 0), b = At(half, 0);
+                    double slope = (b - a) / (2 * half), y = (a + b) / 2;
+                    // Over a crest the straight piece would hang in the air in between: lower it until it nowhere
+                    // stands above the ground (quarter points and middle).
+                    double lift = 0;
+                    foreach (double u in new[] { -half / 2, 0, half / 2 }) lift = Math.Max(lift, (y + (slope * u)) - At(u, 0));
+                    item.Y = (float)(y - lift - 0.05);
+                    item.Slope = (float)slope;
+                }
+                else if (item.Kind is SceneryKind.Maypole or SceneryKind.VillageSign or SceneryKind.DirectionSign
+                         or SceneryKind.Apple or SceneryKind.Linden or SceneryKind.Maple or SceneryKind.Beech or SceneryKind.Alder or SceneryKind.Willow)
+                {
+                    // On their foot: the lowest ground within half a metre, 10 cm in (trees keep their sunk roots).
+                    double foot = Math.Min(At(0, 0), Math.Min(Math.Min(At(0.5, 0), At(-0.5, 0)), Math.Min(At(0, 0.5), At(0, -0.5))));
+                    item.Y = (float)(foot - (item.Kind is SceneryKind.Maypole or SceneryKind.VillageSign or SceneryKind.DirectionSign ? 0.1 : 0.3));
+                }
+                else
+                {
+                    // Rigid things (benches, beds, tables, piles, cars): the lowest corner of their footprint.
+                    var (x0, x1, z0, z1) = Footprint(item.Kind, item.Variant);
+                    double low = Math.Min(Math.Min(At(x0, z0), At(x1, z0)), Math.Min(Math.Min(At(x0, z1), At(x1, z1)), At(0, 0)));
+                    item.Y = (float)(low - 0.02);
+                }
+
+                Items[k] = item;
+            }
+
+            // The signposts' copies (their boards are drawn by the app) follow their items.
+            for (int s = 0; s < Signposts.Count; s++)
+            {
+                var (post, boards) = Signposts[s];
+                var moved = Items.FirstOrDefault(i => i.Kind == SceneryKind.DirectionSign && i.X == post.X && i.Z == post.Z);
+                if (moved.Kind == SceneryKind.DirectionSign) Signposts[s] = (moved, boards);
+            }
+        }
+
+        private static readonly Dictionary<(SceneryKind, int), (double, double, double, double)> FootprintCache = new Dictionary<(SceneryKind, int), (double, double, double, double)>();
+
+        /// <summary>The coded model's extent on the ground (local x and z), for seating rigid things.</summary>
+        private static (double X0, double X1, double Z0, double Z1) Footprint(SceneryKind kind, int variant)
+        {
+            lock (FootprintCache)
+            {
+                if (FootprintCache.TryGetValue((kind, variant % SceneryModels.Variants), out var f)) return f;
+                var verts = SceneryModels.Get(kind, variant).Lod0.Values.SelectMany(m => m.Vertices).ToList();
+                f = verts.Count == 0 ? (0, 0, 0, 0) : (verts.Min(v => v.X), verts.Max(v => v.X), verts.Min(v => v.Z), verts.Max(v => v.Z));
+                FootprintCache[(kind, variant % SceneryModels.Variants)] = f;
+                return f;
             }
         }
 
