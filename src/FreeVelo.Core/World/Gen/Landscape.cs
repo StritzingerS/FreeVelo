@@ -470,7 +470,8 @@ namespace FreeVelo.Core.World.Gen
             (double X, double Z) P(double u, double v) => (x + (ax * u) + (tx * v), z + (az * u) + (tz * v)); // v towards the road
             // The street in front: the road, or the lane for houses along a side lane.
             double roadEdge = Math.Min(_terrain.DistanceToRoad(x, z, 60, out var road, out _, out _) - ((road?.Width ?? 6.5) / 2), LaneDistance(x, z) - 1.7);
-            double front = (d / 2) + 0.9; // door step
+            // The door step; the Tripo inn's ground floor stands back under its overhanging upper floors.
+            double front = kind == SceneryKind.Inn ? InnGroundFront - 0.05 : (d / 2) + 0.9;
             double gap = roadEdge - front;
             if (gap < 2) return;
 
@@ -489,17 +490,22 @@ namespace FreeVelo.Core.World.Gen
                 Items.Add(new SceneryItem { Kind = k, Variant = var, X = (float)px, Y = (float)(_terrain.Height(px, pz) - 0.05), Z = (float)pz, RotationDeg = (float)rot, Scale = 1 });
             }
 
-            if (kind is SceneryKind.Inn or SceneryKind.Shop || kind == SceneryKind.Farmhouse)
+            if (kind == SceneryKind.Inn)
+            {
+                // Meadow in front, a cobbled path from the street to the door (0.3 m off the middle of the Tripo
+                // model's front, measured on a straight-on render), a bench by the wall.
+                double r = rotationDeg * Math.PI / 180;
+                double door = 0.3 * Math.Sign((ax * Math.Cos(r)) - (az * Math.Sin(r)));
+                AddSurface(P, door - 0.9, door + 0.9, front - 0.3, roadEdge + 0.3, rotationDeg, WorldMaterial.Stone);
+                Item(SceneryKind.Bench, (w / 2) - 2, front + 0.6, rotationDeg + 180, 0);
+                BeerGarden(w, d, P, (k, u, v, rot, var) => Item(k, u, v, rot, var), rotationDeg);
+                return;
+            }
+
+            if (kind is SceneryKind.Shop || kind == SceneryKind.Farmhouse)
             {
                 // Gravel forecourt / yard between the building and the street
                 AddSurface(P, -w / 2, w / 2, front, roadEdge - 0.5, rotationDeg, WorldMaterial.Gravel);
-
-                if (kind == SceneryKind.Inn)
-                {
-                    Item(SceneryKind.Bench, (w / 2) - 2, front + 0.6, rotationDeg + 180, 0);
-                    BeerGarden(w, d, P, (k, u, v, r, var) => Item(k, u, v, r, var), rotationDeg);
-                }
-
                 return;
             }
 
@@ -538,52 +544,68 @@ namespace FreeVelo.Core.World.Gen
         }
 
         /// <summary>
-        /// The inn's Gastgarten beside the house: gravel, tables with benches (some with parasols), a big shady tree on
-        /// the outer side and a low fence round it.
+        /// The inn's small Gastgarten right against its side wall: gravel open to the forecourt, three or four table sets
+        /// that guests have pushed about a little (not in a grid), a shady tree at the back corner and a low fence on the
+        /// outer side and the back. Kept small: a big one would need parasols, little trees and more.
         /// </summary>
+        // The Tripo inn's ground floor as modelled (Resources/Models/Inn_0, measured 0.5-1.5 m above its floor): the
+        // upper floors overhang it by about a metre on every side.
+        private const double InnGroundHalfWidth = 6.1, InnGroundFront = 7.65, InnGroundBack = -1.2;
+
         private void BeerGarden(double w, double d, Func<double, double, (double X, double Z)> p, Action<SceneryKind, double, double, double, int> item, double rotationDeg)
         {
+            const double Width = 7, Wall = 0.1;
+            double vFront = InnGroundFront + 1.2, vBack = InnGroundBack + 0.5;
             foreach (int side in _random.NextDouble() < 0.5 ? new[] { 1, -1 } : new[] { -1, 1 })
             {
-                double cu = side * ((w / 2) + 8), half = 6.5, halfV = 8;
-                var c = p(cu, 0);
+                // a: distance from the ground-floor side wall, outwards
+                double U(double a) => side * (InnGroundHalfWidth + Wall + a);
+                double vMid = (vFront + vBack) / 2, halfV = (vFront - vBack) / 2;
+                var c = p(U(Width / 2), vMid);
                 bool room = true;
-                foreach (var (u, v) in new[] { (cu, 0.0), (cu - half, -halfV), (cu + half, -halfV), (cu - half, halfV), (cu + half, halfV) })
+                foreach (var (a, v) in new[] { (Width / 2, vMid), (0.0, vBack), (Width + 1, vBack), (0.0, vFront), (Width + 1, vFront) })
                 {
-                    var q = p(u, v);
+                    var q = p(U(a), v);
                     if (_terrain.IsWater(q.X, q.Z, 2) || _terrain.DistanceToRoad(q.X, q.Z, 5, out _, out _, out _) < 5) room = false;
                 }
 
                 var inn = p(0, 0);
-                if (!room || _footprints.Any(f => Dist(f.X, f.Z, c.X, c.Z) < f.R + 6 && Dist(f.X, f.Z, inn.X, inn.Z) > 0.5)) continue;
+                if (!room || _footprints.Any(f => Dist(f.X, f.Z, c.X, c.Z) < f.R + 4 && Dist(f.X, f.Z, inn.X, inn.Z) > 0.5)) continue;
 
                 // The garden is levelled with the inn's floor, so its gravel floor lies flat under the tables.
                 int own = _pads.FindLastIndex(q => Math.Abs(q.X - inn.X) < 0.01 && Math.Abs(q.Z - inn.Z) < 0.01);
-                if (own >= 0) _pads.Add(new Terrain.Pad(c.X, c.Z, half, halfV, rotationDeg, _pads[own].Height));
+                if (own >= 0) _pads.Add(new Terrain.Pad(c.X, c.Z, (Width / 2) + Wall + 0.5, halfV + 0.5, rotationDeg, _pads[own].Height));
 
-                AddSurface(p, cu - 6, cu + 6, -halfV + 1, halfV - 1, rotationDeg, WorldMaterial.Gravel);
+                AddSurface(p, Math.Min(U(-Wall - 0.2), U(Width)), Math.Max(U(-Wall - 0.2), U(Width)), vBack, vFront, rotationDeg, WorldMaterial.Gravel);
 
-                for (int i = 0; i < 2; i++)
+                // Its own random numbers (from the position), so the rest of the landscape stays as it was.
+                var rnd = new Random(unchecked(((int)Math.Round(c.X * 7.0) * 73856093) ^ ((int)Math.Round(c.Z * 7.0) * 19349663)));
+                double Jitter(double r) => (rnd.NextDouble() * 2 - 1) * r;
+                // Two rows along the wall; the row by the wall under the eaves. One place stays empty now and then.
+                var places = new List<(double A, double V)> { (2.0, vFront - 2.4), (2.2, vFront - 6.6), (5.2, vFront - 3.6), (5.4, vFront - 7.6) };
+                if (rnd.NextDouble() < 0.4) places.RemoveAt(rnd.Next(places.Count));
+                foreach (var (a, v) in places)
                 {
-                    for (int j = 0; j < 3; j++) item(SceneryKind.BeerTable, cu - 1.8 + (i * 3.6), -5 + (j * 4.2), rotationDeg + 90, (i + j) % 3);
+                    // Shoved about by the guests: up to half a metre off the line and turned by up to 14 degrees.
+                    item(SceneryKind.BeerTable, U(a + Jitter(0.5)), v + Jitter(0.5), rotationDeg + 90 + Jitter(14), rnd.Next(3));
                 }
 
-                item(_random.NextDouble() < 0.5 ? SceneryKind.Linden : SceneryKind.Maple, cu + (side * (half + 1)), 2, _random.Next(360), 1);
-                double rot = rotationDeg + 90;
-                void Fence(double u, double v, double r, double du, double dv)
+                item(_random.NextDouble() < 0.5 ? SceneryKind.Linden : SceneryKind.Maple, U(Width + 1.2), vBack - 0.8, _random.Next(360), 1);
+                void Fence(double a, double v, double r, double da, double dv)
                 {
-                    if (FenceClear(p(u - du, v - dv), p(u, v), p(u + du, v + dv))) item(SceneryKind.GardenFence, u, v, r, 0);
+                    if (FenceClear(p(U(a - da), v - dv), p(U(a), v), p(U(a + da), v + dv))) item(SceneryKind.GardenFence, U(a), v, r, 0);
                 }
 
-                for (int k = 0; k < 5; k++) Fence(cu + (side * (half + 0.3)), -halfV + 1.5 + (k * 3), rot, 0, 1.6);
-                for (int k = 0; k < 4; k++)
-                {
-                    Fence(cu - half + 1.5 + (k * 3.2), -halfV, rotationDeg, 1.6, 0);
-                    Fence(cu - half + 1.5 + (k * 3.2), halfV, rotationDeg, 1.6, 0);
-                }
+                // Outer side, back and the outer half of the front; the way in is by the house, from the forecourt. The
+                // house wall closes the fourth side.
+                double sideLength = vFront - vBack;
+                int along = (int)Math.Round(sideLength / 3);
+                for (int k = 0; k < along; k++) Fence(Width + 0.3, vBack + ((k + 0.5) * sideLength / along), rotationDeg + 90, 0, 1.5);
+                for (int k = 0; k < 2; k++) Fence(Width + 0.3 - 1.5 - (k * 3), vBack, rotationDeg, 1.5, 0);
+                Fence(Width + 0.3 - 1.5, vFront, rotationDeg, 1.5, 0);
 
-                _footprints.Add((c.X, c.Z, 9));
-                BlockCircle(c.X, c.Z, 11);
+                _footprints.Add((c.X, c.Z, 7.5));  // reaches the corners of the levelled pad
+                BlockCircle(c.X, c.Z, 7.5);
                 return;
             }
         }
@@ -610,12 +632,24 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>A building's whole outline (see <see cref="Outline"/>) is off the roads (1.5 m from the asphalt) and dry.</summary>
         private bool FootprintClear(SceneryKind kind, int variant, double x, double z, double rotationDeg)
         {
+            double? floor = null;
             foreach (var (px, pz) in OutlinePoints(kind, variant, x, z, rotationDeg, 2))
             {
                 if (_terrain.IsWater(px, pz, 1)) return false;
                 double d = _terrain.DistanceToRoad(px, pz, 12, out var road, out _, out _);
                 if (road != null && d < (road.Width / 2) + 1.5) return false;
                 if (LaneDistance(px, pz) < 2.6) return false;
+                // Not over a road's cutting or embankment: there the drawn ground drops below the slope (a farmhouse's
+                // ramp corner hung 1 m in the air 2.5 m off the asphalt).
+                if (road != null && d < (road.Width / 2) + 8 && _terrain.SurfaceHeight(px, pz) < (floor ??= GroundUnder(x, z, kind)) - 1) return false;
+                // Not on another building's levelled pad (the circle check in Free misses the corners of long
+                // buildings): the later pad would cut the ground under this one's corner, or lift it.
+                foreach (var pad in _pads)
+                {
+                    double dx = px - pad.X, dz = pz - pad.Z;
+                    double u = (dx * pad.Cos) - (dz * pad.Sin), v = (dx * pad.Sin) + (dz * pad.Cos);
+                    if (Math.Abs(u) < pad.HalfX + 3 && Math.Abs(v) < pad.HalfZ + 3) return false;
+                }
             }
 
             return true;
@@ -790,16 +824,23 @@ namespace FreeVelo.Core.World.Gen
                     var e = _map.Edges[inId];
                     bool fromHere = e.From == node.Id;
                     if (e.Length < 80) continue;
-                    // Coming in: travelling towards the node along e.
-                    var a = Along(e, fromHere ? 30 : e.Length - 30);
-                    double dx = fromHere ? -a.TX : a.TX, dz = fromHere ? -a.TZ : a.TZ;
-                    double x = 0, z = 0;
+                    // Coming in: travelling towards the node along e (moved a few metres if a garden path is in the way).
+                    double x = 0, z = 0, dx = 0, dz = 0;
                     bool clear = false;
-                    foreach (double off in new[] { 5.6, 7.0, 9.0 })
+                    foreach (double shift in new[] { 0.0, 3, -3, 6 })
                     {
-                        x = a.X + (dz * off); z = a.Z - (dx * off); // right-hand side: (dz, −dx)
-                        double d = _terrain.DistanceToRoad(x, z, 12, out var road, out _, out _);
-                        if (road == null || d >= (road.Width / 2) + 1) { clear = true; break; }
+                        var a = Along(e, fromHere ? 30 + shift : e.Length - 30 - shift);
+                        dx = fromHere ? -a.TX : a.TX; dz = fromHere ? -a.TZ : a.TZ;
+                        foreach (double off in new[] { 5.6, 7.0, 9.0 })
+                        {
+                            x = a.X + (dz * off); z = a.Z - (dx * off); // right-hand side: (dz, −dx)
+                            double d = _terrain.DistanceToRoad(x, z, 12, out var road, out _, out _);
+                            if (road == null || d >= (road.Width / 2) + 1) { clear = true; break; }
+                        }
+
+                        double px = x, pz = z;
+                        if (clear && Surfaces.Any(s => s.Crop == WorldMaterial.Stone && s.Contains(px, pz, 1))) clear = false;
+                        if (clear) break;
                     }
 
                     if (!clear) continue;
