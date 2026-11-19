@@ -12,6 +12,7 @@ the project, see docs/THIRD_PARTY_ASSETS.md), made fit for the game - with the a
 
 Run headless:
   blender -b --factory-startup --python tools/blender/generated_house.py -- <in.glb> <out stem> <texture stem>
+      [width depth]   (default: the AlpineHouse footprint)
 """
 
 import math
@@ -27,6 +28,7 @@ import fvm  # noqa: E402
 
 WIDTH, DEPTH = 10.5, 12.0     # walls of the coded AlpineHouse variant 0 (x, and z = front in Unity)
 SINK = 0.25
+FRONT_ALIGN = False
 FAR_TRIANGLES = 900
 
 
@@ -66,8 +68,11 @@ def normalise(o):
     # Fit inside the coded footprint (never larger: neighbours, fences and lanes are placed around it), proportions kept.
     s = min(WIDTH / (x1 - x0), DEPTH / (y1 - y0))
     centre = Vector(((x0 + x1) / 2, (y0 + y1) / 2, lo))
-    me.transform(Matrix.Translation(Vector((0, 0, -SINK))) @ Matrix.Scale(s, 4) @ Matrix.Translation(-centre))
-    print(f"walls {(x1 - x0) * s:.1f} x {(y1 - y0) * s:.1f} m, height {h * s:.1f} m (scale {s:.2f})")
+    # With FRONT_ALIGN the front wall stands at the footprint's front edge (where the path or forecourt begins) instead
+    # of the middle: a model shallower than its plot otherwise leaves a strip of meadow before the door.
+    shift = ((DEPTH - ((y1 - y0) * s)) / 2) if FRONT_ALIGN else 0
+    me.transform(Matrix.Translation(Vector((0, shift, -SINK))) @ Matrix.Scale(s, 4) @ Matrix.Translation(-centre))
+    print(f"walls {(x1 - x0) * s:.1f} x {(y1 - y0) * s:.1f} m, height {h * s:.1f} m (scale {s:.2f}), moved {shift:.1f} m to the front")
     return h * s
 
 
@@ -101,23 +106,38 @@ def shade(o):
 def reduce(o, target):
     # Tripo's mesh is split into separate pieces along its texture seams; reduced as they are, their borders move
     # apart and the far version tears open. Joined first (texture coordinates stay per corner), it stays closed.
+    # On some models the joined mesh stops above the target (the inn: 5,300 instead of 900). Reducing it unjoined
+    # reaches 900 but tears it (1,642 open edges, checked), so the closed, larger far version is kept (10 inns only).
     bm = bmesh.new()
     bm.from_mesh(o.data)
     bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.002)
     bm.to_mesh(o.data)
     bm.free()
-    tris = sum(len(p.vertices) - 2 for p in o.data.polygons)
-    if tris <= target:
-        return
-    m = o.modifiers.new("Decimate", "DECIMATE")
-    m.ratio = target / tris
+    _collapse(o, target)
+    print(f"far version: {sum(len(p.vertices) - 2 for p in o.data.polygons)} triangles")
+
+
+def _collapse(o, target):
+    # One collapse pass can stop far above the target on meshes with many separate pieces (the inn stayed at 5,344
+    # instead of 900): repeat until it gets there or stops shrinking.
     bpy.context.view_layer.objects.active = o
-    bpy.ops.object.modifier_apply(modifier=m.name)
+    for _ in range(6):
+        tris = sum(len(p.vertices) - 2 for p in o.data.polygons)
+        if tris <= target * 1.1:
+            break
+        m = o.modifiers.new("Decimate", "DECIMATE")
+        m.ratio = target / tris
+        bpy.ops.object.modifier_apply(modifier=m.name)
+        if sum(len(p.vertices) - 2 for p in o.data.polygons) >= tris * 0.97:
+            break
 
 
 if __name__ == "__main__":
     args = sys.argv[sys.argv.index("--") + 1:]
     src, stem, tex_stem = args[0], args[1], args[2]
+    if len(args) > 4:   # another building's footprint (width along the road, depth towards it), e.g. the inn 14 x 17
+        WIDTH, DEPTH = float(args[3]), float(args[4])
+    FRONT_ALIGN = len(args) > 5 and args[5] == "front"
     for detail in (0, 1):
         house = load(src)
         normalise(house)
