@@ -11,7 +11,7 @@ docs/THIRD_PARTY_ASSETS.md), made fit for the game:
 
 Run headless:
   blender -b --factory-startup --python tools/blender/generated_tree.py -- <in.glb> <height m> <bark material>
-      <foliage material> <out stem> [preview.png] [uv]
+      <foliage material> <out stem> [preview.png] [uv] [pale]
   (uv: own texture coordinates for the close version, so the leaf texture does not break up per facet)
 e.g. ... -- tools/blender/sources/larch_tripo.glb 17 Bark LarchNeedles unity/.../Resources/Models/Larch_0
 """
@@ -101,7 +101,9 @@ def split_by_texture(o, bark, foliage):
         y = min(h - 1, max(0, int((v % 1.0) * h)))
         k = (y * w + x) * 4
         r, g, b = px[k], px[k + 1], px[k + 2]
-        green = g > r * 1.08 and g > b
+        # Pale foliage (the weeping willow's silvery leaves) is not clearly green: with PALE only brownish faces
+        # (more red than green) count as bark.
+        green = (g >= r) if PALE else (g > r * 1.08 and g > b)
         p.material_index = 1 if green else 0
         counts[p.material_index] += 1
     print(f"faces: {counts[0]} {bark}, {counts[1]} {foliage}")
@@ -169,6 +171,7 @@ def far_version(o, height, bark, foliage, target):
     return [crown] + trunk
 
 
+PALE = False
 TILE = {"Bark": 1.0}    # metres per repeat of the game's textures (SurfaceTextures: foliage 0.6 m, bark used at 1 m)
 FOLIAGE_TILE = 0.6
 
@@ -204,6 +207,7 @@ if __name__ == "__main__":
     args = sys.argv[sys.argv.index("--") + 1:]
     src, height, bark, foliage, stem = args[0], float(args[1]), args[2], args[3], args[4]
     preview = next((a for a in args[5:] if a.endswith(".png")), None)
+    PALE = "pale" in args[5:]   # pale foliage: only brownish faces are bark (the weeping willow)
     with_uvs = "uv" in args[5:]   # own texture coordinates for the close version (all trees and the bush use it)
     for detail in (0, 1):
         tree = load(src)
