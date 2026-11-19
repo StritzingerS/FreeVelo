@@ -204,7 +204,7 @@ if __name__ == "__main__":
     args = sys.argv[sys.argv.index("--") + 1:]
     src, height, bark, foliage, stem = args[0], float(args[1]), args[2], args[3], args[4]
     preview = next((a for a in args[5:] if a.endswith(".png")), None)
-    with_uvs = "uv" in args[5:]   # own texture coordinates for the close version (the bush; trees not yet re-baked)
+    with_uvs = "uv" in args[5:]   # own texture coordinates for the close version (all trees and the bush use it)
     for detail in (0, 1):
         tree = load(src)
         normalise(tree, height)
