@@ -182,8 +182,11 @@ Notes:
   no gap under its walls on any of its 97 plots).
 - Result: 0 floating items. `LandscapeTests.NothingFloatsAboveTheDrawnGround` keeps it that way (one rule for all
   items instead of one test per symptom; the old garden-things test is folded into it).
-- Still open from the target design below: plots planned as a whole (`PlotPlanner`), yards and paths as ground
-  surfaces instead of plates (they still sink up to 0.4 m uphill by design), fences as polylines.
+- Yards, forecourts, beer-garden floors and stone paths are ground surfaces (`Landscape.Surfaces`: one rectangle
+  each, one continuous path per house instead of separate stones), draped by the app over the drawn ground on a
+  1 m grid and rising onto the road where they meet it. The plate models `Yard` and `PathStone` are no longer placed
+  and `SeatFlatPlates` is gone. The lanes now follow `SurfaceHeight` too.
+- Still open from the target design below: plots planned as a whole (`PlotPlanner`), fences as polylines.
 
 ### Target design
 

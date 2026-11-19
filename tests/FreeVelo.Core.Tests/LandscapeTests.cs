@@ -138,21 +138,19 @@ public class LandscapeTests
     }
 
     [Fact]
-    public void YardsAndPathsDoNotFloat()
+    public void YardsAndPathsAreGroundSurfaces()
     {
-        var terrain = Terrain.Build(WorldMap.Default); // own copy: the pads change the ground
+        // No more plate models (they floated or sank on slopes): gravel yards and stone paths are surfaces the app
+        // drapes over the ground. Every house plot's path leads to its street; no surface lies on a road or in water.
+        var terrain = Terrain.Build(WorldMap.Default);
         var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
-        foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.Yard or SceneryKind.PathStone))
+        Assert.DoesNotContain(l.Items, i => i.Kind is SceneryKind.Yard or SceneryKind.PathStone);
+        Assert.True(l.Surfaces.Count(s => s.Crop == WorldMaterial.Stone) > 100, "stone paths to the house doors");
+        Assert.True(l.Surfaces.Count(s => s.Crop == WorldMaterial.Gravel) > 20, "gravel yards and forecourts");
+        foreach (var s in l.Surfaces)
         {
-            // The plate's base reaches 0.68 m below its seat: no ground under it may be lower than that.
-            var (hx, hz) = i.Kind == SceneryKind.Yard ? (3.5, 3.0) : (0.75, 2.0);
-            double r = i.RotationDeg * Math.PI / 180;
-            foreach (var (u, v) in new[] { (-hx, -hz), (hx, -hz), (-hx, hz), (hx, hz) })
-            {
-                double g = terrain.SurfaceHeight(i.X + (u * Math.Cos(r)) + (v * Math.Sin(r)), i.Z - (u * Math.Sin(r)) + (v * Math.Cos(r)));
-                Assert.True(g >= i.Y - 0.01, $"{i.Kind} at ({i.X:0},{i.Z:0}) floats");
-                Assert.True(g - i.Y <= 0.5, $"{i.Kind} at ({i.X:0},{i.Z:0}) buried");
-            }
+            Assert.False(terrain.IsWater(s.Cx, s.Cz, 0), $"{s.Crop} at ({s.Cx:0},{s.Cz:0}) in the water");
+            Assert.True(terrain.DistanceToRoad(s.Cx, s.Cz, 5, out var road, out _, out _) > ((road?.Width ?? 0) / 2), $"{s.Crop} at ({s.Cx:0},{s.Cz:0}) on a road");
         }
     }
 
@@ -183,13 +181,13 @@ public class LandscapeTests
     {
         var terrain = Terrain.Build(WorldMap.Default);
         var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
-        var yards = l.Items.Where(i => i.Kind == SceneryKind.Yard).ToList();
+        var gravel = l.Surfaces.Where(s => s.Crop == WorldMaterial.Gravel).ToList();
         var tables = l.Items.Where(i => i.Kind == SceneryKind.BeerTable).ToList();
         Assert.NotEmpty(tables);
         foreach (var t in tables)
         {
-            // Every table stands on a gravel plate (the garden floor) and on level ground.
-            Assert.Contains(yards, y => Math.Abs(y.X - t.X) < 4.5 && Math.Abs(y.Z - t.Z) < 4.5);
+            // Every table stands on the gravel garden floor and on level ground.
+            Assert.Contains(gravel, s => s.Contains(t.X, t.Z));
             Assert.True(Math.Abs(terrain.Height(t.X, t.Z) - terrain.Height(t.X + 1, t.Z + 1)) < 0.1, $"table at ({t.X:0},{t.Z:0}) on a slope");
         }
     }

@@ -59,6 +59,27 @@ namespace FreeVelo.Core.World.Gen
 
         /// <summary>The side lanes, from the road's edge outwards: asphalt in the villages, gravel to the farms (the app drapes them on the ground).</summary>
         public List<(double AX, double AZ, double BX, double BZ, bool Gravel)> Lanes { get; } = new List<(double, double, double, double, bool)>();
+
+        /// <summary>
+        /// Gravel yards, forecourts, beer-garden floors and stone paths as ground surfaces: rectangles the app drapes over
+        /// the drawn ground (Crop = <see cref="WorldMaterial.Gravel"/> or <see cref="WorldMaterial.Stone"/>). They replace
+        /// the old plate models, which floated or sank on slopes.
+        /// </summary>
+        public List<FieldPatch> Surfaces { get; } = new List<FieldPatch>();
+
+        /// <summary>
+        /// A surface in a building's frame: centre (u along the road, v towards it), half sizes along u and v, the
+        /// building's rotation (its model's +Z = towards the road).
+        /// </summary>
+        private void AddSurface(Func<double, double, (double X, double Z)> p, double u0, double u1, double v0, double v1, double rotationDeg, WorldMaterial material)
+        {
+            if (u1 - u0 < 0.5 || v1 - v0 < 0.5) return;
+            var (cx, cz) = p((u0 + u1) / 2, (v0 + v1) / 2);
+            // FieldPatch: its length runs along the angle's direction (= the model's +Z, towards the road), its width across.
+            var patch = new FieldPatch(cx, cz, (v1 - v0) / 2, (u1 - u0) / 2, rotationDeg * Math.PI / 180, material);
+            Surfaces.Add(patch);
+            BlockPatch(patch, 0.5);
+        }
         private readonly Dictionary<long, List<SceneryItem>> _itemsByChunk = new Dictionary<long, List<SceneryItem>>();
         private readonly Dictionary<long, List<FieldPatch>> _fieldsByChunk = new Dictionary<long, List<FieldPatch>>();
 
@@ -100,7 +121,6 @@ namespace FreeVelo.Core.World.Gen
             l.PlaceFields();
             l.PlaceHayHuts();
             l.LevelBuildingPlots();
-            l.SeatFlatPlates();
             l.SettleOnSurface();
             foreach (var item in l.Items) l.Index(item);
             return l;
@@ -399,15 +419,22 @@ namespace FreeVelo.Core.World.Gen
                 BlockCircle(px, pz, SceneryModels.Radius(k) + 1);
             }
 
+            // A gravel apron in front of the doors (as the old yard plates: the building's width, 6 m deep).
+            void Apron()
+            {
+                var (cx, cz) = P(0, (d / 2) + 3);
+                if (FenceClear((cx, cz)) && _terrain.DistanceToRiver(cx, cz, 15, out _) >= 12) AddSurface(P, -w / 2, w / 2, d / 2, (d / 2) + 6, rot, WorldMaterial.Gravel);
+            }
+
             switch (kind)
             {
                 case SceneryKind.Workshop:
-                    for (double u = -(w / 2) + 3.5; u <= (w / 2) - 3.5 + 0.01; u += 7) Put(SceneryKind.Yard, u, (d / 2) + 3, rot, 0);
+                    Apron();
                     Put(SceneryKind.Car, -3.6, (d / 2) + 3.2, rot + 180 + (_random.NextDouble() * 20), _random.Next(3));
                     if (_random.NextDouble() < 0.7) Put(SceneryKind.Car, (w / 2) + 3, (d / 2) + 2.5, rot + 90 + (_random.NextDouble() * 15), _random.Next(3));
                     break;
                 case SceneryKind.FireStation:
-                    for (double u = -(w / 2) + 3.5; u <= (w / 2) - 3.5 + 0.01; u += 7) Put(SceneryKind.Yard, u, (d / 2) + 3, rot, 0);
+                    Apron();
                     break;
                 case SceneryKind.Sawmill:
                     // Logs waiting on one side, sawn timber drying on the other.
@@ -465,10 +492,7 @@ namespace FreeVelo.Core.World.Gen
             if (kind is SceneryKind.Inn or SceneryKind.Shop || kind == SceneryKind.Farmhouse)
             {
                 // Gravel forecourt / yard between the building and the street
-                for (double u = -(w / 2) + 3.5; u <= (w / 2) - 3.5 + 0.01; u += 7)
-                {
-                    for (double v = front + 3; v < roadEdge - 0.5; v += 6) Item(SceneryKind.Yard, u, v, rotationDeg, 0);
-                }
+                AddSurface(P, -w / 2, w / 2, front, roadEdge - 0.5, rotationDeg, WorldMaterial.Gravel);
 
                 if (kind == SceneryKind.Inn)
                 {
@@ -479,8 +503,8 @@ namespace FreeVelo.Core.World.Gen
                 return;
             }
 
-            // Stone path from the road to the door
-            for (double v = front + 2; v < roadEdge + 1; v += 3.8) Item(SceneryKind.PathStone, 0, v, rotationDeg, 0);
+            // Stone path from the door to the road edge
+            AddSurface(P, -0.75, 0.75, front - 0.3, roadEdge + 0.3, rotationDeg, WorldMaterial.Stone);
 
             // Flower beds along the front wall, either side of the door
             foreach (int side in new[] { -1, 1 }) Item(SceneryKind.FlowerBed, side * ((w / 4) + 0.9), (d / 2) + 0.6, rotationDeg, 0);
@@ -537,10 +561,7 @@ namespace FreeVelo.Core.World.Gen
                 int own = _pads.FindLastIndex(q => Math.Abs(q.X - inn.X) < 0.01 && Math.Abs(q.Z - inn.Z) < 0.01);
                 if (own >= 0) _pads.Add(new Terrain.Pad(c.X, c.Z, half, halfV, rotationDeg, _pads[own].Height));
 
-                for (double u = cu - 3.5; u <= cu + 3.5; u += 7)
-                {
-                    for (double v = -halfV + 3; v <= halfV - 3; v += 6) item(SceneryKind.Yard, u, v, rotationDeg, 0);
-                }
+                AddSurface(p, cu - 6, cu + 6, -halfV + 1, halfV - 1, rotationDeg, WorldMaterial.Gravel);
 
                 for (int i = 0; i < 2; i++)
                 {
@@ -685,49 +706,18 @@ namespace FreeVelo.Core.World.Gen
         }
 
         /// <summary>
-        /// Yards and path stones are flat plates with a deep base: each sits on the lowest ground under it, so the uphill
-        /// part sinks into the meadow instead of the downhill end floating; where the ground is too steep, it is left out.
-        /// </summary>
-        private void SeatFlatPlates()
-        {
-            for (int k = Items.Count - 1; k >= 0; k--)
-            {
-                var item = Items[k];
-                if (item.Kind is not (SceneryKind.Yard or SceneryKind.PathStone)) continue;
-                var (hx, hz) = item.Kind == SceneryKind.Yard ? (3.5, 3.0) : (0.75, 2.0);
-                double r = item.RotationDeg * Math.PI / 180, sin = Math.Sin(r), cos = Math.Cos(r);
-                double low = double.MaxValue, high = double.MinValue;
-                foreach (var (u, v) in new[] { (-hx, -hz), (hx, -hz), (-hx, hz), (hx, hz), (0.0, 0.0) })
-                {
-                    double g = _terrain.SurfaceHeight(item.X + (u * cos) + (v * sin), item.Z - (u * sin) + (v * cos));
-                    low = Math.Min(low, g);
-                    high = Math.Max(high, g);
-                }
-
-                if (high - low > 0.45)
-                {
-                    Items.RemoveAt(k);
-                    continue;
-                }
-
-                item.Y = (float)low;
-                Items[k] = item;
-            }
-        }
-
-        /// <summary>
         /// Last step, once the ground is final (pads set): every item stands on the ground exactly as the app draws it
         /// (<see cref="Terrain.SurfaceHeight"/>) - before, heights came from a bilinear estimate that was up to 1.7 m off
         /// the drawn triangles. Fences follow the ground along their length (<see cref="SceneryItem.Slope"/>); small rigid
         /// things sit on the lowest point of their footprint, so no corner hangs in the air; trees and poles on their
-        /// foot. Buildings keep their level pad and plates their seat (<see cref="SeatFlatPlates"/>).
+        /// foot. Buildings keep their level pad.
         /// </summary>
         private void SettleOnSurface()
         {
             for (int k = 0; k < Items.Count; k++)
             {
                 var item = Items[k];
-                if (IsBuilding(item.Kind) || item.Kind is SceneryKind.Yard or SceneryKind.PathStone) continue;
+                if (IsBuilding(item.Kind)) continue;
                 double r = item.RotationDeg * Math.PI / 180, sin = Math.Sin(r), cos = Math.Cos(r);
                 double At(double u, double v) => _terrain.SurfaceHeight(item.X + (u * cos) + (v * sin), item.Z - (u * sin) + (v * cos));
                 if (item.Kind is SceneryKind.GardenFence or SceneryKind.Fence)

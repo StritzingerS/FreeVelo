@@ -97,6 +97,7 @@ namespace FreeVelo.World
             BuildSummitSigns();
             BuildVillageSigns();
             BuildLanes();
+            BuildSurfaces();
         }
 
         /// <summary>Number of ground covers (submeshes of the mountain pieces).</summary>
@@ -132,7 +133,7 @@ namespace FreeVelo.World
                 {
                     float t = length * k / steps;
                     double x = ax + (along.x * t), z = az + (along.z * t);
-                    float y = (float)_terrain.Height(x, z) + 0.08f;
+                    float y = (float)_terrain.SurfaceHeight(x, z) + 0.08f;
                     double d = _terrain.DistanceToRoad(x, z, 12, out var road, out double roadHeight, out _);
                     if (road != null)
                     {
@@ -149,6 +150,68 @@ namespace FreeVelo.World
 
             CreateMesh("Lanes", paved.ToMesh("Lanes"), Mat(Color.white, TextureFactory.Asphalt(), 0.12f), false);
             CreateMesh("GravelLanes", gravel.ToMesh("GravelLanes"), Mat(Color.white, TextureFactory.GravelRoad(), 0.05f), false);
+        }
+
+        /// <summary>
+        /// Gravel yards, forecourts, beer-garden floors and stone paths (Landscape.Surfaces): each rectangle draped over the
+        /// ground exactly as drawn (Terrain.SurfaceHeight) on a 1 m grid, 4 cm above it, rising onto the road where it
+        /// meets one (as the lanes do). One mesh per material for the whole world.
+        /// </summary>
+        private void BuildSurfaces()
+        {
+            var landscape = _terrain.Landscape;
+            if (landscape == null || landscape.Surfaces.Count == 0) return;
+            var byMaterial = new Dictionary<WorldMaterial, (List<Vector3> V, List<Vector2> UV, List<int> T)>();
+            foreach (var s in landscape.Surfaces)
+            {
+                if (!byMaterial.TryGetValue(s.Crop, out var m)) byMaterial[s.Crop] = m = (new List<Vector3>(), new List<Vector2>(), new List<int>());
+                float tile = SurfaceTextures.TileM(s.Crop);
+                int nu = Mathf.Max(1, Mathf.CeilToInt((float)(s.HalfLength * 2))), nv = Mathf.Max(1, Mathf.CeilToInt((float)(s.HalfWidth * 2)));
+                int start = m.V.Count;
+                for (int j = 0; j <= nv; j++)
+                {
+                    for (int i = 0; i <= nu; i++)
+                    {
+                        double u = -s.HalfLength + (s.HalfLength * 2 * i / nu), v = -s.HalfWidth + (s.HalfWidth * 2 * j / nv);
+                        var (x, z) = s.Point(u, v);
+                        float y = (float)_terrain.SurfaceHeight(x, z) + 0.04f;
+                        double d = _terrain.DistanceToRoad(x, z, 8, out var road, out double roadHeight, out _);
+                        if (road != null)
+                        {
+                            float over = (float)(d - (road.Width / 2));
+                            float blend = Mathf.Clamp01(1 - (over / 2.5f));
+                            y = Mathf.Max(y, Mathf.Lerp(y, (float)roadHeight + 0.02f, blend));
+                        }
+
+                        m.V.Add(new Vector3((float)x, y, (float)z));
+                        m.UV.Add(new Vector2((float)x, (float)z) / tile);
+                    }
+                }
+
+                for (int j = 0; j < nv; j++)
+                {
+                    for (int i = 0; i < nu; i++)
+                    {
+                        int a = start + (j * (nu + 1)) + i, b = a + nu + 1;
+                        // Up-facing whatever the patch's orientation (as the road fans do).
+                        var n = Vector3.Cross(m.V[b] - m.V[a], m.V[a + 1] - m.V[a]);
+                        if (n.y > 0) m.T.AddRange(new[] { a, b, a + 1, a + 1, b, b + 1 });
+                        else m.T.AddRange(new[] { a, a + 1, b, a + 1, b + 1, b });
+                    }
+                }
+            }
+
+            foreach (var pair in byMaterial)
+            {
+                var mesh = new Mesh { name = "Surfaces " + pair.Key, indexFormat = IndexFormat.UInt32 };
+                mesh.SetVertices(pair.Value.V);
+                mesh.SetUVs(0, pair.Value.UV);
+                mesh.SetTriangles(pair.Value.T, 0);
+                mesh.RecalculateNormals();
+                mesh.RecalculateTangents();
+                mesh.RecalculateBounds();
+                CreateMesh("Surfaces " + pair.Key, mesh, Mat(pair.Key), false);
+            }
         }
 
         /// <summary>Black letters, as on the white Austrian place-name and direction signs.</summary>
