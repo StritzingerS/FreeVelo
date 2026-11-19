@@ -99,12 +99,21 @@ def check(o, kind, limit):
         findings.append(f"triangles {tris} over the limit {limit}")
 
     # Loose parts: everything but the largest piece, if small (floating bits). Trees may consist of several pieces.
+    # Floating parts: a separate piece is fine if it touches another piece (a picket nailed on a rail); a gap of more
+    # than 0.5 % of the size to every other piece means it floats (fence C: pickets 3-4 cm off the rails on 3 m).
+    # Measured by distance, not by size: on a small model one picket is a large share of all triangles.
     parts = sorted(islands(bm), key=len, reverse=True)
-    for p in parts[1:]:
-        if len(p) < 0.05 * tris and kind != "tree":
-            c = sum((f.calc_center_median() for f in p), Vector()) / len(p)
-            findings.append(f"loose part: {len(p)} faces at ({c.x:.2f}, {c.y:.2f}, {c.z:.2f})")
-            red.update(f.index for f in p)
+    if kind != "tree" and len(parts) > 1:
+        verts = [v.co for v in bm.verts]
+        for i, p in enumerate(parts):
+            others = [[v.index for v in f.verts] for j, q in enumerate(parts) if j != i for f in q]
+            other_tree = BVHTree.FromPolygons(verts, others)
+            gap = min(other_tree.find_nearest(v.co)[3] or 0.0 for f in p for v in f.verts)
+            if gap > extent * 0.005:
+                c = sum((f.calc_center_median() for f in p), Vector()) / len(p)
+                findings.append(f"floating part: {len(p)} faces, {gap / extent * 100:.1f} % of the size away from the rest, "
+                                f"at ({c.x:.2f}, {c.y:.2f}, {c.z:.2f})")
+                red.update(f.index for f in p)
 
     # Holes: open edges above the lowest 3 % (the underside may be open, it sits in the ground).
     open_edges = [e for e in bm.edges if e.is_boundary and min(v.co.z for v in e.verts) > lo + size * 0.03]

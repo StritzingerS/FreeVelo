@@ -101,6 +101,10 @@ shows. This must not happen again.
    "object + key features + material/style + constraints", one object, no scene; add "one solid piece, single
    connected mesh, closed walls". The house prompt that produced the funnels had about 90 words listing ten
    features - too long. Negative prompts are not a reliable way to remove parts.
+7a. **Very low triangle counts (fences, 19 Nov):** the H series crumples below a few hundred triangles; the P series
+   (P1, 30 credits even without texture) builds clean shapes at about 150 triangles, but as separate boards that
+   float 3-10 cm apart (three garden fence tries, none accepted). The garden fence stays the coded model for now;
+   simple board props are where the coded models are least noticeable.
 8. **Buildings and hero objects: check in 2D before 3D** (Tripo API): reference image -> `image-to-multiview`
    (four view images: front, left, back, right) -> owner and Claude look at the four views; unwanted elements are
    removed with `edit-multiview` (`prompts: [{"prompt": "...", "view": "left"}]`) -> `multiview-to-model` with
