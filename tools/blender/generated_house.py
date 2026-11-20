@@ -107,8 +107,9 @@ def textured(o, stem):
 
 
 def save_textures(out_dir, stem):
-    for prefix, suffix in (("Color", "_diff"), ("NormalGL", "_nor")):
-        img = next(i for i in bpy.data.images if i.name.startswith(prefix) and i.size[0])
+    # Image names: "Color*" / "NormalGL*" from generation, "tripo_base_color*" / "tripo_normal*" from Tripo's texture task
+    for prefixes, suffix in ((("Color", "tripo_base_color"), "_diff"), (("NormalGL", "tripo_normal"), "_nor")):
+        img = next(i for i in bpy.data.images if i.name.startswith(prefixes) and i.size[0])
         copy = img.copy()
         copy.scale(1024, 1024)
         copy.filepath_raw = os.path.join(out_dir, stem + suffix + ".jpg")
