@@ -566,9 +566,14 @@ namespace FreeVelo.Core.World.Gen
                 // Stone path from the door to the road edge
                 AddSurface(P, -0.75, 0.75, front - 0.3, roadEdge + 0.3, rotationDeg, WorldMaterial.Stone);
 
-                // Flower beds along the front wall, either side of the door; sometimes a bench
-                foreach (int side in new[] { -1, 1 }) Item(SceneryKind.FlowerBed, side * ((w / 4) + 0.9), (d / 2) + 0.6, rotationDeg, 0);
-                if (_random.NextDouble() < 0.5) Item(SceneryKind.Bench, (_random.NextDouble() < 0.5 ? -1 : 1) * (w / 2 - 1.4), (d / 2) + 0.55, rotationDeg, 0);   // back to the wall
+                // Flower beds along the front wall, either side of the door; sometimes a bench instead of one of them
+                // (both stood on the same spot). The random draws are as before, so the rest of the landscape stays.
+                int benchSide = _random.NextDouble() < 0.5 ? (_random.NextDouble() < 0.5 ? -1 : 1) : 0;
+                foreach (int side in new[] { -1, 1 })
+                {
+                    if (side == benchSide) Item(SceneryKind.Bench, side * (w / 2 - 1.4), (d / 2) + 0.55, rotationDeg, 0);   // back to the wall
+                    else Item(SceneryKind.FlowerBed, side * ((w / 4) + 0.9), (d / 2) + 0.6, rotationDeg, 0);
+                }
             }
 
             // Garden fence: front (with a gap for the path, 1.5 m from the road edge), sides and back
