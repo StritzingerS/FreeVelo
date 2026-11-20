@@ -133,14 +133,15 @@ namespace FreeVelo.Core.World.Gen
                     double slope = terrain.Slope(x, z);
                     var item = new SceneryItem { X = (float)x, Y = (float)h - 0.3f, Z = (float)z, RotationDeg = (float)(r3 * 360), Variant = (int)(r2 * 97), Scale = (float)(0.8 + (0.4 * r1)) };
 
-                    // Along the river and the lake shores: alders and willows.
+                    // Along the river and the lake shores: alders (the weeping willow was taken out at the owner's
+                    // request: it did not fit the landscape).
                     double river = terrain.DistanceToRiver(x, z, 40, out _);
                     bool shore = river < 40 || map.Lakes.Any(l => l.Relative(x, z) is double q && q > 1.03 && q < 1.35);
                     if (shore && h < 1300)
                     {
                         if (r3 < 0.5)
                         {
-                            item.Kind = species < 0.62 ? SceneryKind.Alder : SceneryKind.Willow;
+                            item.Kind = SceneryKind.Alder;
                             items.Add(item);
                         }
 
