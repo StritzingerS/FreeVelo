@@ -146,8 +146,10 @@ def far_version(o, height, bark, foliage, target):
     bpy.ops.mesh.separate(type="MATERIAL")
     bpy.ops.object.mode_set(mode="OBJECT")
     parts = [p for p in bpy.context.selected_objects]
-    crown = next(p for p in parts if p.material_slots[0].material.name == foliage or
-                 any(s.material.name == foliage for s in p.material_slots) and len(p.data.polygons) > 100)
+    # The crown is the largest part with the foliage material (with bark and foliage the same material, as on the
+    # mountain pine, the small stem part would otherwise be taken and the real crown left unreduced as "trunk").
+    crown = max((p for p in parts if any(s.material and s.material.name == foliage for s in p.material_slots)),
+                key=lambda p: len(p.data.polygons))
     trunk = [p for p in parts if p is not crown]
     # Thin needle sheets would fall between the voxels and the crown would come out too narrow: thicken them first.
     s = crown.modifiers.new("Solidify", "SOLIDIFY")
@@ -158,12 +160,18 @@ def far_version(o, height, bark, foliage, target):
     m.mode = "VOXEL"
     m.voxel_size = height * 0.02
     apply(crown, m)
-    tris = sum(len(p.vertices) - 2 for p in crown.data.polygons)
-    budget = target - sum(len(p.data.polygons) * 2 for p in trunk)
-    if tris > budget:
+    budget = max(150, target - sum(len(p.data.polygons) * 2 for p in trunk))
+    # One collapse pass can stop well above the budget (the mountain pine's dome stayed at about 870 of 450): repeat
+    # until it gets there or stops shrinking.
+    for _ in range(4):
+        tris = sum(len(p.vertices) - 2 for p in crown.data.polygons)
+        if tris <= budget * 1.1:
+            break
         d = crown.modifiers.new("Decimate", "DECIMATE")
         d.ratio = budget / tris
         apply(crown, d)
+        if sum(len(p.vertices) - 2 for p in crown.data.polygons) >= tris * 0.97:
+            break
     crown.data.materials.clear()
     crown.data.materials.append(fvm.material(foliage))
     for p in crown.data.polygons:
