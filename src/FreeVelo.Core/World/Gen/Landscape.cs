@@ -444,7 +444,8 @@ namespace FreeVelo.Core.World.Gen
                         if (FenceClear(P(0, (d / 2) + 3)) && _terrain.DistanceToRiver(cx, cz, 15, out _) >= 12)
                         {
                             double front = Math.Min((d / 2) + 9, _terrain.DistanceToRoad(cx, cz, 40, out var fr, out _, out _) - ((fr?.Width ?? 6.5) / 2) + 0.3);
-                            AddSurface(P, -5, 5, d / 2, front, rot, WorldMaterial.Gravel);
+                            // From 1 m under the building: its front wall stands a little behind the plot's edge.
+                            AddSurface(P, -5, 5, (d / 2) - 1, front, rot, WorldMaterial.Gravel);
                         }
                     }
 
