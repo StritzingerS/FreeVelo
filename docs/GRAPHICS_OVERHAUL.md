@@ -121,7 +121,7 @@ that are never placed are dropped. About 33 models instead of about 85:
 | Group | Models |
 |---|---|
 | Nature (10) | Larch (approved 18 Nov), Spruce/Fir (fir darker), Stone pine, Mountain pine (both done 19 Nov), Broadleaf (beech, maple, linden, alder by leaf colour), Willow (weeping willow), Apple (both done 19 Nov), Bush (done 19 Nov), Rock × 2 (done 19 Nov: P1 series, see 7a) |
-| Buildings (11) | Alpine house × 2 meshes (with material looks), Farmhouse as a Paarhof: dwelling + Stadel (done 20 Nov), Inn, Shop, Church, Hay hut (done 20 Nov), Alpine hut (done 19 Nov), Workshop, Sawmill, Fire station, Shrine (done 18 Nov) |
+| Buildings (11) | Alpine house × 2 meshes (with material looks), Farmhouse as a Paarhof: dwelling + Stadel (done 20 Nov), Inn, Shop, Church, Hay hut (done 20 Nov), Alpine hut (done 19 Nov), Workshop (done 20 Nov), Sawmill, Fire station, Shrine (done 18 Nov) |
 | Props (11) | Garden fence, Fence, Flower bed, Bench, Beer table, Log pile, Lumber stack, Car (paint by material), Maypole, Village sign, Direction sign (lettering stays in the app) |
 | Road furniture (3, later) | Guard rail, Kerb, Bridge railing |
 
