@@ -78,6 +78,7 @@ public class LandscapeTests
 
         Assert.True(l.Items.Count(i => i.Kind == SceneryKind.Church) >= 4);
         Assert.True(l.Items.Count(i => i.Kind == SceneryKind.Farmhouse) >= 8, "farms on the valley floors");
+        Assert.Equal(l.Items.Count(i => i.Kind == SceneryKind.Farmhouse), l.Items.Count(i => i.Kind == SceneryKind.Barn)); // each a Paarhof
         Assert.NotEmpty(l.Fields);
         Assert.NotEmpty(l.Pastures);
         Assert.Contains(l.Items, i => i.Kind == SceneryKind.BeerTable); // the inns' Gastgarten
@@ -160,7 +161,7 @@ public class LandscapeTests
         var terrain = Terrain.Build(WorldMap.Default); // own copy: the pads change the ground
         var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
         int checkedBuildings = 0;
-        foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.AlpineHouse or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.Farmhouse))
+        foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.AlpineHouse or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.Farmhouse or SceneryKind.Barn))
         {
             // Across the middle of the footprint the ground is within a few centimetres of the building's floor.
             foreach (var (x, z) in new[] { (0.0, 0.0), (3.0, 0.0), (-3.0, 0.0), (0.0, 3.0), (0.0, -3.0) })
@@ -206,7 +207,7 @@ public class LandscapeTests
     {
         var terrain = Ground.Value;
         var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
-        foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.AlpineHouse or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.Church or SceneryKind.Farmhouse
+        foreach (var i in l.Items.Where(i => i.Kind is SceneryKind.AlpineHouse or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.Church or SceneryKind.Farmhouse or SceneryKind.Barn
             or SceneryKind.Workshop or SceneryKind.Sawmill or SceneryKind.FireStation))
         {
             Assert.True(terrain.DistanceToRoad(i.X, i.Z, 8, out _, out _, out _) >= 8, $"{i.Kind} at ({i.X:0},{i.Z:0}) on a road");

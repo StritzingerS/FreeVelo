@@ -116,7 +116,7 @@ namespace FreeVelo.Core.World.Gen
         public static double Radius(SceneryKind kind) => kind switch
         {
             SceneryKind.House => 9,
-            SceneryKind.Barn => 11,
+            SceneryKind.Barn => 9.5,
             SceneryKind.Oak => 4,
             SceneryKind.Spruce => 3,
             SceneryKind.Pine => 3,
@@ -376,22 +376,22 @@ namespace FreeVelo.Core.World.Gen
             }
         }
 
+        /// <summary>
+        /// The Paarhof's Stadel, as the Tripo model (Resources/Models/Barn_*, which replaces this close up and to 300
+        /// m): 12 m wide, 14 m deep, its gable with the big gate to the front (+Z), wooden walls, a red roof.
+        /// </summary>
         private static void Barn(Parts near, Parts far, int v)
         {
-            float w = 16f, d = 10f, wallTop = 5f, pitch = 35f;
-            var roof = v == 0 ? WorldMaterial.RoofGrey : v == 1 ? WorldMaterial.RoofRed : WorldMaterial.RoofBrown;
-            Building(near, w, d, wallTop, pitch, WorldMaterial.WallWood, roof, detailed: false, floors: 0, gableWindows: false);
-            Building(far, w, d, wallTop, pitch, WorldMaterial.WallWood, roof, detailed: false, floors: 0, gableWindows: false);
+            float length = 14f, width = 12f, wallTop = 4.6f, pitch = 28f;   // built along X, then turned to the front
+            foreach (var p in new[] { near, far })
+            {
+                Building(p, length, width, wallTop, pitch, WorldMaterial.WallWood, WorldMaterial.RoofRed, detailed: false, floors: 0, gableWindows: false);
+            }
 
-            // Big gate on the front, vertical boards.
-            var gate = near.Of(WorldMaterial.Door);
-            gate.Box(new Vector3(0, 0.5f + 1.9f, (d / 2) + 0.05f), new Vector3(4.2f, 3.8f, 0.12f), Rot.Identity);
-            var frame = near.Of(WorldMaterial.Frame);
-            frame.Box(new Vector3(0, 0.5f + 3.85f, (d / 2) + 0.08f), new Vector3(4.6f, 0.18f, 0.14f), Rot.Identity);
-            frame.Box(new Vector3(-2.2f, 0.5f + 1.9f, (d / 2) + 0.08f), new Vector3(0.18f, 3.8f, 0.14f), Rot.Identity);
-            frame.Box(new Vector3(2.2f, 0.5f + 1.9f, (d / 2) + 0.08f), new Vector3(0.18f, 3.8f, 0.14f), Rot.Identity);
-            frame.Box(new Vector3(0, 0.5f + 1.9f, (d / 2) + 0.09f), new Vector3(0.12f, 3.8f, 0.14f), Rot.Identity);
-            for (int i = -1; i <= 1; i += 2) Window(near, new Vector3(i * 5.5f, 3.2f, (d / 2) + 0.02f), 0.9f, 0.7f, Rot.Identity, cross: false);
+            // The big double gate in the front gable (x = +length/2 before the turn).
+            near.Of(WorldMaterial.Door).Box(new Vector3((length / 2) + 0.05f, 0.5f + 2.0f, 0), new Vector3(0.12f, 4.0f, 5.0f), Rot.Identity);
+            near.TurnXToFront();
+            far.TurnXToFront();
         }
 
         /// <summary>
@@ -573,6 +573,16 @@ namespace FreeVelo.Core.World.Gen
             {
                 if (!_builders.TryGetValue(material, out var b)) _builders[material] = b = new MeshBuilder();
                 return b;
+            }
+
+            /// <summary>Turns everything built so far by 90 degrees about the vertical: +X becomes +Z (the front).</summary>
+            public void TurnXToFront()
+            {
+                foreach (var b in _builders.Values)
+                {
+                    var verts = b.Mesh.Vertices;
+                    for (int i = 0; i < verts.Count; i++) verts[i] = new Vector3(-verts[i].Z, verts[i].Y, verts[i].X);
+                }
             }
 
             public Dictionary<WorldMaterial, MeshData> Done()

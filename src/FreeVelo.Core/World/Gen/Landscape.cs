@@ -304,7 +304,11 @@ namespace FreeVelo.Core.World.Gen
                 if (!Free(x, z, r + 1.5, roadClear: (r * 0.75) + 5)) continue;
                 int variant = _random.Next(3);
                 if (!FootprintClear(kind, variant, x, z, lot.Item.RotationDeg)) continue;
+                // A farm on the edge of the village is a Paarhof too; without room for its Stadel it is a house.
+                int stadel = kind == SceneryKind.Farmhouse ? StadelSide(x, z, lot.Item.RotationDeg, (r * 0.75) + 5) : 0;
+                if (kind == SceneryKind.Farmhouse && stadel == 0) kind = SceneryKind.AlpineHouse;
                 Place(kind, x, z, lot.Item.RotationDeg, variant);
+                if (stadel != 0) PlaceStadel(Items[Items.Count - 1], stadel, byTrack: false);
                 Plot(kind, variant, x, z, lot.TowardX, lot.TowardZ, lot.AlongX, lot.AlongZ, lot.Item.RotationDeg);
                 if (kind == SceneryKind.Inn) inns--;
                 else if (kind == SceneryKind.Shop) shops--;
@@ -451,7 +455,8 @@ namespace FreeVelo.Core.World.Gen
             SceneryKind.AlpineHouse => variant == 1 ? (11.5, 13) : variant == 2 ? (9, 10) : (10.5, 12),
             SceneryKind.Inn => (14, 17),
             SceneryKind.Shop => (10.5, 12),
-            SceneryKind.Farmhouse => (12.5, 27 + (2 * variant)),
+            SceneryKind.Farmhouse => (12, 11.5),   // the Paarhof's dwelling (its Stadel: Barn)
+            SceneryKind.Barn => (12, 14),
             SceneryKind.AlpineHut => (8, 10),
             SceneryKind.Workshop => (16, 13),
             SceneryKind.FireStation => (14, 13),
@@ -502,7 +507,9 @@ namespace FreeVelo.Core.World.Gen
                 return;
             }
 
-            if (kind is SceneryKind.Shop || kind == SceneryKind.Farmhouse)
+            if (kind == SceneryKind.Farmhouse) return;   // the Paarhof's paths and driveway: PlaceStadel
+
+            if (kind is SceneryKind.Shop)
             {
                 // Gravel forecourt / yard between the building and the street
                 AddSurface(P, -w / 2, w / 2, front, roadEdge - 0.5, rotationDeg, WorldMaterial.Gravel);
@@ -874,7 +881,7 @@ namespace FreeVelo.Core.World.Gen
                         }
 
                         double px = x, pz = z;
-                        if (clear && Surfaces.Any(s => s.Crop == WorldMaterial.Stone && s.Contains(px, pz, 1))) clear = false;
+                        if (clear && Surfaces.Any(s => s.Crop is WorldMaterial.Stone or WorldMaterial.Gravel && s.Contains(px, pz, 1))) clear = false;
                         if (clear) break;
                     }
 
@@ -985,22 +992,27 @@ namespace FreeVelo.Core.World.Gen
             var house = P(0, setback);
             if (!Free(house.X, house.Z, SceneryModels.Radius(SceneryKind.Farmhouse) + 4, roadClear: 30) || _terrain.Slope(house.X, house.Z) > 0.12) return false;
             if (_map.ValleyDistance(house.X, house.Z) > (farSetback.HasValue ? 650 : 500) || _map.ValleyFloorFactor(house.X, house.Z) < (farSetback.HasValue ? 0.6 : 0)) return false;
+            double rot = Facing(-vx, -vz);
+            if (!FootprintClear(SceneryKind.Farmhouse, 0, house.X, house.Z, rot)) return false;
+            int stadel = StadelSide(house.X, house.Z, rot, roadClear: 20);
+            if (stadel == 0) return false;
             if (farSetback.HasValue)
             {
-                // The track from the road to the farmyard in front of the house
-                var start = P(0, (_terrain.DistanceToRoad(a.X, a.Z, 1, out var r0, out _, out _) * 0) + ((r0?.Width ?? 6.5) / 2) + 0.3);
-                var end = P(0, setback - 21); // stops in front of the farmyard, clear of the house
-                if (!FootprintClear(SceneryKind.Farmhouse, 2, house.X, house.Z, Facing(-vx, -vz))) return false;
+                // The track from the road to the yard in front of the Stadel's gate, square to the road
+                var end = FarmPoint(house.X, house.Z, rot, stadel * StadelU, FarmFront + 5.5);
+                double uEnd = ((end.X - a.X) * a.TX) + ((end.Z - a.Z) * a.TZ);
+                _terrain.DistanceToRoad(a.X, a.Z, 1, out var r0, out _, out _);
+                var start = P(uEnd, ((r0?.Width ?? 6.5) / 2) + 0.3);
                 if (!AddLane(start.X, start.Z, end.X, end.Z, gravel: true)) return false;
             }
-            if (!FootprintClear(SceneryKind.Farmhouse, 2, house.X, house.Z, Facing(-vx, -vz))) return false;
 
             double roadAngle = Math.Atan2(a.TX, a.TZ);
-            Place(SceneryKind.Farmhouse, house.X, house.Z, Facing(-vx, -vz), _random.Next(3));
+            Place(SceneryKind.Farmhouse, house.X, house.Z, rot, _random.Next(3));
+            PlaceStadel(Items[Items.Count - 1], stadel, byTrack: farSetback.HasValue);
             int across = _random.NextDouble() < 0.5 ? -1 : 1;
 
-            // The farm tree beside the house, towards the road
-            var tree = P(across * 16, setback - 14);
+            // The farm tree beside the dwelling, on the side away from the Stadel
+            var tree = FarmPoint(house.X, house.Z, rot, -stadel * 15.5, 1);
             if (Free(tree.X, tree.Z, 5, roadClear: 9)) Place(_random.NextDouble() < 0.6 ? SceneryKind.Linden : SceneryKind.Maple, tree.X, tree.Z, _random.Next(360), _random.Next(3));
 
             // Orchard behind the house
@@ -1028,7 +1040,7 @@ namespace FreeVelo.Core.World.Gen
 
             var crops = new[] { WorldMaterial.Wheat, WorldMaterial.Crop, WorldMaterial.Plowed };
             // Fields beside the farm and behind it (as many as fit)
-            foreach (var (u, v) in new[] { (-across * 92.0, setback + 10.0), (-across * 92.0, setback + 92.0), (0.0, setback + 110.0), (across * 80.0, setback + 100.0) })
+            foreach (var (u, v) in new[] { (-across * 112.0, setback + 10.0), (-across * 112.0, setback + 92.0), (0.0, setback + 110.0), (across * 80.0, setback + 100.0) })
             {
                 var fc = P(u, v);
                 var field = new FieldPatch(fc.X, fc.Z, 58 + (_random.NextDouble() * 22), 34, roadAngle, crops[_random.Next(crops.Length)]);
@@ -1145,7 +1157,73 @@ namespace FreeVelo.Core.World.Gen
             return true;
         }
 
-        private void Place(SceneryKind kind, double x, double z, double rotationDeg, int variant, bool block = true)
+        // ------------------------------------------------------------------ Paarhof
+
+        // The Paarhof (docs/GRAPHICS_OVERHAUL.md): the dwelling (Farmhouse, 12 x 11.5 m) and its Stadel (Barn, 12 x 14 m)
+        // side by side, both gables to the road, their fronts in line, a gravel yard between them. In the dwelling's
+        // frame (u across, v to the front): the Stadel's centre at u = ±StadelU, v = StadelV.
+        private const double StadelU = 6 + 9 + 6, StadelV = 5.75 - 7, FarmFront = 5.75;
+
+        /// <summary>A point in a building's frame (u across, v to its front), as the app turns items.</summary>
+        private static (double X, double Z) FarmPoint(double x, double z, double rotationDeg, double u, double v)
+        {
+            double r = rotationDeg * Math.PI / 180, sin = Math.Sin(r), cos = Math.Cos(r);
+            return (x + (u * cos) + (v * sin), z - (u * sin) + (v * cos));
+        }
+
+        /// <summary>Which side of a dwelling at (x, z) its Stadel fits on: +1 or -1 (a random one first), 0 if neither.</summary>
+        private int StadelSide(double x, double z, double rotationDeg, double roadClear)
+        {
+            int first = _random.NextDouble() < 0.5 ? 1 : -1;
+            foreach (int side in new[] { first, -first })
+            {
+                var (bx, bz) = FarmPoint(x, z, rotationDeg, side * StadelU, StadelV);
+                if (!Free(bx, bz, SceneryModels.Radius(SceneryKind.Barn) + 1.5, roadClear)) continue;
+                if (_terrain.Slope(bx, bz) > 0.15) continue;
+                if (FootprintClear(SceneryKind.Barn, 0, bx, bz, rotationDeg)) return side;
+            }
+
+            return 0;
+        }
+
+        /// <summary>
+        /// The Stadel beside the dwelling just placed, on its floor (one level farm: a pad under both). Meadow round the
+        /// dwelling, with a stone footpath from its front door to the street and one along its front to the Stadel; a
+        /// gravel apron before the Stadel's gate that narrows into a driveway to the street (on farms reached by a
+        /// track, <paramref name="byTrack"/>, the apron only: the track ends at it).
+        /// </summary>
+        private void PlaceStadel(SceneryItem house, int side, bool byTrack)
+        {
+            double rot = house.RotationDeg;
+            var (bx, bz) = FarmPoint(house.X, house.Z, rot, side * StadelU, StadelV);
+            Place(SceneryKind.Barn, bx, bz, rot, _random.Next(3), floor: house.Y);
+            var (yx, yz) = FarmPoint(house.X, house.Z, rot, side * StadelU / 2, StadelV);
+            _pads.Add(new Terrain.Pad(yx, yz, (StadelU / 2) + 6, 7.5, rot, house.Y));
+            (double X, double Z) H(double u, double v) => FarmPoint(house.X, house.Z, rot, u, v);
+            (double, double) Span(double a, double b) => (Math.Min(a, b), Math.Max(a, b));
+
+            // The street's edge, measured from the dwelling (it faces the street square on).
+            double street = _terrain.DistanceToRoad(house.X, house.Z, 400, out var road, out _, out _) - ((road?.Width ?? 6.5) / 2);
+            street = Math.Min(street, LaneDistance(house.X, house.Z) - 1.7);
+            bool toStreet = !byTrack && street < 120;
+
+            // Gravel before the gate (the Stadel's width), then the driveway (5 m) to the street.
+            var (a0, a1) = Span(side * (StadelU - 6.5), side * (StadelU + 6.5));
+            AddSurface(H, a0, a1, FarmFront - 0.2, FarmFront + 6, rot, WorldMaterial.Gravel);
+            if (toStreet && street > FarmFront + 7)
+            {
+                var (d0, d1) = Span(side * (StadelU - 2.5), side * (StadelU + 2.5));
+                AddSurface(H, d0, d1, FarmFront + 5.8, street + 0.3, rot, WorldMaterial.Gravel);
+            }
+
+            // Footpaths: from the front door to the street, and along the front to the gravel before the Stadel.
+            if (toStreet) AddSurface(H, -0.75, 0.75, FarmFront - 0.3, street + 0.3, rot, WorldMaterial.Stone);
+            else AddSurface(H, -0.75, 0.75, FarmFront - 0.3, FarmFront + 3, rot, WorldMaterial.Stone);
+            var (p0, p1) = Span(side * 0.75, side * (StadelU - 6.5));
+            AddSurface(H, p0, p1, FarmFront + 1.5, FarmFront + 3, rot, WorldMaterial.Stone);
+        }
+
+        private void Place(SceneryKind kind, double x, double z, double rotationDeg, int variant, bool block = true, double? floor = null)
         {
             double r = SceneryModels.Radius(kind);
             var item = new SceneryItem
@@ -1153,7 +1231,7 @@ namespace FreeVelo.Core.World.Gen
                 Kind = kind,
                 Variant = variant,
                 X = (float)x,
-                Y = (float)GroundUnder(x, z, kind),
+                Y = (float)(floor ?? GroundUnder(x, z, kind)),
                 Z = (float)z,
                 RotationDeg = (float)rotationDeg,
                 Scale = 1,
@@ -1168,7 +1246,7 @@ namespace FreeVelo.Core.World.Gen
             }
         }
 
-        private static bool IsBuilding(SceneryKind kind) => kind is SceneryKind.AlpineHouse or SceneryKind.Farmhouse or SceneryKind.Church
+        private static bool IsBuilding(SceneryKind kind) => kind is SceneryKind.AlpineHouse or SceneryKind.Farmhouse or SceneryKind.Barn or SceneryKind.Church
             or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.HayHut or SceneryKind.AlpineHut or SceneryKind.Shrine
             or SceneryKind.Workshop or SceneryKind.Sawmill or SceneryKind.FireStation;
 

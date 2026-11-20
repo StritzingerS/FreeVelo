@@ -13,6 +13,7 @@ the project, see docs/THIRD_PARTY_ASSETS.md), made fit for the game - with the a
 Run headless:
   blender -b --factory-startup --python tools/blender/generated_house.py -- <in.glb> <out stem> <texture stem>
       [width depth]   (default: the AlpineHouse footprint) [front] [turn=<deg>]   (default 90: Tripo's front to the road)
+      [square]   (turn the walls square to the axes first, for a model generated askew)
 """
 
 import math
@@ -60,8 +61,27 @@ def wall_extent(me, z0, z1):
 TURN = 90   # Tripo front +X -> +Y; the farmhouse (long side at Tripo's front) turns 180: house end to the road
 
 
+SQUARE = False   # turn the walls square to the axes first (the barn came 32 degrees askew inside its model)
+
+
+def wall_turn(me):
+    """Angle of the walls against the model's axes: area-weighted direction of the near-vertical faces, mod 90."""
+    sx = sy = 0.0
+    for p in me.polygons:
+        if abs(p.normal.z) > 0.3:
+            continue
+        a = math.atan2(p.normal.y, p.normal.x)
+        sx += p.area * math.cos(4 * a)
+        sy += p.area * math.sin(4 * a)
+    return math.atan2(sy, sx) / 4
+
+
 def normalise(o):
     me = o.data
+    if SQUARE:
+        t = wall_turn(me)
+        me.transform(Matrix.Rotation(-t, 4, "Z"))
+        print(f"walls squared: turned {math.degrees(-t):.1f} degrees")
     me.transform(Matrix.Rotation(math.radians(TURN), 4, "Z"))
     zs = [v.co.z for v in me.vertices]
     lo, hi = min(zs), max(zs)
@@ -142,6 +162,7 @@ if __name__ == "__main__":
         WIDTH, DEPTH = float(args[3]), float(args[4])
     FRONT_ALIGN = "front" in args[5:]
     TURN = next((int(a[5:]) for a in args[5:] if a.startswith("turn=")), TURN)
+    SQUARE = "square" in args[5:]
     for detail in (0, 1):
         house = load(src)
         normalise(house)

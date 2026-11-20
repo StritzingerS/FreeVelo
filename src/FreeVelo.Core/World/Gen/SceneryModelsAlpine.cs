@@ -61,7 +61,7 @@ namespace FreeVelo.Core.World.Gen
         private static double AlpineRadius(SceneryKind kind) => kind switch
         {
             SceneryKind.Church => 17,
-            SceneryKind.Farmhouse => 16,
+            SceneryKind.Farmhouse => 9,
             SceneryKind.Inn => 11,
             SceneryKind.AlpineHouse => 9,
             SceneryKind.Shop => 8,
@@ -506,30 +506,16 @@ namespace FreeVelo.Core.World.Gen
             near.Of(WorldMaterial.SignBoard).Box(new Vector3(0, 3.45f, (d / 2) + 0.1f), new Vector3(4.2f, 0.55f, 0.08f), Rot.Identity);
         }
 
+        /// <summary>
+        /// The Paarhof's dwelling, as the Tripo model (Resources/Models/Farmhouse_*, which replaces this close up and to
+        /// 300 m): a big house for the family and the farm hands, 12 x 11.5 m, gable with the front door to the road;
+        /// its Stadel (SceneryKind.Barn) stands beside it.
+        /// </summary>
         private static void Farmhouse(Parts near, Parts far, int v)
         {
-            // Einhof: the living part in front (gable to the road), the barn behind it under one long roof.
-            float w = 12.5f, living = 12f, barn = 15f + (v * 2f);
-            float total = living + barn;
-            float zLiving = (total / 2) - (living / 2), zBarn = -(total / 2) + (barn / 2);
-            var plaster = v == 1 ? WorldMaterial.WallCream : WorldMaterial.WallWhite;
-            var roof = v == 2 ? WorldMaterial.Shingle : WorldMaterial.RoofBrown;
             foreach (var (p, detailed) in new[] { (near, true), (far, false) })
             {
-                // One long roof over both parts: build the whole length as a body, the barn walls drawn over it.
-                AlpineBody(p, w, total, 1, 22f, plaster, roof, detailed: false, backBalcony: false, sideBalcony: false);
-                if (!detailed) continue;
-                AlpineBody(p, w - 0.02f, living - 0.2f, 1, 22f, plaster, roof, detailed: true, backBalcony: false, sideBalcony: true, zOffset: zLiving);
-                // Barn: stone below, boards above, a big gate on the side and on the back
-                p.Of(WorldMaterial.Stone).Box(new Vector3(0, 1.95f, zBarn), new Vector3(w + 0.16f, 2.9f, barn), Rot.Identity);
-                p.Of(WorldMaterial.WoodDark).Box(new Vector3(0, 4.85f, zBarn), new Vector3(w + 0.2f, 2.9f, barn), Rot.Identity);
-                p.Of(WorldMaterial.Door).Box(new Vector3((w / 2) + 0.12f, 4.6f, zBarn), new Vector3(0.1f, 3.0f, 3.6f), Rot.Identity);
-                p.Of(WorldMaterial.Door).Box(new Vector3(0, 2.0f, -(total / 2) - 0.12f), new Vector3(3.2f, 3.0f, 0.1f), Rot.Identity);
-                // Ramp up to the hay floor
-                p.Of(WorldMaterial.Stone).Box(new Vector3((w / 2) + 2.6f, 1.8f, zBarn), new Vector3(5.0f, 0.5f, 4.0f), Rot.AboutZ(-25));
-                for (int i = 0; i < 4; i++) Window(p, new Vector3((w / 2) + 0.2f, 1.8f, zBarn - (barn / 2) + 2 + (i * 3.4f)), 0.5f, 0.4f, Rot.AboutY(90), cross: false);
-                // Woodpile under the eaves
-                p.Of(WorldMaterial.WoodLight).Box(new Vector3(-(w / 2) - 0.6f, 1.2f, zLiving - 3), new Vector3(0.9f, 1.4f, 4.0f), Rot.Identity);
+                AlpineBody(p, 12f, 11.5f, 1, 22f, WorldMaterial.WallWhite, WorldMaterial.RoofRed, detailed, backBalcony: false, sideBalcony: false);
             }
         }
 

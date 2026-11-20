@@ -143,7 +143,7 @@ namespace FreeVelo.Core.World.Gen
             [WorldMaterial.Awning] = (new Vector3(0.70f, 0.21f, 0.16f), 0.05f),
             [WorldMaterial.SignBoard] = (new Vector3(0.20f, 0.14f, 0.10f), 0.2f),
             [WorldMaterial.SignBlue] = (new Vector3(0.10f, 0.25f, 0.55f), 0.3f),
-            [WorldMaterial.Gravel] = (new Vector3(0.66f, 0.63f, 0.57f), 0.05f),
+            [WorldMaterial.Gravel] = (new Vector3(0.50f, 0.47f, 0.41f), 0.05f),   // weathered farmyard gravel (0.66 read as concrete)
             [WorldMaterial.Soil] = (new Vector3(0.33f, 0.24f, 0.17f), 0f),
             [WorldMaterial.Flowers] = (new Vector3(0.93f, 0.78f, 0.25f), 0f),
             [WorldMaterial.RollerDoor] = (new Vector3(0.72f, 0.73f, 0.74f), 0.3f),
