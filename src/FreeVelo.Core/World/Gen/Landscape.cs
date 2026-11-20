@@ -236,6 +236,7 @@ namespace FreeVelo.Core.World.Gen
                     if (!Free(cx, cz, SceneryModels.Radius(SceneryKind.Church) + 3, roadClear: 21)) continue;
                     if (!FootprintClear(SceneryKind.Church, 0, cx, cz, lot.Item.RotationDeg)) continue; // the graveyard wall too
                     Place(SceneryKind.Church, cx, cz, lot.Item.RotationDeg, _random.Next(2));
+                    Place(SceneryKind.Graveyard, cx, cz, lot.Item.RotationDeg, 0, block: false, floor: Items[^1].Y);
                     // In front: the maypole (in May) and a big linden.
                     double fx = cx + (lot.TowardX * 22), fz = cz + (lot.TowardZ * 22);
                     // Both off every road (the square in front can touch another road leaving the village).
@@ -1264,7 +1265,8 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>The ground levelled for a building: its footprint (the church with its tower and graveyard wall).</summary>
         private static (double W, double D) PadSize(SceneryKind kind, int variant) => kind switch
         {
-            SceneryKind.Church or SceneryKind.HayHut or SceneryKind.Shrine => (SceneryModels.Radius(kind) * 1.4, SceneryModels.Radius(kind) * 1.4),
+            SceneryKind.Church => (SceneryModels.Radius(kind) * 1.4, 30), // the Tripo church is 27 m long with its tower
+            SceneryKind.HayHut or SceneryKind.Shrine => (SceneryModels.Radius(kind) * 1.4, SceneryModels.Radius(kind) * 1.4),
             _ => Size(kind, variant),
         };
 

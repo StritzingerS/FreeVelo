@@ -62,6 +62,9 @@ namespace FreeVelo.Core.World.Gen
 
         /// <summary>A 5 m piece of a narrow lane (village side lane: asphalt; farm track: gravel).</summary>
         Lane,
+
+        /// <summary>The low wall and the grave crosses round the church (placed with it: the church is a Tripo model).</summary>
+        Graveyard,
     }
 
     /// <summary>A model in two levels of detail, one mesh per material, in local space (origin on the ground, front +Z).</summary>
