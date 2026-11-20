@@ -233,8 +233,8 @@ namespace FreeVelo.World
         private static readonly Color SignInk = Color.black;
 
         /// <summary>
-        /// The writing on the signs (the boards themselves are scenery): the village names at the village entrances
-        /// and, on the signposts before each junction, an arrow and where each road leads.
+        /// The writing on the signs (the boards themselves are scenery): the village names at the village entrances.
+        /// (The junction signposts were taken out at the owner's request: they did not look good.)
         /// </summary>
         private void BuildVillageSigns()
         {
@@ -246,18 +246,6 @@ namespace FreeVelo.World
                 var sign = SignRoot($"Sign {place.Name}", place.Item);
                 SignText(sign.transform, place.Name, new Vector3(0, 1.75f, 0.047f), 0.045f, font, front: true);
                 SignText(sign.transform, place.Name, new Vector3(0, 1.75f, -0.047f), 0.045f, font, front: false); // the back (end of the village)
-            }
-
-            foreach (var (item, boards) in landscape.Signposts)
-            {
-                var post = SignRoot("Signpost", item);
-                for (int i = 0; i < boards.Length; i++)
-                {
-                    var (arrow, name) = boards[i];
-                    string line = arrow == "→" ? name + " →" : arrow + " " + name;
-                    float size = 0.026f * Mathf.Min(1, 15f / Mathf.Max(1, line.Length));
-                    SignText(post.transform, line, new Vector3(0.75f, 2.4f - (i * 0.42f), 0.08f), size, font, front: true);
-                }
             }
         }
 

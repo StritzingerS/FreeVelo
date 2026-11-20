@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -104,9 +104,6 @@ namespace FreeVelo.Core.World.Gen
 
         public List<VillageSignPlace> Signs { get; } = new List<VillageSignPlace>();
 
-        /// <summary>Junction signposts: the post and, per board, an arrow ("←", "↑", "→") and where the road leads.</summary>
-        public List<(SceneryItem Item, (string Arrow, string Name)[] Boards)> Signposts { get; } = new List<(SceneryItem, (string, string)[])>();
-
         /// <summary>
         /// Lays out villages, farms and huts. <paramref name="today"/> decides about the maypoles: they only stand in May
         /// (the rest is the same every day).
@@ -117,7 +114,6 @@ namespace FreeVelo.Core.World.Gen
             l.PlaceVillages();
             l.PlaceAlm();
             l.PlaceFarms();
-            l.PlaceSignposts();
             l.PlaceFields();
             l.PlaceHayHuts();
             l.LevelBuildingPlots();
@@ -162,7 +158,18 @@ namespace FreeVelo.Core.World.Gen
             public bool Hamlet;
         }
 
-        private static Plan PlanFor(string name) => name switch
+        /// <summary>The villages are smaller than first laid out (owner's decision, 20 Nov 2026): radii × 0.65.</summary>
+        private const double VillageScale = 0.65;
+
+        private static Plan PlanFor(string name)
+        {
+            var plan = BasePlan(name);
+            // Valbrune keeps its size: it has only a few houses on its outer lots, none left when scaled.
+            if (name != "Valbrune") plan.Radius *= VillageScale;
+            return plan;
+        }
+
+        private static Plan BasePlan(string name) => name switch
         {
             "Lärchwald" => new Plan { Radius = 420, Church = true, Inns = 2, Shops = 2 },
             "Kirchbach" => new Plan { Radius = 380, Church = true, Inns = 1, Shops = 1 },
@@ -332,7 +339,7 @@ namespace FreeVelo.Core.World.Gen
             // Trades on the outskirts: the fire station in every village with a church, a car workshop in the bigger
             // ones, sawmills by the river in the wood villages.
             if (plan.Church) Outskirts(village, plan, roads, SceneryKind.FireStation, nearRiver: false);
-            if (plan.Radius >= 380) Outskirts(village, plan, roads, SceneryKind.Workshop, nearRiver: false);
+            if (plan.Radius >= 380 * VillageScale) Outskirts(village, plan, roads, SceneryKind.Workshop, nearRiver: false);
             if (village.Name is "Lärchwald" or "Hinterau" or "Kirchbach") Outskirts(village, plan, roads, SceneryKind.Sawmill, nearRiver: true);
 
             // No forest in the village: block the land along its streets.
@@ -701,8 +708,15 @@ namespace FreeVelo.Core.World.Gen
         private bool FootprintClear(SceneryKind kind, int variant, double x, double z, double rotationDeg)
         {
             double? floor = null;
+            double low = double.MaxValue, high = double.MinValue;
             foreach (var (px, pz) in OutlinePoints(kind, variant, x, z, rotationDeg, 2))
             {
+                // Not across a slope too steep to level: the drawn ground between the pad and the slope dipped a
+                // metre below the terrain at the downhill corner (an alpine hut on 2.7 m of fall).
+                double g = _terrain.Height(px, pz);
+                low = Math.Min(low, g);
+                high = Math.Max(high, g);
+                if (high - low > 2.4) return false;
                 if (_terrain.IsWater(px, pz, 1)) return false;
                 double d = _terrain.DistanceToRoad(px, pz, 12, out var road, out _, out _);
                 if (road != null && d < (road.Width / 2) + 1.5) return false;
@@ -852,14 +866,6 @@ namespace FreeVelo.Core.World.Gen
 
                 Items[k] = item;
             }
-
-            // The signposts' copies (their boards are drawn by the app) follow their items.
-            for (int s = 0; s < Signposts.Count; s++)
-            {
-                var (post, boards) = Signposts[s];
-                var moved = Items.FirstOrDefault(i => i.Kind == SceneryKind.DirectionSign && i.X == post.X && i.Z == post.Z);
-                if (moved.Kind == SceneryKind.DirectionSign) Signposts[s] = (moved, boards);
-            }
         }
 
         private static readonly Dictionary<(SceneryKind, int), (double, double, double, double)> FootprintCache = new Dictionary<(SceneryKind, int), (double, double, double, double)>();
@@ -874,66 +880,6 @@ namespace FreeVelo.Core.World.Gen
                 f = verts.Count == 0 ? (0, 0, 0, 0) : (verts.Min(v => v.X), verts.Max(v => v.X), verts.Min(v => v.Z), verts.Max(v => v.Z));
                 FootprintCache[(kind, variant % SceneryModels.Variants)] = f;
                 return f;
-            }
-        }
-
-        // ------------------------------------------------------------------ signposts
-
-        /// <summary>
-        /// At every junction, a signpost on the right of each road coming in, 30 m before it: one board per way on,
-        /// with an arrow and the next village (or the climb's name).
-        /// </summary>
-        private void PlaceSignposts()
-        {
-            foreach (var node in _map.Nodes.Where(n => n.Edges.Count >= 3))
-            {
-                foreach (int inId in node.Edges)
-                {
-                    var e = _map.Edges[inId];
-                    bool fromHere = e.From == node.Id;
-                    if (e.Length < 80) continue;
-                    // Coming in: travelling towards the node along e (moved a few metres if a garden path is in the way).
-                    double x = 0, z = 0, dx = 0, dz = 0;
-                    bool clear = false;
-                    foreach (double shift in new[] { 0.0, 3, -3, 6 })
-                    {
-                        var a = Along(e, fromHere ? 30 + shift : e.Length - 30 - shift);
-                        dx = fromHere ? -a.TX : a.TX; dz = fromHere ? -a.TZ : a.TZ;
-                        foreach (double off in new[] { 5.6, 7.0, 9.0 })
-                        {
-                            x = a.X + (dz * off); z = a.Z - (dx * off); // right-hand side: (dz, −dx)
-                            double d = _terrain.DistanceToRoad(x, z, 12, out var road, out _, out _);
-                            if (road == null || d >= (road.Width / 2) + 1) { clear = true; break; }
-                        }
-
-                        double px = x, pz = z;
-                        if (clear && Surfaces.Any(s => s.Crop is WorldMaterial.Stone or WorldMaterial.Gravel && s.Contains(px, pz, 1))) clear = false;
-                        if (clear) break;
-                    }
-
-                    if (!clear) continue;
-                    var boards = new List<(double Turn, string Arrow, string Name)>();
-                    foreach (int outId in node.Edges.Where(id => id != inId))
-                    {
-                        var o = _map.Edges[outId];
-                        bool outFrom = o.From == node.Id;
-                        var b = Along(o, outFrom ? 40 : o.Length - 40);
-                        double ox = b.X - node.X, oz = b.Z - node.Z, ol = Math.Sqrt((ox * ox) + (oz * oz));
-                        double turn = Math.Atan2((dx * oz) - (dz * ox), (dx * ox) + (dz * oz)) * 180 / Math.PI; // + = left
-                        string arrow = Math.Abs(turn) < 30 ? "↑" : turn > 0 ? "←" : "→";
-                        string name = o.Kind == RoadKind.Climb ? (_map.Mountain?.Find(o.ClimbId!)?.Data.Name ?? "") : _map.Nodes[outFrom ? o.To : o.From].Name;
-                        if (o.Kind == RoadKind.Climb && o.ClimbId == ClimbData.Stelvio) name = "Passo dello Stelvio";
-                        if (string.IsNullOrEmpty(name) || ol < 1) continue;
-                        boards.Add((turn, arrow, name));
-                    }
-
-                    if (boards.Count == 0 || _terrain.IsWater(x, z, 1)) continue;
-                    var ordered = boards.OrderByDescending(b => b.Turn).Take(3).Select(b => (b.Arrow, b.Name)).ToArray(); // left first
-                    var item = new SceneryItem { Kind = SceneryKind.DirectionSign, Variant = ordered.Length - 1, X = (float)x, Y = (float)_terrain.Height(x, z), Z = (float)z, RotationDeg = (float)Facing(-dx, -dz), Scale = 1 };
-                    Items.Add(item);
-                    Signposts.Add((item, ordered));
-                    BlockCircle(x, z, 2);
-                }
             }
         }
 
@@ -1234,12 +1180,17 @@ namespace FreeVelo.Core.World.Gen
             bool toStreet = !byTrack && street < 120;
 
             // Gravel before the gate (the Stadel's width), then the driveway (5 m) to the street.
+            // It ends at a road that runs closer to the Stadel than to the dwelling (two farms facing each other
+            // across a bend: the gravel lay on the road).
             var (a0, a1) = Span(side * (StadelU - 6.5), side * (StadelU + 6.5));
-            AddSurface(H, a0, a1, FarmFront - 0.2, FarmFront + 6, rot, WorldMaterial.Gravel);
-            if (toStreet && street > FarmFront + 7)
+            double gate = _terrain.DistanceToRoad(bx, bz, 40, out var gr, out _, out _) - ((gr?.Width ?? 6.5) / 2);
+            double apron = Math.Min(FarmFront + 6, StadelV + gate + 0.3);
+            if (apron > FarmFront + 1) AddSurface(H, a0, a1, FarmFront - 0.2, apron, rot, WorldMaterial.Gravel);
+            double drive = Math.Min(street, StadelV + gate) + 0.3;
+            if (toStreet && drive > FarmFront + 7)
             {
                 var (d0, d1) = Span(side * (StadelU - 2.5), side * (StadelU + 2.5));
-                AddSurface(H, d0, d1, FarmFront + 5.8, street + 0.3, rot, WorldMaterial.Gravel);
+                AddSurface(H, d0, d1, FarmFront + 5.8, drive, rot, WorldMaterial.Gravel);
             }
 
             // Footpaths: from the front door to the street, and along the front to the gravel before the Stadel.
