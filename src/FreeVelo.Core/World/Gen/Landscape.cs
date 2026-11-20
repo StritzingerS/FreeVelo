@@ -848,12 +848,14 @@ namespace FreeVelo.Core.World.Gen
                 {
                     // Posts at both ends of the piece on the ground, the piece sheared between them; 5 cm into the ground.
                     double half = item.Kind == SceneryKind.Fence ? 2.0 : 1.5;
-                    double a = At(-half, 0), b = At(half, 0);
+                    // The lower of both faces of the piece (across a slope one face stood 6 cm above the ground).
+                    double Low(double u) => Math.Min(At(u, -0.2), Math.Min(At(u, 0), At(u, 0.2)));
+                    double a = Low(-half), b = Low(half);
                     double slope = (b - a) / (2 * half), y = (a + b) / 2;
                     // Over a crest the straight piece would hang in the air in between: lower it until it nowhere
                     // stands above the ground (quarter points and middle).
                     double lift = 0;
-                    foreach (double u in new[] { -half / 2, 0, half / 2 }) lift = Math.Max(lift, (y + (slope * u)) - At(u, 0));
+                    foreach (double u in new[] { -half / 2, 0, half / 2 }) lift = Math.Max(lift, (y + (slope * u)) - Low(u));
                     item.Y = (float)(y - lift - 0.05);
                     item.Slope = (float)slope;
                 }
@@ -1291,7 +1293,9 @@ namespace FreeVelo.Core.World.Gen
             void Side(double u0, double v0, double u1, double v1, double rot, bool gate)
             {
                 double length = Math.Sqrt(((u1 - u0) * (u1 - u0)) + ((v1 - v0) * (v1 - v0)));
-                int pieces = (int)(length / 4);
+                // Rounded up: the pieces at most 4 m apart, so the Tripo fence's end posts meet (rounded down, gaps of
+                // up to a metre opened between the pieces).
+                int pieces = (int)Math.Ceiling(length / 4);
                 for (int i = 0; i < pieces; i++)
                 {
                     if (gate && i == pieces / 2) continue;
