@@ -234,10 +234,8 @@ namespace FreeVelo.Core.World.Gen
                     double back = 15; // further from the road than a house
                     double cx = lot.Item.X - (lot.TowardX * back), cz = lot.Item.Z - (lot.TowardZ * back);
                     if (!Free(cx, cz, SceneryModels.Radius(SceneryKind.Church) + 3, roadClear: 21)) continue;
-                    if (!FootprintClear(SceneryKind.Church, 0, cx, cz, lot.Item.RotationDeg)) continue; // the graveyard wall too
-                    Place(SceneryKind.Church, cx, cz, lot.Item.RotationDeg, _random.Next(2));
-                    Place(SceneryKind.Graveyard, cx, cz, lot.Item.RotationDeg, 0, block: false, floor: Items[^1].Y);
-                    // In front: the maypole (in May) and a big linden.
+                    if (!FootprintClear(SceneryKind.Church, 0, cx, cz, lot.Item.RotationDeg)) continue; // with the churchyard round it
+                    Place(SceneryKind.Church, cx, cz, lot.Item.RotationDeg, _random.Next(2));                    // In front: the maypole (in May) and a big linden.
                     double fx = cx + (lot.TowardX * 22), fz = cz + (lot.TowardZ * 22);
                     // Both off every road (the square in front can touch another road leaving the village).
                     bool OffRoad(double x, double z, double clear) => _terrain.DistanceToRoad(x, z, clear, out _, out _, out _) >= clear;
@@ -666,7 +664,7 @@ namespace FreeVelo.Core.World.Gen
 
         /// <summary>
         /// The ground a building covers, in its own frame (front = +Z): half width across, and from the back to the
-        /// front – with roof overhangs, balconies, ramps, terraces and, for the church, the graveyard wall and the tower.
+        /// front – with roof overhangs, balconies, ramps, terraces and, for the church, the tower and an open churchyard (lawn, no wall) round it.
         /// </summary>
         public static (double HalfX, double Back, double Front, double RightExtra) Outline(SceneryKind kind, int variant)
         {
@@ -1262,7 +1260,7 @@ namespace FreeVelo.Core.World.Gen
             or SceneryKind.Inn or SceneryKind.Shop or SceneryKind.HayHut or SceneryKind.AlpineHut or SceneryKind.Shrine
             or SceneryKind.Workshop or SceneryKind.Sawmill or SceneryKind.FireStation;
 
-        /// <summary>The ground levelled for a building: its footprint (the church with its tower and graveyard wall).</summary>
+        /// <summary>The ground levelled for a building: its footprint (the church with its tower).</summary>
         private static (double W, double D) PadSize(SceneryKind kind, int variant) => kind switch
         {
             SceneryKind.Church => (SceneryModels.Radius(kind) * 1.4, 30), // the Tripo church is 27 m long with its tower

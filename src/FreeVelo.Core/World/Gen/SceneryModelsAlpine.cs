@@ -28,9 +28,7 @@ namespace FreeVelo.Core.World.Gen
                 case SceneryKind.MountainPine: MountainPine(near, far, v, random); return true;
                 case SceneryKind.AlpineHouse: AlpineHouse(near, far, v); return true;
                 case SceneryKind.Farmhouse: Farmhouse(near, far, v); return true;
-                case SceneryKind.Church: Church(near, far, v); return true;
-                case SceneryKind.Graveyard: Graveyard(near); return true;
-                case SceneryKind.Inn: Inn(near, far, v); return true;
+                case SceneryKind.Church: Church(near, far, v); return true;                case SceneryKind.Inn: Inn(near, far, v); return true;
                 case SceneryKind.Shop: Shop(near, far, v); return true;
                 case SceneryKind.HayHut: HayHut(near, far, v); return true;
                 case SceneryKind.AlpineHut: AlpineHut(near, far, v, random); return true;
@@ -76,9 +74,7 @@ namespace FreeVelo.Core.World.Gen
             SceneryKind.Larch or SceneryKind.Fir or SceneryKind.StonePine or SceneryKind.Alder => 3,
             SceneryKind.MountainPine => 2.5,
             SceneryKind.Shrine => 2.5,
-            SceneryKind.Maypole => 1,
-            SceneryKind.Graveyard => 1,
-            SceneryKind.Fence => 0.5,
+            SceneryKind.Maypole => 1,            SceneryKind.Fence => 0.5,
             SceneryKind.VillageSign => 1,
             SceneryKind.DirectionSign => 1,
             SceneryKind.Yard => 4,
@@ -611,27 +607,6 @@ namespace FreeVelo.Core.World.Gen
             }
         }
 
-        /// <summary>
-        /// Low graveyard wall round the church with a gap for the tower, and iron grave crosses along the sides. Its own
-        /// item at the church's place (the church itself is a Tripo model); the wall has a footing into the ground.
-        /// </summary>
-        private static void Graveyard(Parts p)
-        {
-            const float w = 13f, d = 24f, cd = 6f, tw = 5.4f, foot = 1.5f, top = 1.2f;
-            float gx = (w / 2) + 6, gz0 = -(d / 2) - cd - 5, gz1 = (d / 2) + 2, y = (top - foot) / 2, h = top + foot;
-            var wall = p.Of(WorldMaterial.WallWhite);
-            wall.Box(new Vector3(-gx, y, (gz0 + gz1) / 2), new Vector3(0.45f, h, gz1 - gz0), Rot.Identity);
-            wall.Box(new Vector3(gx, y, (gz0 + gz1) / 2), new Vector3(0.45f, h, gz1 - gz0), Rot.Identity);
-            wall.Box(new Vector3(0, y, gz0), new Vector3((2 * gx) + 0.45f, h, 0.45f), Rot.Identity);
-            for (int s = -1; s <= 1; s += 2) wall.Box(new Vector3(s * ((gx + (tw / 2) + 1.5f) / 2), y, gz1), new Vector3(gx - (tw / 2) - 1.5f, h, 0.45f), Rot.Identity);
-            for (int i = 0; i < 8; i++)
-            {
-                float x = (i % 2 == 0 ? -1 : 1) * ((w / 2) + 2.5f + (i % 3));
-                float z = gz0 + 3 + (i * 3.6f);
-                p.Of(WorldMaterial.Iron).Box(new Vector3(x, 0.8f - 0.5f, z), new Vector3(0.08f, 2.0f, 0.08f), Rot.Identity);
-                p.Of(WorldMaterial.Iron).Box(new Vector3(x, 1.05f, z), new Vector3(0.45f, 0.08f, 0.08f), Rot.Identity);
-            }
-        }
 
         /// <summary>Onion dome: square drum roof, the bulb, a lantern, a second small bulb, spire, golden ball and cross.</summary>
         private static void OnionDome(Parts p, Vector3 b, float tw, bool detailed)
