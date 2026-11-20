@@ -12,7 +12,7 @@ the project, see docs/THIRD_PARTY_ASSETS.md), made fit for the game - with the a
 
 Run headless:
   blender -b --factory-startup --python tools/blender/generated_house.py -- <in.glb> <out stem> <texture stem>
-      [width depth]   (default: the AlpineHouse footprint)
+      [width depth]   (default: the AlpineHouse footprint) [front] [turn=<deg>]   (default 90: Tripo's front to the road)
 """
 
 import math
@@ -57,9 +57,12 @@ def wall_extent(me, z0, z1):
     return xs[k], xs[-k - 1], ys[k], ys[-k - 1]
 
 
+TURN = 90   # Tripo front +X -> +Y; the farmhouse (long side at Tripo's front) turns 180: house end to the road
+
+
 def normalise(o):
     me = o.data
-    me.transform(Matrix.Rotation(math.radians(90), 4, "Z"))   # Tripo front +X -> +Y
+    me.transform(Matrix.Rotation(math.radians(TURN), 4, "Z"))
     zs = [v.co.z for v in me.vertices]
     lo, hi = min(zs), max(zs)
     h = hi - lo
@@ -137,7 +140,8 @@ if __name__ == "__main__":
     src, stem, tex_stem = args[0], args[1], args[2]
     if len(args) > 4:   # another building's footprint (width along the road, depth towards it), e.g. the inn 14 x 17
         WIDTH, DEPTH = float(args[3]), float(args[4])
-    FRONT_ALIGN = len(args) > 5 and args[5] == "front"
+    FRONT_ALIGN = "front" in args[5:]
+    TURN = next((int(a[5:]) for a in args[5:] if a.startswith("turn=")), TURN)
     for detail in (0, 1):
         house = load(src)
         normalise(house)
