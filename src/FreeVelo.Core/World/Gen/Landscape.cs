@@ -437,7 +437,17 @@ namespace FreeVelo.Core.World.Gen
                     if (_random.NextDouble() < 0.7) Put(SceneryKind.Car, (w / 2) + 3, (d / 2) + 2.5, rot + 90 + (_random.NextDouble() * 15), _random.Next(3));
                     break;
                 case SceneryKind.FireStation:
-                    Apron();
+                    // The Tripo fire station's two doors span 7.6 m in the middle of its gable: a gravel drive just
+                    // wider than them, from the doors to the road edge.
+                    {
+                        var (cx, cz) = P(0, 0);
+                        if (FenceClear(P(0, (d / 2) + 3)) && _terrain.DistanceToRiver(cx, cz, 15, out _) >= 12)
+                        {
+                            double front = Math.Min((d / 2) + 9, _terrain.DistanceToRoad(cx, cz, 40, out var fr, out _, out _) - ((fr?.Width ?? 6.5) / 2) + 0.3);
+                            AddSurface(P, -5, 5, d / 2, front, rot, WorldMaterial.Gravel);
+                        }
+                    }
+
                     break;
                 case SceneryKind.Sawmill:
                     // An earth yard under the shed and round the stacks (the Tripo sawmill stands 19.6 m long in the
