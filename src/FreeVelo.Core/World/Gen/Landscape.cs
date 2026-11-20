@@ -440,8 +440,16 @@ namespace FreeVelo.Core.World.Gen
             {
                 case SceneryKind.Workshop:
                     Apron();
-                    Put(SceneryKind.Car, -3.6, (d / 2) + 3.2, rot + 180 + (_random.NextDouble() * 20), _random.Next(3));
-                    if (_random.NextDouble() < 0.7) Put(SceneryKind.Car, (w / 2) + 3, (d / 2) + 2.5, rot + 90 + (_random.NextDouble() * 15), _random.Next(3));
+                    // The cars were taken out (owner's decision, 20 Nov 2026); their random draws stay, so the rest
+                    // of the landscape stays as it was.
+                    _random.NextDouble();
+                    _random.Next(3);
+                    if (_random.NextDouble() < 0.7)
+                    {
+                        _random.NextDouble();
+                        _random.Next(3);
+                    }
+
                     break;
                 case SceneryKind.FireStation:
                     // The Tripo fire station's two doors span 7.6 m in the middle of its gable: a gravel drive just
@@ -472,7 +480,7 @@ namespace FreeVelo.Core.World.Gen
                     // Logs waiting on one side, sawn timber drying on the other.
                     for (int k = 0; k < 3; k++) Put(SceneryKind.LogPile, -(w / 2) - 6, -8 + (k * 5.5), rot + 90, k % 3);
                     for (int k = 0; k < 3; k++) Put(SceneryKind.LumberStack, (w / 2) + 4.5, -6 + (k * 4.2), rot + 90, k % 3);
-                    Put(SceneryKind.Car, (w / 2) + 4, (d / 2) + 1, rot + 200, _random.Next(3));
+                    _random.Next(3); // the car's draw (cars taken out)
                     break;
             }
         }

@@ -7,6 +7,7 @@ Run headless:
   blender -b --factory-startup --python tools/blender/generated_prop.py -- <in.glb> <length m> <material> <out stem>
       [whole]   (measure the whole model, not its longest piece)
       [uv=<metres per repeat>]   (own texture coordinates for the material's texture, e.g. uv=2.4 for Rock)
+      [height=<m>]   (squeeze to this height after the length is set: a garden fence piece)
 """
 
 import math
@@ -32,7 +33,7 @@ def main():
     # Tripo's P series delivers in several pieces) the whole model's extent counts.
     bm = bmesh.new()
     bm.from_mesh(me)
-    pieces = [list(bm.faces)] if len(args) > 4 and args[4] == "whole" else inspect_candidate.islands(bm)
+    pieces = [list(bm.faces)] if "whole" in args[4:] else inspect_candidate.islands(bm)
     biggest = max(pieces, key=lambda p: max(
         max(v.co.x for f in p for v in f.verts) - min(v.co.x for f in p for v in f.verts),
         max(v.co.y for f in p for v in f.verts) - min(v.co.y for f in p for v in f.verts)))
@@ -49,7 +50,12 @@ def main():
     s = length / dx
     centre = Vector(((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, min(zs)))
     me.transform(Matrix.Scale(s, 4) @ Matrix.Translation(-centre))
-    print(f"size {(max(xs) - min(xs)) * s:.2f} x {(max(ys) - min(ys)) * s:.2f} x {(max(zs) - min(zs)) * s:.2f} m")
+    # height=<m>: a fence piece whose length is fixed by the placement (3 m garden fence) but came out too tall for
+    # it is squeezed in height only (a scale, the shape itself stays).
+    h_option = next((float(a[7:]) for a in args[4:] if a.startswith("height=")), None)
+    if h_option:
+        me.transform(Matrix.Scale(h_option / ((max(zs) - min(zs)) * s), 4, Vector((0, 0, 1))))
+    print(f"size {(max(xs) - min(xs)) * s:.2f} x {(max(ys) - min(ys)) * s:.2f} x {h_option or (max(zs) - min(zs)) * s:.2f} m")
 
     uv_option = next((a for a in args[4:] if a.startswith("uv=")), None)
     if uv_option is None:

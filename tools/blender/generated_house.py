@@ -14,6 +14,7 @@ Run headless:
   blender -b --factory-startup --python tools/blender/generated_house.py -- <in.glb> <out stem> <texture stem>
       [width depth]   (default: the AlpineHouse footprint) [front] [turn=<deg>]   (default 90: Tripo's front to the road)
       [square]   (turn the walls square to the axes first, for a model generated askew)
+      [height=<m>]   (scale to this total height instead of the footprint: textured props)  [sink=<m>]
 """
 
 import math
@@ -62,6 +63,7 @@ TURN = 90   # Tripo front +X -> +Y; the farmhouse (long side at Tripo's front) t
 
 
 SQUARE = False   # turn the walls square to the axes first (the barn came 32 degrees askew inside its model)
+HEIGHT = None    # scale to a total height (props) instead of fitting the footprint
 
 
 def wall_turn(me):
@@ -90,6 +92,8 @@ def normalise(o):
     x0, x1, y0, y1 = wall_extent(me, lo + h * 0.1, lo + h * 0.35)
     # Fit inside the coded footprint (never larger: neighbours, fences and lanes are placed around it), proportions kept.
     s = min(WIDTH / (x1 - x0), DEPTH / (y1 - y0))
+    if HEIGHT:   # props (maypole, flower box): scaled to a real height instead of a footprint
+        s = HEIGHT / h
     centre = Vector(((x0 + x1) / 2, (y0 + y1) / 2, lo))
     # With FRONT_ALIGN the front wall stands at the footprint's front edge (where the path or forecourt begins) instead
     # of the middle: a model shallower than its plot otherwise leaves a strip of meadow before the door.
@@ -164,6 +168,8 @@ if __name__ == "__main__":
     FRONT_ALIGN = "front" in args[5:]
     TURN = next((int(a[5:]) for a in args[5:] if a.startswith("turn=")), TURN)
     SQUARE = "square" in args[5:]
+    HEIGHT = next((float(a[7:]) for a in args[5:] if a.startswith("height=")), None)
+    SINK = next((float(a[5:]) for a in args[5:] if a.startswith("sink=")), SINK)
     for detail in (0, 1):
         house = load(src)
         normalise(house)
