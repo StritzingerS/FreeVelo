@@ -184,7 +184,7 @@ namespace FreeVelo.World
                         }
 
                         m.V.Add(new Vector3((float)x, y, (float)z));
-                        m.UV.Add(new Vector2((float)x, (float)z) / tile);
+                        m.UV.Add(SurfaceUV(s.Crop, (float)x, (float)z, tile));
                     }
                 }
 
@@ -212,6 +212,21 @@ namespace FreeVelo.World
                 mesh.RecalculateBounds();
                 CreateMesh("Surfaces " + pair.Key, mesh, Mat(pair.Key), false);
             }
+        }
+
+        /// <summary>
+        /// Texture coordinates of a ground surface: world metres / repeat. On the earth yard they are bent a little by
+        /// low-frequency noise, so the repeats do not line up in straight rows (the scan's large blotches, which showed
+        /// the grid most, are filtered out of the file itself: docs/THIRD_PARTY_ASSETS.md). Turning world-sized UVs
+        /// stretched the scan into streaks; this only shifts them, by up to about a third of a repeat.
+        /// </summary>
+        private static Vector2 SurfaceUV(WorldMaterial material, float x, float z, float tile)
+        {
+            var uv = new Vector2(x, z) / tile;
+            if (material != WorldMaterial.YardEarth) return uv;
+            float n1 = Mathf.PerlinNoise((x * 0.11f) + 17.3f, (z * 0.11f) + 4.1f) - 0.5f;
+            float n2 = Mathf.PerlinNoise((x * 0.11f) + 51.7f, (z * 0.11f) + 33.9f) - 0.5f;
+            return uv + new Vector2(0.6f * n1, 0.6f * n2);
         }
 
         /// <summary>Black letters, as on the white Austrian place-name and direction signs.</summary>

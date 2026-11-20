@@ -78,6 +78,7 @@ namespace FreeVelo.Core.World.Gen
         Glass,
         Sawdust,
         LaneAsphalt,
+        YardEarth,
     }
 
     public static class WorldMaterials
@@ -155,6 +156,7 @@ namespace FreeVelo.Core.World.Gen
             [WorldMaterial.Glass] = (new Vector3(0.18f, 0.24f, 0.30f), 0.9f),
             [WorldMaterial.Sawdust] = (new Vector3(0.80f, 0.66f, 0.45f), 0f),
             [WorldMaterial.LaneAsphalt] = (new Vector3(0.33f, 0.33f, 0.34f), 0.1f),
+            [WorldMaterial.YardEarth] = (new Vector3(0.45f, 0.36f, 0.26f), 0f),   // trodden earth and sawdust (the sawmill's yard)
         };
     }
 }

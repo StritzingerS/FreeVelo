@@ -441,6 +441,17 @@ namespace FreeVelo.Core.World.Gen
                     Apron();
                     break;
                 case SceneryKind.Sawmill:
+                    // An earth yard under the shed and round the stacks (the Tripo sawmill stands 19.6 m long in the
+                    // middle of its 30 m plot), reaching to the road edge in front.
+                    {
+                        var (cx, cz) = P(0, 0);
+                        if (_terrain.DistanceToRiver(cx, cz, 30, out _) >= 18)
+                        {
+                            double front = Math.Min(13.5, _terrain.DistanceToRoad(cx, cz, 40, out var sr, out _, out _) - ((sr?.Width ?? 6.5) / 2) + 0.3);
+                            AddSurface(P, -(w / 2) - 10, (w / 2) + 8, -12.5, front, rot, WorldMaterial.YardEarth);
+                        }
+                    }
+
                     // Logs waiting on one side, sawn timber drying on the other.
                     for (int k = 0; k < 3; k++) Put(SceneryKind.LogPile, -(w / 2) - 6, -8 + (k * 5.5), rot + 90, k % 3);
                     for (int k = 0; k < 3; k++) Put(SceneryKind.LumberStack, (w / 2) + 4.5, -6 + (k * 4.2), rot + 90, k % 3);

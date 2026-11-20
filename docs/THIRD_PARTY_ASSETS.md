@@ -49,3 +49,4 @@ a tint (`SurfaceTextures.cs`).
 | `pine_bark` | tree bark | 2.0 m (used at 1 m) | https://polyhaven.com/a/pine_bark |
 | `rock_face` | rocks | 2.4 m | https://polyhaven.com/a/rock_face |
 | `gravel_floor` | gravel yards, lanes | 2.25 m | https://polyhaven.com/a/gravel_floor |
+| `dirt` | the sawmill's earth yard (`YardEarth`); downloaded 20 November 2026, by Charlotte Baglioni; the diffuse map high-passed (48 px wrapping blur subtracted, mean added back) so its large blotches do not repeat in a visible grid | 2.0 m | https://polyhaven.com/a/dirt |

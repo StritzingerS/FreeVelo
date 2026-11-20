@@ -27,6 +27,7 @@ namespace FreeVelo.World
             Rock,
             Concrete,
             Gravel,
+            Earth,
         }
 
         /// <summary>A surface: detail (sRGB), normal map (linear) and how many metres one repeat covers.</summary>
@@ -71,6 +72,7 @@ namespace FreeVelo.World
             [Surface.Bark] = ("pine_bark", 1.0f, new Color(0.402f, 0.325f, 0.252f)),
             [Surface.Rock] = ("rock_face", 2.4f, new Color(0.380f, 0.273f, 0.194f)),
             [Surface.Gravel] = ("gravel_floor", 2.25f, new Color(0.636f, 0.524f, 0.395f)),
+            [Surface.Earth] = ("dirt", 2.0f, new Color(0.389f, 0.323f, 0.245f)),   // high-passed: no repeating blotches
         };
 
         private static Set LoadScan(Surface s)
@@ -154,6 +156,8 @@ namespace FreeVelo.World
                 case WorldMaterial.Gravel:
                 case WorldMaterial.LaneAsphalt:
                     return Surface.Gravel;
+                case WorldMaterial.YardEarth:
+                    return Surface.Earth;
                 default:
                     return Surface.None;
             }
@@ -315,6 +319,7 @@ namespace FreeVelo.World
                     });
 
                 case Surface.Gravel:
+                case Surface.Earth:   // only without the scan
                     return Make("GravelStones", 1f, 4f, (u, v) =>
                     {
                         var (d1, _, id) = Voronoi(u, v, 20, 71);
