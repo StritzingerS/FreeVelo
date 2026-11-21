@@ -296,7 +296,13 @@ shadow and are culled beyond 4 km (layer 30). Editor counts: valley view 5,627 �
 2.6 M triangles: the phone is bound by its GPU at the fixed settings (full resolution, 4× MSAA, HDR, soft 2048 px
 shadows to 110 m, two cascades). Third step: graphics quality in Settings → App (`GraphicsQuality`, applied to a
 runtime copy of the pipeline asset in the player only): low 70 % resolution, no MSAA, hard 1024 px shadows to 50 m,
-one cascade; medium (default) 80 %, 2× MSAA, no HDR, hard 1024 px shadows to 70 m; high as before.
+one cascade; medium (default) 80 %, 2× MSAA, no HDR, hard 1024 px shadows to 70 m; high as before. Measured on the
+Nord 2: medium 48–49 fps (GPU 19.5 ms), low 51–53 fps (GPU 17.5 ms), thermal none, about 0.5 % battery a minute;
+start-up had grown to 11–12 s (scenery layout 7 s, far tiles 4.8 s). Fourth step: the layout's slowest parts run on
+all cores (settling every item on the ground, the nature items per chunk: 1.9 s → 0.4 s on a PC, same result), the
+far tiles sample the mountain once on their finest grid for all three levels, and they are computed after the
+layout instead of beside it (they read its fields and levelled plots, which it was still changing). The start-up
+line in the log now lists the layout's steps.
 
 ### Budget for 60 fps on a mid-range phone *(estimate)*
 

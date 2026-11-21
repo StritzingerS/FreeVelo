@@ -104,16 +104,15 @@ namespace FreeVelo.Core.World.Gen
             int seed = NatureSeed(terrain.Map);
             int c0x = (int)Math.Floor(terrain.MinX / MountainLook.ChunkSize), c1x = (int)Math.Floor(terrain.MaxX / MountainLook.ChunkSize);
             int c0z = (int)Math.Floor(terrain.MinZ / MountainLook.ChunkSize), c1z = (int)Math.Floor(terrain.MaxZ / MountainLook.ChunkSize);
-            for (int cx = c0x; cx <= c1x; cx++)
+            // The chunks are independent: computed on all cores, then added in the same order as before.
+            int nx = c1x - c0x + 1, nz = c1z - c0z + 1;
+            var perChunk = new List<SceneryItem>[nx * nz];
+            System.Threading.Tasks.Parallel.For(0, perChunk.Length, i =>
             {
-                for (int cz = c0z; cz <= c1z; cz++)
-                {
-                    foreach (var item in MountainLook.Items(terrain, cx, cz, seed))
-                    {
-                        if (terrain.InGrid(item.X, item.Z)) layout.Items.Add(item);
-                    }
-                }
-            }
+                int cx = c0x + (i / nz), cz = c0z + (i % nz);
+                perChunk[i] = MountainLook.Items(terrain, cx, cz, seed).Where(item => terrain.InGrid(item.X, item.Z)).ToList();
+            });
+            foreach (var chunk in perChunk) layout.Items.AddRange(chunk);
 
             layout.Fields.AddRange(terrain.Landscape.Fields.Where(f => terrain.InGrid(f.Cx, f.Cz)));
             return layout;

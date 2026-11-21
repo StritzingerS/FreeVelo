@@ -110,18 +110,38 @@ namespace FreeVelo.Core.World.Gen
         /// </summary>
         public static Landscape Generate(Terrain terrain, DateTime today, int seed = 11)
         {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var times = new System.Text.StringBuilder();
+            void Step(string name)
+            {
+                times.Append(times.Length > 0 ? ", " : "").Append(name).Append(' ').Append(clock.ElapsedMilliseconds);
+                clock.Restart();
+            }
+
             var l = new Landscape(terrain, seed, today.Month == 5);
+            Step("init");
             l.PlaceVillages();
+            Step("villages");
             l.PlaceAlm();
+            Step("alm");
             l.PlaceFarms();
+            Step("farms");
             l.PlaceFields();
+            Step("fields");
             l.PlaceHayHuts();
             l.LevelBuildingPlots();
+            Step("levelling");
             l.SettleOnSurface();
+            Step("settle");
             l.PaintPlainHouses(seed);
             foreach (var item in l.Items) l.Index(item);
+            Step("index");
+            l.Timings = times.ToString();
             return l;
         }
+
+        /// <summary>Where the layout's time went (ms per step), for the start-up line in the app log.</summary>
+        public string Timings { get; private set; } = "";
 
         // ------------------------------------------------------------------ queries
 
@@ -871,10 +891,12 @@ namespace FreeVelo.Core.World.Gen
         /// </summary>
         private void SettleOnSurface()
         {
-            for (int k = 0; k < Items.Count; k++)
+            // Every item reads only the finished ground and writes only itself: spread over all cores (the slowest
+            // step of the layout: 0.9 s on a PC, about four times that on a phone).
+            System.Threading.Tasks.Parallel.For(0, Items.Count, k =>
             {
                 var item = Items[k];
-                if (IsBuilding(item.Kind)) continue;
+                if (IsBuilding(item.Kind)) return;
                 double r = item.RotationDeg * Math.PI / 180, sin = Math.Sin(r), cos = Math.Cos(r);
                 double At(double u, double v) => _terrain.SurfaceHeight(item.X + (u * cos) + (v * sin), item.Z - (u * sin) + (v * cos));
                 if (item.Kind is SceneryKind.GardenFence or SceneryKind.Fence)
@@ -908,7 +930,7 @@ namespace FreeVelo.Core.World.Gen
                 }
 
                 Items[k] = item;
-            }
+            });
         }
 
         private static readonly Dictionary<(SceneryKind, int), (double, double, double, double)> FootprintCache = new Dictionary<(SceneryKind, int), (double, double, double, double)>();

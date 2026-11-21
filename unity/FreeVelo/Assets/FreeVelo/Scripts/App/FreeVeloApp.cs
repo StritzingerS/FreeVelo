@@ -104,20 +104,16 @@ namespace FreeVelo.App
                 LoadingStep = "loading_world_scenery";
                 // Generated (no bundled world, or one that does not fit this version's map): keep it for the next start.
                 if (!loaded) SavePreparedWorld(terrain, cache);
-                // Scenery and the mountain's far tiles in parallel, both off the main thread.
+                // The scenery layout first, then the mountain's far tiles, both off the main thread and each spread over
+                // all cores. One after the other: the far tiles read the finished landscape (its fields and levelled
+                // plots), which the layout was still changing while both ran side by side.
                 clock.Restart();
-                var farClock = System.Diagnostics.Stopwatch.StartNew();
-                long farMs = 0;
-                var far = System.Threading.Tasks.Task.Run(() =>
-                {
-                    var tiles = WorldBuilder.ComputeFarTiles(terrain);
-                    farMs = farClock.ElapsedMilliseconds;
-                    return tiles;
-                });
                 var layout = SceneryLayout.Generate(terrain);
                 long layoutMs = clock.ElapsedMilliseconds;
-                var farTiles = far.Result;
-                BackgroundTimes = $"world {(loaded ? "loaded" : "generated")} {terrainMs}, scenery layout {layoutMs}, far tiles {farMs} (parallel)";
+                clock.Restart();
+                var farTiles = WorldBuilder.ComputeFarTiles(terrain);
+                long farMs = clock.ElapsedMilliseconds;
+                BackgroundTimes = $"world {(loaded ? "loaded" : "generated")} {terrainMs}, scenery layout {layoutMs} [{terrain.Landscape?.Timings}], far tiles {farMs}";
                 return (terrain, layout, farTiles);
             });
             _ride.Initialize(_ble, path.Route);

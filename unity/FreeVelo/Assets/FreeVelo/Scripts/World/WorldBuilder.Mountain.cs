@@ -411,9 +411,12 @@ namespace FreeVelo.World
 
             Parallel.ForEach(tiles, t =>
             {
-                t.Lod0 = FarTileParts(terrain, homeGrid, seed, t.Area, 32f);
-                t.Lod1 = t.Lod0 != null ? FarTileParts(terrain, homeGrid, seed, t.Area, 64f) : null;
-                t.Lod2 = t.Lod0 != null ? FarTileParts(terrain, homeGrid, seed, t.Area, 128f) : null;
+                // The mountain's height and slope sampled once on the finest grid; the coarser levels take every 2nd and
+                // 4th point of it (they were sampled anew for every level: the far tiles took 4.8 s at start on a phone).
+                var samples = new TileSamples(terrain.Mountain, t.Area, 32f);
+                t.Lod0 = FarTileParts(terrain, homeGrid, seed, t.Area, 32f, samples);
+                t.Lod1 = t.Lod0 != null ? FarTileParts(terrain, homeGrid, seed, t.Area, 64f, samples) : null;
+                t.Lod2 = t.Lod0 != null ? FarTileParts(terrain, homeGrid, seed, t.Area, 128f, samples) : null;
             });
             foreach (var t in tiles)
             {
@@ -423,8 +426,46 @@ namespace FreeVelo.World
             return result;
         }
 
+        /// <summary>The mountain's coarse height and its slope (±8 m) on a tile's finest grid, computed once.</summary>
+        private sealed class TileSamples
+        {
+            private readonly float[] _h, _hx, _hz;
+            private readonly int _n;
+            private readonly float _x0, _z0, _step;
+
+            public TileSamples(FreeVelo.Core.World.Gen.MountainTerrain m, Rect area, float step)
+            {
+                _x0 = area.xMin;
+                _z0 = area.yMin;
+                _step = step;
+                _n = Mathf.RoundToInt(area.width / step) + 1;
+                _h = new float[_n * _n];
+                _hx = new float[_n * _n];
+                _hz = new float[_n * _n];
+                for (int j = 0; j < _n; j++)
+                {
+                    for (int i = 0; i < _n; i++)
+                    {
+                        float x = _x0 + (i * step), z = _z0 + (j * step);
+                        int k = (j * _n) + i;
+                        _h[k] = (float)m.Coarse(x, z);
+                        _hx[k] = (float)(m.Coarse(x + 8, z) - m.Coarse(x - 8, z));
+                        _hz[k] = (float)(m.Coarse(x, z + 8) - m.Coarse(x, z - 8));
+                    }
+                }
+            }
+
+            /// <summary>Height and slope differences at a grid point of this tile (any multiple of the step).</summary>
+            public (float H, float Hx, float Hz) At(float x, float z)
+            {
+                int i = Mathf.RoundToInt((x - _x0) / _step), j = Mathf.RoundToInt((z - _z0) / _step);
+                int k = (j * _n) + i;
+                return (_h[k], _hx[k], _hz[k]);
+            }
+        }
+
         /// <summary>Coarse ground of a tile, one submesh per ground cover; chunks inside the home grid are left out.</summary>
-        private static MeshParts FarTileParts(FreeVelo.Core.World.Gen.Terrain terrain, Rect homeGrid, int seed, Rect area, float step)
+        private static MeshParts FarTileParts(FreeVelo.Core.World.Gen.Terrain terrain, Rect homeGrid, int seed, Rect area, float step, TileSamples samples)
         {
             var m = terrain.Mountain;
             var parts = new MeshParts();
@@ -448,8 +489,8 @@ namespace FreeVelo.World
                         {
                             float x = x0 + (i * step), z = z0 + (j * step);
                             // Natural ground, kept below the roads next to it (big triangles would cut through them).
-                            float h = (float)System.Math.Min(m.Coarse(x, z), terrain.RoadCap(x, z, step) + 1.5); // (−1.5 below)
-                            float hx = (float)(m.Coarse(x + 8, z) - m.Coarse(x - 8, z)), hz = (float)(m.Coarse(x, z + 8) - m.Coarse(x, z - 8));
+                            var (coarse, hx, hz) = samples.At(x, z);
+                            float h = (float)System.Math.Min(coarse, terrain.RoadCap(x, z, step) + 1.5); // (−1.5 below)
                             vertices.Add(new Vector3(x, h - 1.5f, z));
                             normals.Add(new Vector3(-hx, 16f, -hz).normalized);
                             uvs.Add(new Vector2(x / 18f, z / 18f));
