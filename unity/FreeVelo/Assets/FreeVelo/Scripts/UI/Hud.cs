@@ -861,11 +861,16 @@ namespace FreeVelo.UI
             if (newLang != AppSettings.Language) AppSettings.Language = newLang;
             // Graphics quality: resolution, edge smoothing and shadows (lower = smoother on older phones).
             GUI.Label(new Rect(app.x + 24, app.y + 150, app.width - 48, 26), L.Get("graphics_quality"), Theme.With(Theme.Body, Theme.Text));
-            int quality = Ui.Segmented(new Rect(app.x + 24, app.y + 182, app.width - 48, 50), GraphicsQuality.Names, AppSettings.Quality);
-            if (quality != AppSettings.Quality)
+            int current = AppSettings.Quality == GraphicsQuality.Low ? 0 : 1;
+            int chosen = Ui.Segmented(new Rect(app.x + 24, app.y + 182, app.width - 48, 50), GraphicsQuality.Names, current);
+            if (chosen != current)
             {
+                int quality = chosen == 0 ? GraphicsQuality.Low : GraphicsQuality.High;
                 AppSettings.Quality = quality;
+                // High chosen by hand after the app had dropped to low: the rider wants it, no automatic switch.
+                if (quality == GraphicsQuality.High && AppSettings.QualityAutoLowered) AppSettings.QualityChosenByHand = true;
                 GraphicsQuality.Apply(quality);
+                FindFirstObjectByType<AutoQuality>()?.Restart();
             }
 
             GUI.Label(new Rect(app.x + 24, app.y + 240, app.width - 48, 40), L.Get("graphics_quality_hint"), new GUIStyle(Theme.With(Theme.Caption, Theme.Faint, 13)) { wordWrap = true });

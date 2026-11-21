@@ -304,6 +304,10 @@ far tiles sample the mountain once on their finest grid for all three levels, an
 layout instead of beside it (they read its fields and levelled plots, which it was still changing). The start-up
 line in the log now lists the layout's steps. Far tile meshes are prepared as ready arrays in the background (start
 on the Nord 2: 11–12 s → 7.8 s). Low now holds a fixed 30 fps (it averaged 52–54 but jumped between 60 and 30).
+Owner's decision, same day: only two tiers, high (the default) and low; medium is gone (a stored medium counts as
+high). `AutoQuality` watches high after the first 20 s of a running world: below 45 fps on average over 30 s it
+switches to low, says so (toast and log line) and remembers it; if the rider then chooses high again by hand, it
+stays high.
 
 ### Budget for 60 fps on a mid-range phone *(estimate)*
 

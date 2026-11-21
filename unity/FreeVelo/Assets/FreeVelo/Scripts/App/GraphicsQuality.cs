@@ -6,18 +6,22 @@ using UnityEngine.Rendering.Universal;
 namespace FreeVelo.App
 {
     /// <summary>
-    /// The graphics quality tiers (Settings → App): resolution, edge smoothing, HDR and shadows. Measured on a OnePlus
-    /// Nord 2 at the old fixed settings (full resolution, 4× MSAA, HDR, soft 2048 px shadows to 110 m): 34 fps, the GPU
-    /// at 29 ms a frame. The render pipeline asset is copied first, so changing it at run time never touches the asset
-    /// file in the project (docs/GRAPHICS_OVERHAUL.md section 6).
+    /// The graphics quality (Settings → App): high or low (owner's decision, 21 November 2026: two tiers, and the app
+    /// drops from high to low by itself when high stutters, see <see cref="AutoQuality"/>). Measured on a OnePlus Nord 2:
+    /// high 34 fps (GPU 29 ms a frame), low 52–54 fps before its fixed 30. The render pipeline asset is copied first,
+    /// so changing it at run time never touches the asset file in the project (docs/GRAPHICS_OVERHAUL.md section 6).
     /// </summary>
     public static class GraphicsQuality
     {
+        public const int Low = 0;
+        public const int High = 2;
+
         private static UniversalRenderPipelineAsset _copy;
 
-        public static string[] Names => new[] { L.Get("quality_low"), L.Get("quality_medium"), L.Get("quality_high") };
+        /// <summary>The choices in the settings, in this order: low, high.</summary>
+        public static string[] Names => new[] { L.Get("quality_low"), L.Get("quality_high") };
 
-        /// <summary>Applies the tier (0 low, 1 medium, 2 high) to the render pipeline and the sun.</summary>
+        /// <summary>Applies the tier (<see cref="Low"/> or <see cref="High"/>) to the render pipeline and the sun.</summary>
         public static void Apply(int tier)
         {
 #if UNITY_EDITOR
@@ -41,25 +45,23 @@ namespace FreeVelo.App
                 QualitySettings.renderPipeline = _copy;
             }
 
-            switch (tier)
+            if (tier == Low)
             {
-                case 0: // low: 70 % resolution, no edge smoothing, short hard shadows, 30 fps
-                    Set(0.7f, 1, false, 50f, 1, 1024);
-                    break;
-                case 2: // high: as before
-                    Set(1f, 4, true, 110f, 2, 2048);
-                    break;
-                default: // medium: 80 % resolution, 2× edge smoothing, hard shadows to 70 m
-                    Set(0.8f, 2, false, 70f, 2, 1024);
-                    break;
+                // 70 % resolution, no edge smoothing, short hard shadows
+                Set(0.7f, 1, false, 50f, 1, 1024);
+            }
+            else
+            {
+                // full resolution, 4× edge smoothing, HDR, soft shadows to 110 m (the project's own settings)
+                Set(1f, 4, true, 110f, 2, 2048);
             }
 
             // Low holds a steady 30 frames a second: the Nord 2 averaged 52–54 fps there but jumped between 60 and 30
             // all the time (95th percentile at 33.7 ms); a fixed 30 is even, cooler and uses less battery.
-            Application.targetFrameRate = tier == 0 ? 30 : 60;
+            Application.targetFrameRate = tier == Low ? 30 : 60;
 
             var sun = Object.FindObjectsByType<Light>(FindObjectsSortMode.None).FirstOrDefault(l => l.type == LightType.Directional);
-            if (sun != null) sun.shadows = tier == 2 ? LightShadows.Soft : LightShadows.Hard;
+            if (sun != null) sun.shadows = tier == High ? LightShadows.Soft : LightShadows.Hard;
         }
 
         private static void Set(float scale, int msaa, bool hdr, float shadowDistance, int cascades, int shadowResolution)
@@ -70,6 +72,55 @@ namespace FreeVelo.App
             _copy.shadowDistance = shadowDistance;
             _copy.shadowCascadeCount = cascades;
             _copy.mainLightShadowmapResolution = shadowResolution;
+        }
+    }
+
+    /// <summary>
+    /// Watches the frame rate on high: when the phone cannot keep up (below 45 fps on average over 30 s, measured
+    /// after the first 20 s of a running world), it switches to low, says so, and remembers it. If the rider then
+    /// chooses high again by hand, it stays high.
+    /// </summary>
+    public sealed class AutoQuality : MonoBehaviour
+    {
+        private const float Warmup = 20f, Window = 30f, MinFps = 45f;
+
+        private System.Func<bool> _active;
+        private System.Action<string> _log;
+        private float _running, _window, _frames;
+
+        public void Begin(System.Func<bool> active, System.Action<string> log)
+        {
+            _active = active;
+            _log = log;
+        }
+
+        /// <summary>Starts the measuring over (after the quality was changed, or the world rebuilt).</summary>
+        public void Restart()
+        {
+            _running = 0;
+            _window = 0;
+            _frames = 0;
+        }
+
+        private void Update()
+        {
+            if (_active == null || !_active() || AppSettings.Quality != GraphicsQuality.High || AppSettings.QualityChosenByHand) return;
+            float dt = Time.unscaledDeltaTime;
+            _running += dt;
+            if (_running < Warmup || dt > 1f) return; // loading hitches and the app coming back from the background
+            _window += dt;
+            _frames++;
+            if (_window < Window) return;
+            float fps = _frames / _window;
+            _window = 0;
+            _frames = 0;
+            if (fps >= MinFps) return;
+
+            AppSettings.Quality = GraphicsQuality.Low;
+            AppSettings.QualityAutoLowered = true;
+            GraphicsQuality.Apply(GraphicsQuality.Low);
+            _log?.Invoke($"Graphics: high ran at {fps:0} fps over {Window:0} s, switched to low");
+            FreeVelo.UI.Ui.Toast(L.Get("quality_auto_low"));
         }
     }
 }

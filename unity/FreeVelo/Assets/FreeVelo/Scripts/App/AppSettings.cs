@@ -189,11 +189,28 @@ namespace FreeVelo.App
             set => SetInt("powerSource", (int)value);
         }
 
-        /// <summary>Graphics quality: 0 low, 1 medium (default), 2 high. See <see cref="GraphicsQuality"/>.</summary>
+        /// <summary>
+        /// Graphics quality: <see cref="GraphicsQuality.Low"/> or <see cref="GraphicsQuality.High"/> (the default; the app
+        /// drops to low by itself when high stutters). The former medium (1) counts as high.
+        /// </summary>
         public static int Quality
         {
-            get => Mathf.Clamp(PlayerPrefs.GetInt("quality", 1), 0, 2);
-            set => SetInt("quality", Mathf.Clamp(value, 0, 2));
+            get => PlayerPrefs.GetInt("quality", GraphicsQuality.High) == GraphicsQuality.Low ? GraphicsQuality.Low : GraphicsQuality.High;
+            set => SetInt("quality", value == GraphicsQuality.Low ? GraphicsQuality.Low : GraphicsQuality.High);
+        }
+
+        /// <summary>The app has dropped from high to low by itself once (because high stuttered).</summary>
+        public static bool QualityAutoLowered
+        {
+            get => PlayerPrefs.GetInt("qualityAutoLowered", 0) == 1;
+            set => SetInt("qualityAutoLowered", value ? 1 : 0);
+        }
+
+        /// <summary>The rider chose high by hand after the app had dropped to low: no automatic switch any more.</summary>
+        public static bool QualityChosenByHand
+        {
+            get => PlayerPrefs.GetInt("qualityByHand", 0) == 1;
+            set => SetInt("qualityByHand", value ? 1 : 0);
         }
 
         /// <summary>"de" or "en".</summary>
