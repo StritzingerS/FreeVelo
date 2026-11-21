@@ -263,7 +263,7 @@ namespace FreeVelo.App
             ["power_source"] = ("Power source", "Leistungsquelle"),
             ["language"] = ("Language", "Sprache"),
             ["graphics_quality"] = ("Graphics quality", "Grafikqualität"),
-            ["graphics_quality_hint"] = ("Lower is smoother and cooler on older phones (resolution, edge smoothing, shadows).", "Niedriger läuft auf älteren Handys flüssiger und kühler (Auflösung, Kantenglättung, Schatten)."),
+            ["graphics_quality_hint"] = ("Lower is smoother and cooler on older phones (resolution, edge smoothing, shadows). Low holds a steady 30 frames a second.", "Niedriger läuft auf älteren Handys flüssiger und kühler (Auflösung, Kantenglättung, Schatten). Niedrig hält gleichmäßige 30 Bilder pro Sekunde."),
             ["quality_low"] = ("Low", "Niedrig"),
             ["quality_medium"] = ("Medium", "Mittel"),
             ["quality_high"] = ("High", "Hoch"),

@@ -43,7 +43,7 @@ namespace FreeVelo.App
 
             switch (tier)
             {
-                case 0: // low: 70 % resolution, no edge smoothing, short hard shadows
+                case 0: // low: 70 % resolution, no edge smoothing, short hard shadows, 30 fps
                     Set(0.7f, 1, false, 50f, 1, 1024);
                     break;
                 case 2: // high: as before
@@ -53,6 +53,10 @@ namespace FreeVelo.App
                     Set(0.8f, 2, false, 70f, 2, 1024);
                     break;
             }
+
+            // Low holds a steady 30 frames a second: the Nord 2 averaged 52–54 fps there but jumped between 60 and 30
+            // all the time (95th percentile at 33.7 ms); a fixed 30 is even, cooler and uses less battery.
+            Application.targetFrameRate = tier == 0 ? 30 : 60;
 
             var sun = Object.FindObjectsByType<Light>(FindObjectsSortMode.None).FirstOrDefault(l => l.type == LightType.Directional);
             if (sun != null) sun.shadows = tier == 2 ? LightShadows.Soft : LightShadows.Hard;

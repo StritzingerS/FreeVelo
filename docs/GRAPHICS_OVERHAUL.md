@@ -302,7 +302,8 @@ start-up had grown to 11–12 s (scenery layout 7 s, far tiles 4.8 s). Fourth st
 all cores (settling every item on the ground, the nature items per chunk: 1.9 s → 0.4 s on a PC, same result), the
 far tiles sample the mountain once on their finest grid for all three levels, and they are computed after the
 layout instead of beside it (they read its fields and levelled plots, which it was still changing). The start-up
-line in the log now lists the layout's steps.
+line in the log now lists the layout's steps. Far tile meshes are prepared as ready arrays in the background (start
+on the Nord 2: 11–12 s → 7.8 s). Low now holds a fixed 30 fps (it averaged 52–54 but jumped between 60 and 30).
 
 ### Budget for 60 fps on a mid-range phone *(estimate)*
 
