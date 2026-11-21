@@ -27,6 +27,24 @@ public class StravaImportTests
         Assert.Empty(StravaReader.ParseActivities("[]", new TestJson()));
     }
 
+    /// <summary>Strava IDs are 64-bit: they must survive beyond 32 bits and beyond a double's 2^53 exact range.</summary>
+    [Theory]
+    [InlineData(4_294_967_297L)]            // 2^32 + 1
+    [InlineData(9_007_199_254_740_993L)]    // 2^53 + 1: lost if anything goes through a double
+    [InlineData(long.MaxValue)]
+    public void KeepsSixtyFourBitIds(long id)
+    {
+        string json = $$"""[{"id":{{id}},"name":"Big","type":"Ride","start_date":"2026-11-08T09:15:02Z","moving_time":3600,"device_watts":true}]""";
+        Assert.Equal(id, StravaReader.ParseActivities(json, new TestJson())[0].id);
+
+        var ready = StravaUploader.Interpret(System.Net.HttpStatusCode.OK, $$"""{"id":{{id}},"error":null,"status":"Your activity is ready.","activity_id":{{id}}}""");
+        Assert.Equal((StravaUploadOutcome.Done, id, id), (ready.Outcome, ready.UploadId, ready.ActivityId));
+
+        var duplicate = StravaUploader.Interpret(System.Net.HttpStatusCode.OK,
+            $$"""{"id":1,"error":"x.fit duplicate of <a href='/activities/{{id}}' target='_blank'>Ramp</a>","status":"There was an error processing your activity.","activity_id":null}""");
+        Assert.Equal((StravaUploadOutcome.Done, id), (duplicate.Outcome, duplicate.ActivityId));
+    }
+
     [Fact]
     public void ParsesStreamsWithGaps()
     {
