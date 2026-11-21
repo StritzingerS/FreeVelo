@@ -78,10 +78,38 @@ namespace FreeVelo.Core.Workouts
 
         public static Workout Endurance(int minutes) => Create(
             $"endurance-{minutes}", $"Endurance {minutes}", $"Grundlage {minutes}", WorkoutCategory.Endurance,
-            $"{minutes} minutes in zone 2 to build aerobic base.", $"{minutes} Minuten in Zone 2 für die Grundlagenausdauer.",
-            Ramp(600, 45, 65),
-            Steady((minutes - 15) * 60, 68),
-            Ramp(300, 60, 45));
+            $"{minutes} minutes in zone 2 to build aerobic base – alternating 15-min blocks of power steps (63–68 % FTP) and cadence drills keep it varied.",
+            $"{minutes} Minuten in Zone 2 für die Grundlagenausdauer – abwechselnde 15-min-Blöcke mit Leistungsstufen (63–68 % FTP) und Trittfrequenz-Übungen sorgen für Abwechslung.",
+            Concat(
+                new WorkoutBlock[] { Ramp(600, 45, 65) },
+                EnduranceMainSet((minutes - 15) / 15),
+                new WorkoutBlock[] { Ramp(300, 60, 45) }));
+
+        /// <summary>
+        /// Zone 2 main set made of 15-minute blocks, alternating a power staircase and a cadence block
+        /// (starting and ending with the staircase). Averages ≈ 66 % FTP. The peak stays at 68 % so recovery weeks
+        /// (−10 %) remain below ~62 % FTP.
+        /// </summary>
+        private static IEnumerable<WorkoutBlock> EnduranceMainSet(int blocks)
+        {
+            for (int i = 0; i < blocks; i++)
+            {
+                if (i % 2 == 0)
+                {
+                    yield return Steady(3 * 60, 63, "Settle in – easy zone 2", "Einrollen – lockere Zone 2");
+                    yield return Steady(4 * 60, 66, "Step up", "Eine Stufe höher");
+                    yield return Steady(5 * 60, 68, "Top step – you can still talk easily", "Oberste Stufe – du kannst noch leicht sprechen");
+                    yield return Steady(3 * 60, 65, "Ease off a little", "Etwas rausnehmen");
+                }
+                else
+                {
+                    yield return Steady(4 * 60, 66, "Spin it up: high cadence", "Hohe Trittfrequenz, rund treten", new CadenceRange(95, 105));
+                    yield return Steady(3 * 60, 68, "Back to your normal cadence", "Zurück zur normalen Trittfrequenz");
+                    yield return Steady(4 * 60, 65, "Low cadence, seated and smooth", "Niedrige Trittfrequenz, im Sitzen und kraftvoll", new CadenceRange(70, 80));
+                    yield return Steady(4 * 60, 68, "Free cadence, relax the upper body", "Freie Trittfrequenz, Oberkörper locker");
+                }
+            }
+        }
 
         public static Workout Tempo2x20() => Create(
             "tempo-2x20", "Tempo 2×20", "Tempo 2×20", WorkoutCategory.Tempo,

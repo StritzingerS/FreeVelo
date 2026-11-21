@@ -1087,11 +1087,24 @@ namespace FreeVelo.UI
                 float a = Mathf.Clamp01((_ride.CueUntil - _ride.ClockS) / 1.5f);
                 var old = GUI.color;
                 GUI.color = new Color(1, 1, 1, a);
+                // Only as wide as the gap between the side cards (workout panel on the right, left column): longer
+                // cues wrap onto more lines, and the font shrinks if they would still get too tall.
+                var content = new GUIContent(_ride.CueText);
+                float maxW = Mathf.Max(260, _w - (2 * 368));
                 var style = Theme.With(Theme.H1, size: 40, anchor: TextAnchor.MiddleCenter);
-                float cw = Mathf.Min(_w - 200, style.CalcSize(new GUIContent(_ride.CueText)).x + 80);
-                var r = new Rect((_w - cw) / 2f, (_h / 2f) - 50, cw, 100);
+                float cw = Mathf.Min(maxW, style.CalcSize(content).x + 80); // measured on one line
+                style.wordWrap = true;
+                float ch = style.CalcHeight(content, cw - 48) + 36;
+                for (int size = 36; ch > 170 && size >= 22; size -= 4)
+                {
+                    style = Theme.With(Theme.H1, size: size, anchor: TextAnchor.MiddleCenter, wrap: true);
+                    ch = style.CalcHeight(content, cw - 48) + 36;
+                }
+
+                ch = Mathf.Max(100, ch);
+                var r = new Rect((_w - cw) / 2f, (_h - ch) / 2f, cw, ch);
                 Ui.Card(r, Theme.Alpha(Theme.Background, 0.85f), 28);
-                GUI.Label(r, _ride.CueText, style);
+                GUI.Label(new Rect(r.x + 24, r.y, r.width - 48, r.height), content, style);
                 GUI.color = old;
             }
 
