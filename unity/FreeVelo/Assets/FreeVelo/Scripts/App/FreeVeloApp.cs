@@ -144,6 +144,11 @@ namespace FreeVelo.App
             _camera.nearClipPlane = 0.4f;
             _camera.farClipPlane = 16000f; // the mountain is seen from far away
             _camera.fieldOfView = 60f;
+            // The far scenery (trees, houses as low-detail chunks) only up to 4 km: beyond, the haze leaves little of
+            // it, and the phone drew a few hundred of these chunks to the horizon.
+            var cull = new float[32];
+            cull[WorldBuilder.FarSceneryLayer] = 4000f;
+            _camera.layerCullDistances = cull;
 
             SetUpAtmosphere();
             WorkoutStore.ProcessImports();

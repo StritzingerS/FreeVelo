@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using FreeVelo.World;
 using UnityEngine;
 
@@ -156,6 +157,7 @@ namespace FreeVelo.App
                     string file = Path.Combine(outDir, Safe(shot.name) + ".png");
                     File.WriteAllBytes(file, tex.EncodeToPNG());
                     result.files.Add(Path.GetFileName(file));
+                    File.WriteAllText(Path.ChangeExtension(file, ".txt"), RenderBreakdown(cam));
                 }
                 catch (Exception e)
                 {
@@ -169,6 +171,54 @@ namespace FreeVelo.App
 
             Destroy(rt);
             Destroy(tex);
+        }
+
+        /// <summary>
+        /// What the camera draws, by renderer name (digits stripped) and distance: renderers, submeshes (about one draw
+        /// call each, more with shadows) and triangles; plus the instanced scenery. For the phone performance work.
+        /// </summary>
+        private static string RenderBreakdown(Camera cam)
+        {
+            var planes = GeometryUtility.CalculateFrustumPlanes(cam);
+            var eye = cam.transform.position;
+            var rows = new Dictionary<string, (int R, int S, long T)>();
+            int totalR = 0, totalS = 0;
+            long totalT = 0;
+            foreach (var r in UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+            {
+                if (!r.enabled || !r.gameObject.activeInHierarchy || !GeometryUtility.TestPlanesAABB(planes, r.bounds)) continue;
+                var lod = r.GetComponentInParent<LODGroup>();
+                if (lod != null)
+                {
+                    // only the LOD level the camera picks: Unity's relative height = group size / (2 d tan(fov/2))
+                    float d0 = Vector3.Distance(eye, lod.transform.TransformPoint(lod.localReferencePoint));
+                    float relative = lod.size / (2f * Mathf.Max(1f, d0) * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad)) * QualitySettings.lodBias;
+                    var lods = lod.GetLODs();
+                    int level = -1;
+                    for (int i = 0; i < lods.Length; i++) if (relative >= lods[i].screenRelativeTransitionHeight) { level = i; break; }
+                    if (level < 0) continue;
+                    if (Array.IndexOf(lods[level].renderers, r) < 0) continue;
+                }
+
+                var mesh = r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var filter) ? filter.sharedMesh : null;
+                if (mesh == null) continue;
+                long tris = 0;
+                for (int s = 0; s < mesh.subMeshCount; s++) tris += mesh.GetIndexCount(s) / 3;
+                float d = Vector3.Distance(new Vector3(eye.x, 0, eye.z), new Vector3(r.bounds.center.x, 0, r.bounds.center.z));
+                string band = d < 400 ? "<400" : d < 1500 ? "<1500" : d < 4000 ? "<4000" : ">4000";
+                string name = new string(r.gameObject.name.Where(c => !char.IsDigit(c) && c != ',').ToArray()).Trim() + (r.transform.parent != null ? " in " + new string(r.transform.parent.name.Where(c => !char.IsDigit(c) && c != ',').ToArray()).Trim() : "");
+                string key = $"{name} [{band}]";
+                rows.TryGetValue(key, out var row);
+                rows[key] = (row.R + 1, row.S + mesh.subMeshCount, row.T + tris);
+                totalR++;
+                totalS += mesh.subMeshCount;
+                totalT += tris;
+            }
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"renderers {totalR}, submeshes {totalS}, triangles {totalT / 1000}k; instanced scenery {WorldBuilder.InstancesDrawn} in {WorldBuilder.InstanceDrawCalls} calls, {WorldBuilder.InstanceTriangles / 1000}k tris; far clip {cam.farClipPlane:0} m");
+            foreach (var p in rows.OrderByDescending(p => p.Value.S)) sb.AppendLine($"{p.Value.S,6} submeshes {p.Value.R,5} renderers {p.Value.T / 1000,6}k tris  {p.Key}");
+            return sb.ToString();
         }
 
         private static string Safe(string name)

@@ -283,6 +283,17 @@ shadow; the baked-model lookups are cached. `PerfMonitor` writes one line a minu
 p95/p99/max frame time, CPU/GPU time via `FrameTimingManager` with Frame Timing Stats on, scenery instances and draw
 calls, Android thermal status, battery). Still open: BatchRendererGroup or GPU Resident Drawer, atlasing, HLODs.
 
+**Measured on a OnePlus Nord 2 (21 November 2026, development build, standing in Lärchwald):** 28–33 fps, CPU 31–36 ms
+and GPU 30–33 ms per frame, 2.5–3.1 M triangles, 2,500–7,300 draw calls, thermal none, about 1 % battery a minute;
+start-up 9 s (scenery layout 5.1 s). The instanced scenery was only ~175 of the draw calls. Render shots now write a
+breakdown next to each picture (`<name>.txt`: renderers, submeshes, triangles by name and distance). It showed the
+far mountain tiles drawn with eight submeshes (one per ground cover) up to about 7 km (their textured level held to
+a relative height of 0.06), and the far scenery chunks with one submesh per material. Second step, same day: the far
+tiles have three levels — textured to about 2 km, then 64 m and 128 m meshes in one piece with the covers' average
+colours (a palette texture); the far scenery chunks are one piece with a palette of the materials' colours, cast no
+shadow and are culled beyond 4 km (layer 30). Editor counts: valley view 5,627 → 952 submeshes, village view
+2,493 → 636. Next measurement on the phone pending.
+
 ### Budget for 60 fps on a mid-range phone *(estimate)*
 
 | Item | Budget |

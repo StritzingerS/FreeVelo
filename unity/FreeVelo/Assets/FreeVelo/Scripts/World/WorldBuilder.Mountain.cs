@@ -86,10 +86,14 @@ namespace FreeVelo.World
                 var tile = new MountainTile { Tx = data.Tx, Tz = data.Tz, Area = data.Area };
                 var go = new GameObject($"Mountain {data.Tx},{data.Tz}");
                 go.transform.SetParent(farRoot.transform, false);
+                // Textured, one piece per cover, only up to about 2 km (relative height 0.25 of a 512 m tile); beyond,
+                // one piece with the covers' average colours: one draw call instead of eight (the phone drew up to
+                // 4,800 for these tiles alone: at 0.06 the textured level reached about 7 km).
                 var r0 = AddRenderer(go.transform, "LOD0", data.Lod0.ToMesh("MountainFar"), _coverMaterials, false);
-                var r1 = AddRenderer(go.transform, "LOD1", data.Lod1.ToMesh("MountainFar"), _coverMaterials, false);
+                var r1 = AddRenderer(go.transform, "LOD1", data.Lod1.ToPaletteMesh("MountainFar"), new[] { FarCoverMaterial() }, false);
+                var r2 = AddRenderer(go.transform, "LOD2", data.Lod2.ToPaletteMesh("MountainFar"), new[] { FarCoverMaterial() }, false);
                 tile.Far = go.AddComponent<LODGroup>();
-                tile.Far.SetLODs(new[] { new LOD(0.06f, new Renderer[] { r0 }), new LOD(0.0004f, new Renderer[] { r1 }) });
+                tile.Far.SetLODs(new[] { new LOD(0.25f, new Renderer[] { r0 }), new LOD(0.07f, new Renderer[] { r1 }), new LOD(0.0004f, new Renderer[] { r2 }) });
                 tile.Far.RecalculateBounds();
                 _tiles[(data.Tx, data.Tz)] = tile;
             }
@@ -318,6 +322,58 @@ namespace FreeVelo.World
 
             /// <summary>The Unity mesh (main thread only).</summary>
             public Mesh ToMesh(string name) => CoverMesh(name, Vertices, Normals, Uvs, Cover);
+
+            /// <summary>
+            /// One submesh for all covers: every triangle gets its own corners whose texture coordinate points at its
+            /// cover's texel in the palette of <see cref="FarCoverMaterial"/> (main thread only).
+            /// </summary>
+            public Mesh ToPaletteMesh(string name)
+            {
+                var v = new List<Vector3>();
+                var n = new List<Vector3>();
+                var uv = new List<Vector2>();
+                var t = new List<int>();
+                for (int k = 0; k < Cover.Length; k++)
+                {
+                    var texel = new Vector2((k + 0.5f) / CoverKinds, 0.5f);
+                    foreach (int i in Cover[k])
+                    {
+                        t.Add(v.Count);
+                        v.Add(Vertices[i]);
+                        n.Add(Normals[i]);
+                        uv.Add(texel);
+                    }
+                }
+
+                var mesh = new Mesh { name = name, indexFormat = IndexFormat.UInt32 };
+                mesh.SetVertices(v);
+                mesh.SetNormals(n);
+                mesh.SetUVs(0, uv);
+                mesh.SetTriangles(t, 0);
+                mesh.RecalculateBounds();
+                return mesh;
+            }
+        }
+
+        private Material _farCover;
+
+        /// <summary>One material for the coarse ground: a palette of the covers' average colours (texture × tint).</summary>
+        private Material FarCoverMaterial()
+        {
+            if (_farCover != null) return _farCover;
+            var palette = new Texture2D(CoverKinds, 1, TextureFormat.RGBA32, false) { name = "CoverPalette", filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+            for (int k = 0; k < CoverKinds; k++)
+            {
+                var m = _coverMaterials[Mathf.Min(k, _coverMaterials.Length - 1)];
+                var c = m.HasProperty("_BaseColor") ? m.GetColor("_BaseColor") : m.color;
+                if (m.mainTexture is Texture2D tex && TextureFactory.Means.TryGetValue(tex, out var mean)) c *= mean;
+                c.a = 1f;
+                palette.SetPixel(k, 0, c);
+            }
+
+            palette.Apply(false, true);
+            _farCover = Mat(Color.white, palette, 0f);
+            return _farCover;
         }
 
         /// <summary>One far tile of the mountain: 32 m and 128 m level of detail.</summary>
@@ -325,7 +381,7 @@ namespace FreeVelo.World
         {
             public int Tx, Tz;
             public Rect Area;
-            public MeshParts Lod0, Lod1;
+            public MeshParts Lod0, Lod1, Lod2;
         }
 
         /// <summary>
@@ -356,11 +412,12 @@ namespace FreeVelo.World
             Parallel.ForEach(tiles, t =>
             {
                 t.Lod0 = FarTileParts(terrain, homeGrid, seed, t.Area, 32f);
-                t.Lod1 = t.Lod0 != null ? FarTileParts(terrain, homeGrid, seed, t.Area, 128f) : null;
+                t.Lod1 = t.Lod0 != null ? FarTileParts(terrain, homeGrid, seed, t.Area, 64f) : null;
+                t.Lod2 = t.Lod0 != null ? FarTileParts(terrain, homeGrid, seed, t.Area, 128f) : null;
             });
             foreach (var t in tiles)
             {
-                if (t.Lod0 != null && t.Lod1 != null) result.Add(t);
+                if (t.Lod0 != null && t.Lod1 != null && t.Lod2 != null) result.Add(t);
             }
 
             return result;

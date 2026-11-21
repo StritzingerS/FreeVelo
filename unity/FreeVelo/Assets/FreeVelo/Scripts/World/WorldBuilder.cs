@@ -687,7 +687,30 @@ namespace FreeVelo.World
             }
         }
 
-        /// <summary>Low-detail scenery of one chunk merged into one mesh (one submesh per material); null if empty.</summary>
+        /// <summary>Layer of the far scenery chunks (the camera culls it beyond 4 km; an unnamed layer is enough).</summary>
+        public const int FarSceneryLayer = 30;
+
+        private static readonly int PaletteSize = System.Enum.GetValues(typeof(WorldMaterial)).Length;
+        private Material _sceneryPalette;
+
+        /// <summary>One material for the far scenery: every WorldMaterial's average colour in a palette texture.</summary>
+        private Material SceneryPaletteMaterial()
+        {
+            if (_sceneryPalette != null) return _sceneryPalette;
+            var palette = new Texture2D(PaletteSize, 1, TextureFormat.RGBA32, false) { name = "SceneryPalette", filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+            foreach (WorldMaterial material in System.Enum.GetValues(typeof(WorldMaterial)))
+            {
+                var c = Color.grey;
+                if (WorldMaterials.All.TryGetValue(material, out var entry)) c = new Color(entry.Item1.X, entry.Item1.Y, entry.Item1.Z, 1f);
+                palette.SetPixel((int)material, 0, c);
+            }
+
+            palette.Apply(false, true);
+            _sceneryPalette = Mat(Color.white, palette, 0f);
+            return _sceneryPalette;
+        }
+
+        /// <summary>Low-detail scenery of one chunk merged into one mesh and one material (a colour palette); null if empty.</summary>
         private MeshRenderer BuildSceneryChunkMesh(Transform parent, List<SceneryItem> items)
         {
             // One mesh per chunk, one submesh per material.
@@ -717,38 +740,37 @@ namespace FreeVelo.World
             }
 
             if (parts.Count == 0) return null;
+            // These chunks are only seen beyond NearChunkRadius (380 m): one submesh, each material as its average
+            // colour from a palette (one draw call per chunk instead of one per material; the phone drew ~800 here).
             var mesh = new Mesh { name = "Scenery", indexFormat = IndexFormat.UInt32 };
             var vertices = new List<Vector3>();
             var allNormals = new List<Vector3>();
             var allUvs = new List<Vector2>();
-            var materials = new List<Material>();
-            var submeshes = new List<List<int>>();
+            var tris = new List<int>();
             foreach (var pair in parts)
             {
                 int offset = vertices.Count;
                 vertices.AddRange(pair.Value.V);
                 allNormals.AddRange(pair.Value.N);
-                allUvs.AddRange(pair.Value.UV);
-                var tris = new List<int>(pair.Value.T.Count);
+                var texel = new Vector2(((int)pair.Key + 0.5f) / PaletteSize, 0.5f);
+                for (int i = 0; i < pair.Value.V.Count; i++) allUvs.Add(texel);
                 foreach (int t in pair.Value.T) tris.Add(t + offset);
-                submeshes.Add(tris);
-                materials.Add(Mat(pair.Key));
             }
 
+            var materials = new List<Material> { SceneryPaletteMaterial() };
             mesh.SetVertices(vertices);
             mesh.SetNormals(allNormals);
             mesh.SetUVs(0, allUvs);
-            mesh.subMeshCount = submeshes.Count;
-            for (int s = 0; s < submeshes.Count; s++) mesh.SetTriangles(submeshes[s], s);
-            mesh.RecalculateTangents();
+            mesh.SetTriangles(tris, 0);
             mesh.RecalculateBounds();
 
-            var go = new GameObject("Scenery");
+            var go = new GameObject("Scenery") { layer = FarSceneryLayer };
             go.transform.SetParent(parent, false);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             var renderer = go.AddComponent<MeshRenderer>();
             renderer.sharedMaterials = materials.ToArray();
-            renderer.shadowCastingMode = ShadowCastingMode.On;
+            // Only seen beyond 380 m, well past the shadow distance: no shadow.
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
             return renderer;
         }
 
@@ -778,6 +800,7 @@ namespace FreeVelo.World
             }
 
             int drawn = 0, calls = 0;
+            long triangles = 0;
             foreach (var pair in _instances)
             {
                 if (pair.Value.Count == 0) continue;
@@ -793,14 +816,29 @@ namespace FreeVelo.World
                 }
 
                 drawn += pair.Value.Count;
+                if (pair.Key.Shadows != (int)ShadowCastingMode.ShadowsOnly) triangles += pair.Value.Count * TriangleCount(mesh);
             }
 
             InstancesDrawn = drawn;
             InstanceDrawCalls = calls;
+            InstanceTriangles = triangles;
         }
 
         /// <summary>Scenery instances drawn and their draw calls in the last frame (for the performance log).</summary>
         public static int InstancesDrawn, InstanceDrawCalls;
+
+        /// <summary>Triangles of the visible scenery instances in the last frame (shadow passes not counted).</summary>
+        public static long InstanceTriangles;
+
+        private readonly Dictionary<Mesh, long> _triangleCounts = new Dictionary<Mesh, long>();
+
+        private long TriangleCount(Mesh mesh)
+        {
+            if (_triangleCounts.TryGetValue(mesh, out var n)) return n;
+            for (int s = 0; s < mesh.subMeshCount; s++) n += mesh.GetIndexCount(s) / 3;
+            _triangleCounts[mesh] = n;
+            return n;
+        }
 
         private float _lastInstanceYaw;
         private readonly Plane[] _frustum = new Plane[6];

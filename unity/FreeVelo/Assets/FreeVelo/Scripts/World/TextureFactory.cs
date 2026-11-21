@@ -108,6 +108,16 @@ namespace FreeVelo.World
 
             texture.SetPixels32(pixels);
             texture.Apply(true, true);
+            long r = 0, g = 0, b = 0;
+            foreach (var p in pixels)
+            {
+                r += p.r;
+                g += p.g;
+                b += p.b;
+            }
+
+            float count = pixels.Length * 255f;
+            Means[texture] = new Color(r / count, g / count, b / count, 1f);
             var heights = new float[size * size];
             for (int i = 0; i < heights.Length; i++) heights[i] = ((pixels[i].r * 0.3f) + (pixels[i].g * 0.59f) + (pixels[i].b * 0.11f)) / 255f;
             Heights[texture] = (heights, size);
@@ -121,6 +131,9 @@ namespace FreeVelo.World
             Heights.Clear();
             Normals.Clear();
         }
+
+        /// <summary>Average colour (sRGB) of each generated texture: the colour a far mesh without the texture takes.</summary>
+        public static readonly System.Collections.Generic.Dictionary<Texture2D, Color> Means = new System.Collections.Generic.Dictionary<Texture2D, Color>();
 
         private static readonly System.Collections.Generic.Dictionary<Texture2D, (float[] Heights, int Size)> Heights = new System.Collections.Generic.Dictionary<Texture2D, (float[], int)>();
         private static readonly System.Collections.Generic.Dictionary<(Texture2D, float), Texture2D> Normals = new System.Collections.Generic.Dictionary<(Texture2D, float), Texture2D>();
