@@ -276,6 +276,13 @@ village.
 
 **This rendering path must be reworked before textured models go in.**
 
+**First step done (21 November 2026):** item matrices are computed once per chunk; the instance lists are rebuilt
+when the camera moves 5 m or turns 6°, and take only chunks inside a frustum 25° wider than the camera's; outside it,
+only items within the shadow distance are drawn, as shadow casters only; items beyond the shadow distance cast no
+shadow; the baked-model lookups are cached. `PerfMonitor` writes one line a minute into the app log (average fps,
+p95/p99/max frame time, CPU/GPU time via `FrameTimingManager` with Frame Timing Stats on, scenery instances and draw
+calls, Android thermal status, battery). Still open: BatchRendererGroup or GPU Resident Drawer, atlasing, HLODs.
+
 ### Budget for 60 fps on a mid-range phone *(estimate)*
 
 | Item | Budget |

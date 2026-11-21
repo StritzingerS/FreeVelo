@@ -284,6 +284,7 @@ namespace FreeVelo.App
             // Where the start-up time goes, in the log on the devices page ("Show log").
             _ble.AddLog($"Start-up (ms): background {waitedMs} [{BackgroundTimes}]");
             _ble.AddLog("Scene " + _world.BuildTimes.Replace("World build (ms):", "(ms):") + $" · total {_startClock?.ElapsedMilliseconds ?? 0}");
+            gameObject.AddComponent<PerfMonitor>().Begin(_ble.AddLog, () => _world != null && !_world.Failed);
         }
 
         /// <summary>Set by the render-shot tooling: where the game camera stands and looks instead of following the rider.</summary>

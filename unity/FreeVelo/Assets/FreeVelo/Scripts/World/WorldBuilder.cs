@@ -30,7 +30,7 @@ namespace FreeVelo.World
         private Material _templateNormal;
         private readonly Dictionary<(SceneryKind, int, int), (Mesh Mesh, Material[] Materials)> _models = new Dictionary<(SceneryKind, int, int), (Mesh, Material[])>();
         private readonly List<SceneryChunkData> _chunks = new List<SceneryChunkData>();
-        private readonly Dictionary<(SceneryKind, int, int), List<Matrix4x4>> _instances = new Dictionary<(SceneryKind, int, int), List<Matrix4x4>>();
+        private readonly Dictionary<(SceneryKind Kind, int Variant, int Lod, int Shadows), List<Matrix4x4>> _instances = new Dictionary<(SceneryKind, int, int, int), List<Matrix4x4>>();
         private readonly Matrix4x4[] _batch = new Matrix4x4[1023];
         private GameObject _root;
         private Material _template;
@@ -640,6 +640,28 @@ namespace FreeVelo.World
             public Vector3 Center;
             public MeshRenderer FarRenderer;
             public readonly List<SceneryItem> Items = new List<SceneryItem>();
+
+            // Filled on first use: every item's matrix (computed once, not at every update) and the chunk's extent.
+            public Matrix4x4[] Matrices;
+            public Bounds Bounds;
+
+            public void Prepare()
+            {
+                if (Matrices != null) return;
+                Matrices = new Matrix4x4[Items.Count];
+                float x0 = float.MaxValue, x1 = float.MinValue, y0 = float.MaxValue, y1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
+                for (int i = 0; i < Items.Count; i++)
+                {
+                    var it = Items[i];
+                    Matrices[i] = ItemMatrix(it);
+                    x0 = Mathf.Min(x0, it.X); x1 = Mathf.Max(x1, it.X);
+                    y0 = Mathf.Min(y0, it.Y); y1 = Mathf.Max(y1, it.Y);
+                    z0 = Mathf.Min(z0, it.Z); z1 = Mathf.Max(z1, it.Z);
+                }
+
+                // Items reach out from their position (a church tower 33 m, trees up to 25 m, a house 8 m to the side).
+                Bounds = new Bounds(new Vector3((x0 + x1) / 2, (y0 + y1) / 2 + 15, (z0 + z1) / 2), new Vector3(x1 - x0 + 30, y1 - y0 + 50, z1 - z0 + 30));
+            }
         }
 
         /// <summary>Static low-detail chunks for everything (shown from afar); near chunks are drawn by <see cref="LateUpdate"/>.</summary>
@@ -742,50 +764,99 @@ namespace FreeVelo.World
             var eye = cam.transform.position;
             StreamMountain(eye);
 
-            if ((eye - _lastInstanceUpdate).sqrMagnitude > 25f)
+            // The instance lists are rebuilt when the camera has moved 5 m or turned 6°: only chunks in view (a frustum
+            // a little wider than the camera's, so turning does not show gaps before the next rebuild) are drawn, plus,
+            // shadow only, those within the shadow distance behind or beside the view. Everything else is skipped
+            // (before: every chunk within 380 m all round, and every model cast shadows to 300 m).
+            var forward = cam.transform.forward;
+            float yaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+            if ((eye - _lastInstanceUpdate).sqrMagnitude > 25f || Mathf.Abs(Mathf.DeltaAngle(yaw, _lastInstanceYaw)) > 6f)
             {
                 _lastInstanceUpdate = eye;
-                foreach (var list in _instances.Values) list.Clear();
-                foreach (var chunk in _chunks)
-                {
-                    var flat = new Vector2(chunk.Center.x - eye.x, chunk.Center.z - eye.z);
-                    bool near = flat.magnitude < NearChunkRadius;
-                    if (chunk.FarRenderer != null) chunk.FarRenderer.enabled = !near;
-                    if (!near) continue;
-                    foreach (var item in chunk.Items)
-                    {
-                        float dx = item.X - eye.x, dz = item.Z - eye.z, d2 = (dx * dx) + (dz * dz);
-                        // Close: the Blender model where there is one. With a baked middle-distance version (trees) the
-                        // switch is at BakedRadius; small props are shown all the way to DetailRadius; big ones like
-                        // houses switch to the coded model at BakedRadius. Beyond DetailRadius, low detail.
-                        var baked = BakedModels.Get(item.Kind, item.Variant);
-                        bool bakedMiddle = BakedModels.Get(item.Kind, item.Variant, 1) != null;
-                        float bakedRange = bakedMiddle ? TreeDetailRadius
-                            : BakedModels.Triangles(baked) <= SmallBakedTriangles ? DetailRadius : BakedRadius;
-                        int lod = d2 >= DetailRadius * DetailRadius ? 1
-                            : baked != null && d2 < bakedRange * bakedRange ? 0
-                            : 2;
-                        var key = (item.Kind, item.Variant, lod);
-                        if (!_instances.TryGetValue(key, out var list)) _instances[key] = list = new List<Matrix4x4>();
-                        list.Add(ItemMatrix(item));
-                    }
-                }
+                _lastInstanceYaw = yaw;
+                RebuildInstances(cam, eye);
             }
 
+            int drawn = 0, calls = 0;
             foreach (var pair in _instances)
             {
                 if (pair.Value.Count == 0) continue;
-                var (mesh, materials) = Model(pair.Key.Item1, pair.Key.Item2, pair.Key.Item3);
+                var (mesh, materials) = Model(pair.Key.Kind, pair.Key.Variant, pair.Key.Lod);
                 if (mesh == null) continue;
-                var shadows = pair.Key.Item3 != 1 ? ShadowCastingMode.On : ShadowCastingMode.Off;
+                var shadows = (ShadowCastingMode)pair.Key.Shadows;
                 for (int start = 0; start < pair.Value.Count; start += _batch.Length)
                 {
                     int count = Mathf.Min(_batch.Length, pair.Value.Count - start);
                     pair.Value.CopyTo(start, _batch, 0, count);
-                    for (int s = 0; s < materials.Length; s++) Graphics.DrawMeshInstanced(mesh, s, materials[s], _batch, count, null, shadows, true);
+                    for (int s = 0; s < materials.Length; s++) Graphics.DrawMeshInstanced(mesh, s, materials[s], _batch, count, null, shadows, shadows != ShadowCastingMode.ShadowsOnly);
+                    calls += materials.Length;
+                }
+
+                drawn += pair.Value.Count;
+            }
+
+            InstancesDrawn = drawn;
+            InstanceDrawCalls = calls;
+        }
+
+        /// <summary>Scenery instances drawn and their draw calls in the last frame (for the performance log).</summary>
+        public static int InstancesDrawn, InstanceDrawCalls;
+
+        private float _lastInstanceYaw;
+        private readonly Plane[] _frustum = new Plane[6];
+        private readonly Dictionary<(SceneryKind, int), (bool Baked, float Range)> _bakedInfo = new Dictionary<(SceneryKind, int), (bool, float)>();
+
+        private void RebuildInstances(Camera cam, Vector3 eye)
+        {
+            foreach (var list in _instances.Values) list.Clear();
+            var projection = Matrix4x4.Perspective(Mathf.Min(170f, cam.fieldOfView + 25f), cam.aspect, cam.nearClipPlane, NearChunkRadius + 100f);
+            GeometryUtility.CalculateFrustumPlanes(projection * cam.worldToCameraMatrix, _frustum);
+            float shadowRange = ShadowDistance() + 15f, shadow2 = shadowRange * shadowRange;
+            const float halfDiagonal = SceneryChunk * 0.75f;
+            foreach (var chunk in _chunks)
+            {
+                var flat = new Vector2(chunk.Center.x - eye.x, chunk.Center.z - eye.z);
+                bool near = flat.magnitude < NearChunkRadius;
+                if (chunk.FarRenderer != null) chunk.FarRenderer.enabled = !near;
+                if (!near) continue;
+                chunk.Prepare();
+                bool inView = GeometryUtility.TestPlanesAABB(_frustum, chunk.Bounds);
+                if (!inView && flat.magnitude > shadowRange + halfDiagonal) continue;
+                for (int i = 0; i < chunk.Items.Count; i++)
+                {
+                    var item = chunk.Items[i];
+                    float dx = item.X - eye.x, dz = item.Z - eye.z, d2 = (dx * dx) + (dz * dz);
+                    bool shadow = d2 < shadow2;
+                    if (!inView && !shadow) continue;
+                    // Close: the Blender model where there is one. With a baked middle-distance version (trees) the
+                    // switch is at TreeDetailRadius; small props are shown all the way to DetailRadius; big ones like
+                    // houses switch to the coded model at BakedRadius. Beyond DetailRadius, low detail.
+                    var (baked, bakedRange) = BakedInfo(item.Kind, item.Variant);
+                    int lod = d2 >= DetailRadius * DetailRadius ? 1
+                        : baked && d2 < bakedRange * bakedRange ? 0
+                        : 2;
+                    var mode = !inView ? ShadowCastingMode.ShadowsOnly : shadow && lod != 1 ? ShadowCastingMode.On : ShadowCastingMode.Off;
+                    var key = (item.Kind, item.Variant, lod, (int)mode);
+                    if (!_instances.TryGetValue(key, out var list)) _instances[key] = list = new List<Matrix4x4>();
+                    list.Add(chunk.Matrices[i]);
                 }
             }
         }
+
+        private (bool Baked, float Range) BakedInfo(SceneryKind kind, int variant)
+        {
+            if (_bakedInfo.TryGetValue((kind, variant), out var info)) return info;
+            var baked = BakedModels.Get(kind, variant);
+            bool bakedMiddle = BakedModels.Get(kind, variant, 1) != null;
+            float range = bakedMiddle ? TreeDetailRadius : BakedModels.Triangles(baked) <= SmallBakedTriangles ? DetailRadius : BakedRadius;
+            info = (baked != null, range);
+            _bakedInfo[(kind, variant)] = info;
+            return info;
+        }
+
+        /// <summary>The render pipeline's shadow distance (scenery farther away casts no shadow).</summary>
+        private static float ShadowDistance() =>
+            GraphicsSettings.currentRenderPipeline is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset urp ? urp.shadowDistance : QualitySettings.shadowDistance;
 
         private static Matrix4x4 ItemMatrix(SceneryItem item)
         {
