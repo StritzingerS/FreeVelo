@@ -48,10 +48,13 @@ namespace FreeVelo.World
         /// </summary>
         public static Part[] Get(SceneryKind kind, int variant, int level = 0)
         {
-            variant = ((variant % SceneryModels.Variants) + SceneryModels.Variants) % SceneryModels.Variants;
             if (Cache.TryGetValue((kind, variant, level), out var parts)) return parts;
             parts = null;
-            var asset = Resources.Load<TextAsset>(level == 0 ? $"Models/{kind}_{variant}" : $"Models/{kind}_{variant}_lod{level}");
+            // Variants above the coded three carry a colour (the plain house: variant = size + 3 × colour) and have
+            // their own baked file; without one they fall back to the size variant.
+            string Name(int v) => level == 0 ? $"Models/{kind}_{v}" : $"Models/{kind}_{v}_lod{level}";
+            int size = ((variant % SceneryModels.Variants) + SceneryModels.Variants) % SceneryModels.Variants;
+            var asset = (variant >= SceneryModels.Variants ? Resources.Load<TextAsset>(Name(variant)) : null) ?? Resources.Load<TextAsset>(Name(size));
             if (asset != null)
             {
                 try

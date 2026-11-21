@@ -118,6 +118,7 @@ namespace FreeVelo.Core.World.Gen
             l.PlaceHayHuts();
             l.LevelBuildingPlots();
             l.SettleOnSurface();
+            l.PaintPlainHouses(seed);
             foreach (var item in l.Items) l.Index(item);
             return l;
         }
@@ -158,14 +159,35 @@ namespace FreeVelo.Core.World.Gen
             public bool Hamlet;
         }
 
-        /// <summary>The villages are smaller than first laid out (owner's decision, 20 Nov 2026): radii × 0.65.</summary>
-        private const double VillageScale = 0.65;
+        /// <summary>Plaster colours of the plain Tripo house (AlpineHouse variants 1 and 2): ochre, white, rose, pale green.</summary>
+        public const int PlainHouseColours = 4;
+
+        /// <summary>
+        /// Gives every plain house (AlpineHouse variant 1 or 2) one of the plaster colours, as variant = size + 3 ×
+        /// colour (the app loads AlpineHouse_4, _5, … ; the size stays variant % 3). Done after the layout with its own
+        /// random numbers, so nothing else moves.
+        /// </summary>
+        private void PaintPlainHouses(int seed)
+        {
+            var random = new Random(seed * 31 + 7);
+            for (int k = 0; k < Items.Count; k++)
+            {
+                var item = Items[k];
+                if (item.Kind != SceneryKind.AlpineHouse || item.Variant % SceneryModels.Variants == 0) continue;
+                item.Variant = (item.Variant % SceneryModels.Variants) + (SceneryModels.Variants * random.Next(PlainHouseColours));
+                Items[k] = item;
+            }
+        }
+
+        /// <summary>The villages are smaller than first laid out (owner's decision, 20 Nov 2026): radii × 0.5 (0.65 first, then smaller again).</summary>
+        private const double VillageScale = 0.5;
 
         private static Plan PlanFor(string name)
         {
             var plan = BasePlan(name);
             // Valbrune keeps its size: it has only a few houses on its outer lots, none left when scaled.
-            if (name != "Valbrune") plan.Radius *= VillageScale;
+            // At least 110 m: the hamlet Oberalm kept only two houses at 85 m.
+            if (name != "Valbrune") plan.Radius = Math.Max(110, plan.Radius * VillageScale);
             return plan;
         }
 
@@ -332,8 +354,17 @@ namespace FreeVelo.Core.World.Gen
                 if (!Free(lot.X, lot.Z, SceneryModels.Radius(SceneryKind.AlpineHouse) + 1.5, roadClear: 12)) continue;
                 int variant = _random.Next(3);
                 if (!FootprintClear(SceneryKind.AlpineHouse, variant, lot.X, lot.Z, lot.Rot)) continue;
-                Place(SceneryKind.AlpineHouse, lot.X, lot.Z, lot.Rot, variant);
-                Plot(SceneryKind.AlpineHouse, variant, lot.X, lot.Z, lot.TowardX, lot.TowardZ, lot.AlongX, lot.AlongZ, lot.Rot);
+                // An inn that found no room along the main road (Valbrune, on a steep hillside) takes a lane lot.
+                var kind = SceneryKind.AlpineHouse;
+                if (inns > 0 && Free(lot.X, lot.Z, SceneryModels.Radius(SceneryKind.Inn) + 1.5, roadClear: 12)
+                    && FootprintClear(SceneryKind.Inn, variant, lot.X, lot.Z, lot.Rot))
+                {
+                    kind = SceneryKind.Inn;
+                    inns--;
+                }
+
+                Place(kind, lot.X, lot.Z, lot.Rot, variant);
+                Plot(kind, variant, lot.X, lot.Z, lot.TowardX, lot.TowardZ, lot.AlongX, lot.AlongZ, lot.Rot);
             }
 
             // Trades on the outskirts: the fire station in every village with a church, a car workshop in the bigger
@@ -724,7 +755,9 @@ namespace FreeVelo.Core.World.Gen
                 double g = _terrain.Height(px, pz);
                 low = Math.Min(low, g);
                 high = Math.Max(high, g);
-                if (high - low > 2.4) return false;
+                // Only for the alm huts, placed freely on the slopes: the village lots of Valbrune, a village on a
+                // hillside, have more fall and would lose their church and inn.
+                if (kind == SceneryKind.AlpineHut && high - low > 2.4) return false;
                 if (_terrain.IsWater(px, pz, 1)) return false;
                 double d = _terrain.DistanceToRoad(px, pz, 12, out var road, out _, out _);
                 if (road != null && d < (road.Width / 2) + 1.5) return false;

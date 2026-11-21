@@ -64,7 +64,9 @@ public class LandscapeTests
     [Fact]
     public void VillagesHaveOneChurchInnsShopsAndSigns()
     {
-        var terrain = Ground.Value;
+        // Own copy: Generate levels the building plots into the terrain, and on a terrain another test already levelled
+        // the hillside village Valbrune found no room at all.
+        var terrain = Terrain.Build(WorldMap.Default);
         var l = Landscape.Generate(terrain, new DateTime(2026, 7, 1));
         Assert.Equal(7, l.Villages.Count);
         foreach (var v in l.Villages)
