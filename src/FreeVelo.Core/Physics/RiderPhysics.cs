@@ -23,8 +23,8 @@ namespace FreeVelo.Core.Physics
         /// <summary>Bike weight in kg.</summary>
         public double BikeMassKg { get; set; } = 8.0;
 
-        /// <summary>Drag area in m².</summary>
-        public double CdA { get; set; } = 0.32;
+        /// <summary>Drag area in m² (0.36 ≈ hands on the hoods; drops ≈ 0.30, upright ≈ 0.40).</summary>
+        public double CdA { get; set; } = 0.36;
 
         /// <summary>Drivetrain efficiency (0–1).</summary>
         public double DrivetrainEfficiency { get; set; } = 0.975;
@@ -37,8 +37,11 @@ namespace FreeVelo.Core.Physics
 
         public double TotalMassKg => RiderMassKg + BikeMassKg;
 
-        /// <summary>Wind resistance coefficient ½·ρ·CdA in kg/m (as used by FTMS and FE-C).</summary>
-        public double WindResistanceCoefficient => 0.5 * AirDensity * CdA;
+        /// <summary>
+        /// Wind resistance coefficient ρ·CdA in kg/m, as FE-C, FTMS and the Zwift protocol expect it: the trainer itself
+        /// applies F = ½ · coefficient · v² (FE-C default 0.51 = CdA 0.40 × ρ 1.275).
+        /// </summary>
+        public double WindResistanceCoefficient => AirDensity * CdA;
 
         /// <summary>Resisting force in N at <paramref name="speedMps"/>.</summary>
         public double ResistanceForce(double speedMps, double gradePercent, double rollingResistance, double headwindMps = 0.0)
@@ -104,12 +107,12 @@ namespace FreeVelo.Core.Physics
     {
         public static double RollingResistance(RoadSurface surface) => surface switch
         {
-            RoadSurface.Asphalt => 0.004,
-            RoadSurface.CompactedGravel => 0.006,
-            RoadSurface.Gravel => 0.008,
-            RoadSurface.Dirt => 0.010,
-            RoadSurface.Grass => 0.015,
-            _ => 0.004,
+            RoadSurface.Asphalt => 0.005, // good road tyres on ordinary asphalt
+            RoadSurface.CompactedGravel => 0.007,
+            RoadSurface.Gravel => 0.009,
+            RoadSurface.Dirt => 0.011,
+            RoadSurface.Grass => 0.016,
+            _ => 0.005,
         };
     }
 }

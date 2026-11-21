@@ -9,9 +9,30 @@ public class RiderPhysicsTests
     [Fact]
     public void FlatRoadSpeedIsRealistic()
     {
-        var p = new RiderPhysics(); // 75 + 8 kg, CdA 0.32
+        var p = new RiderPhysics(); // 75 + 8 kg, CdA 0.36
         double kmh = p.SteadyStateSpeed(200, 0, 0.004) * 3.6;
         Assert.InRange(kmh, 31, 35);
+    }
+
+    [Fact]
+    public void EnduranceRideOnAsphaltIsNotTooFast()
+    {
+        // 80 kg at 150 W on flat asphalt: about 28 km/h on the hoods, not 30+.
+        var p = new RiderPhysics { RiderMassKg = 80 };
+        double kmh = p.SteadyStateSpeed(150, 0, RoadSurfaces.RollingResistance(RoadSurface.Asphalt)) * 3.6;
+        Assert.InRange(kmh, 27, 29.5);
+    }
+
+    [Fact]
+    public void TrainerGetsTheSameAirDragAsTheApp()
+    {
+        // The trainer protocols take ρ·CdA and apply ½·cw·v² themselves.
+        var p = new RiderPhysics();
+        Assert.Equal(1.225 * 0.36, p.WindResistanceCoefficient, 6);
+        double v = 8.0;
+        double app = p.ResistanceForce(v, 0, 0.005);
+        double trainer = VirtualGears.RoadForce(0, v, p.TotalMassKg, 0.005, p.WindResistanceCoefficient);
+        Assert.Equal(app, trainer, 6);
     }
 
     [Fact]

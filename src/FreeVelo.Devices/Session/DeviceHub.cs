@@ -719,8 +719,14 @@ namespace FreeVelo.Devices.Session
                 _simSentMs = now;
                 _ergSent = double.NaN;
 
-                // The Neo 2 asks for the user configuration again after grade changes: send it right away.
-                if (TrainerProtocol == TrainerProtocol.TacxFec) SendFecUserConfig(trainer, now);
+                if (TrainerProtocol == TrainerProtocol.TacxFec)
+                {
+                    // Page 51 carries no air drag: without page 50 the trainer keeps its default 0.51.
+                    Send(trainer, TacxFec.TxCharacteristic, TacxFec.SetWindResistance(_simCw), null);
+
+                    // The Neo 2 asks for the user configuration again after grade changes: send it right away.
+                    SendFecUserConfig(trainer, now);
+                }
             }
         }
 

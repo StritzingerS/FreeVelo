@@ -81,9 +81,19 @@ namespace FreeVelo.Devices.Tacx
         }
 
         /// <summary>
+        /// SIM mode – data page 50 (0x32): wind resistance coefficient ρ·CdA in 0.01 kg/m (default 0.51), no wind,
+        /// no drafting. Without it the trainer keeps its default 0.51.
+        /// </summary>
+        public static byte[] SetWindResistance(double windResistanceKgPerM)
+        {
+            int cw = (int)Math.Max(0, Math.Min(186, Math.Round(windResistanceKgPerM * 100.0)));
+            return WrapPage(new byte[] { 0x32, 0xFF, 0xFF, 0xFF, 0xFF, (byte)cw, 127, 100 });
+        }
+
+        /// <summary>
         /// Data page 55 (0x37): rider and bike weight, wheel diameter. Trainers use it for SIM mode physics.
         /// </summary>
-        public static byte[] SetUserConfiguration(double riderWeightKg, double bikeWeightKg = 9.0, double wheelDiameterM = 0.70)
+        public static byte[] SetUserConfiguration(double riderWeightKg, double bikeWeightKg = 8.0, double wheelDiameterM = 0.70)
         {
             int rider = (int)Math.Round(Math.Max(0, Math.Min(655.34, riderWeightKg)) * 100.0);
             int bike = (int)Math.Round(Math.Max(0, Math.Min(50.0, bikeWeightKg)) / 0.05);

@@ -30,9 +30,12 @@ public class TacxFecTests
     [Fact]
     public void UserConfigurationPage()
     {
-        // rider 75 kg = 7500 = 0x1D4C, bike 9 kg = 180 = 0x0B4, wheel 0.70 m = 70 = 0x46
+        // rider 75 kg = 7500 = 0x1D4C, bike 8 kg = 160 = 0x0A0 (as in the app's physics), wheel 0.70 m = 70 = 0x46
         byte[] msg = TacxFec.SetUserConfiguration(75);
-        Assert.Equal(new byte[] { 0x37, 0x4C, 0x1D, 0xFF, 0x40, 0x0B, 0x46, 0x00 }, msg[4..12]);
+        Assert.Equal(new byte[] { 0x37, 0x4C, 0x1D, 0xFF, 0x00, 0x0A, 0x46, 0x00 }, msg[4..12]);
+
+        // Page 50: ρ·CdA 0.44 kg/m = 44, no wind (127 = 0 km/h), no drafting (100 = 1.00).
+        Assert.Equal(new byte[] { 0x32, 0xFF, 0xFF, 0xFF, 0xFF, 44, 127, 100 }, TacxFec.UnwrapPage(TacxFec.SetWindResistance(0.441)));
     }
 
     [Fact]
@@ -138,7 +141,7 @@ public class RecordedLogTests
         var notifications = entries.Where(e => e.Characteristic == TacxFec.RxCharacteristic).ToList();
 
         // The app sent exactly what the encoder produces.
-        Assert.Equal(TacxFec.SetUserConfiguration(75), writes[0].Payload);
+        Assert.Equal(TacxFec.SetUserConfiguration(75, bikeWeightKg: 9), writes[0].Payload); // recorded with the old 9 kg
         Assert.Equal(TacxFec.SetTargetPower(160), writes[1].Payload);
         Assert.Equal(TacxFec.SetTargetPower(210), writes[2].Payload);
         Assert.Equal(TacxFec.SetTrackResistance(0), writes[3].Payload);

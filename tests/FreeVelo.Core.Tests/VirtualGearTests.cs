@@ -4,7 +4,7 @@ namespace FreeVelo.Core.Tests;
 
 public class VirtualGearTests
 {
-    private const double Mass = 83, Crr = 0.004, Cw = 0.51 * 0.5;
+    private const double Mass = 83, Crr = 0.004, Cw = 0.51; // ρ·CdA, as sent to the trainer
 
     [Fact]
     public void TwentyFourGearsAroundTheReference()

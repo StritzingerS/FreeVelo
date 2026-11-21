@@ -13,7 +13,7 @@ namespace FreeVelo.Devices.Zwift
     /// <code>
     /// handshake  "RideOn" 02 01                        → SyncRx (00000003)
     /// command    04 + HubCommand (protobuf)           → SyncRx
-    ///            HubCommand  4: Simulation { 1 wind m/s×100 (sint), 2 grade %×100 (sint), 3 CdA×10000, 4 Crr×100000 }
+    ///            HubCommand  4: Simulation { 1 wind m/s×100 (sint), 2 grade %×100 (sint), 3 ρ·CdA×10000, 4 Crr×100000 }
     ///                        5: Physical   { 2 gear ratio×10000, 4 bike kg×100, 5 rider kg×100 }
     /// confirm    00 + HubRequest { 1: 520 } = 00 08 88 04   after a gear change
     /// </code>
@@ -35,7 +35,7 @@ namespace FreeVelo.Devices.Zwift
             (services.Contains(ZwiftController.RideService) || services.Contains(ZwiftController.ClickService))
             && (services.Contains(ftmsService) || services.Contains(fecService));
 
-        /// <summary>The road: grade (%), rolling resistance and wind resistance (½·ρ·CdA in kg/m, e.g. 0.51).</summary>
+        /// <summary>The road: grade (%), rolling resistance and wind resistance (ρ·CdA in kg/m, e.g. 0.51; Zwift always sends 0.51).</summary>
         public static byte[] Simulation(double gradePercent, double rollingResistance, double windResistanceKgPerM, double windMps = 0)
         {
             var sim = new List<byte>();

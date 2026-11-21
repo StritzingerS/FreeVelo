@@ -63,11 +63,14 @@ namespace FreeVelo.Core.Physics
             return best;
         }
 
-        /// <summary>Road resistance force (N) at a speed: slope + rolling + air. <paramref name="cw"/> = ½·ρ·CdA (kg/m).</summary>
+        /// <summary>
+        /// Road resistance force (N) at a speed: slope + rolling + air, as the trainer computes it.
+        /// <paramref name="cw"/> = ρ·CdA (kg/m, the trainer protocols' wind resistance coefficient): air = ½·cw·v².
+        /// </summary>
         public static double RoadForce(double gradePercent, double speedMps, double massKg, double crr, double cw)
         {
             double theta = Math.Atan(gradePercent / 100.0);
-            return (massKg * RiderPhysics.Gravity * (Math.Sin(theta) + (crr * Math.Cos(theta)))) + (cw * speedMps * speedMps);
+            return (massKg * RiderPhysics.Gravity * (Math.Sin(theta) + (crr * Math.Cos(theta)))) + (0.5 * cw * speedMps * speedMps);
         }
 
         /// <summary>
@@ -80,7 +83,7 @@ namespace FreeVelo.Core.Physics
             double k = Factor;
             double v = Math.Max(0, trainerSpeedMps);
             double wanted = k * RoadForce(gradePercent, v * k, massKg, crr, cw);
-            double slopeAndRolling = (wanted - (cw * v * v)) / (massKg * RiderPhysics.Gravity);
+            double slopeAndRolling = (wanted - (0.5 * cw * v * v)) / (massKg * RiderPhysics.Gravity);
             double grade = (slopeAndRolling - crr) * 100.0; // small-angle: sin θ ≈ tan θ
             return Math.Max(MinGrade, Math.Min(MaxGrade, Math.Round(grade, 1)));
         }

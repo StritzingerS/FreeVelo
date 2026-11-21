@@ -256,20 +256,21 @@ public class DeviceHubTests
     {
         ConnectNeo();
         _hub.TrainerDifficulty = 0.5;
-        _hub.SetSimulation(8.0);
+        _hub.SetSimulation(8.0, 0.005, 0.44);
         Advance(250);
 
         var commands = _writer.To(TacxFec.TxCharacteristic);
-        Assert.Contains(commands, c => c.SequenceEqual(TacxFec.SetTrackResistance(4.0)));
+        Assert.Contains(commands, c => c.SequenceEqual(TacxFec.SetTrackResistance(4.0, 0.005)));
+        Assert.Contains(commands, c => c.SequenceEqual(TacxFec.SetWindResistance(0.44))); // air drag, not the trainer's default
         Assert.Equal(TacxFec.SetUserConfiguration(75), commands.Last());
 
         // Small changes are throttled to 1/s
         int count = _writer.Writes.Count;
-        _hub.SetSimulation(8.6);
+        _hub.SetSimulation(8.6, 0.005, 0.44);
         Advance(250);
         Assert.Equal(count, _writer.Writes.Count);
         Advance(1000);
-        Assert.Contains(_writer.To(TacxFec.TxCharacteristic), c => c.SequenceEqual(TacxFec.SetTrackResistance(4.3)));
+        Assert.Contains(_writer.To(TacxFec.TxCharacteristic), c => c.SequenceEqual(TacxFec.SetTrackResistance(4.3, 0.005)));
     }
 
     [Fact]

@@ -53,7 +53,7 @@ namespace FreeVelo.Devices.Ftms
         /// <param name="gradePercent">Road grade in percent (resolution 0.01 %).</param>
         /// <param name="windSpeedMps">Head wind (+) or tail wind (−) in m/s (resolution 0.001).</param>
         /// <param name="rollingResistance">Coefficient of rolling resistance (resolution 0.0001, max 0.0255).</param>
-        /// <param name="windResistanceKgPerM">Wind resistance coefficient ½·ρ·CdA in kg/m (resolution 0.01, max 2.55).</param>
+        /// <param name="windResistanceKgPerM">Wind resistance coefficient ρ·CdA in kg/m (resolution 0.01, max 2.55).</param>
         public static byte[] SetIndoorBikeSimulation(
             double gradePercent,
             double windSpeedMps = 0.0,

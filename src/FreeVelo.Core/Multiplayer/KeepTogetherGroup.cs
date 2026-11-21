@@ -50,11 +50,11 @@ namespace FreeVelo.Core.Multiplayer
         /// <summary>Without a fresh "pedaling" update for this long a rider counts as stopped.</summary>
         public const double ActiveWindowS = 3;
 
-        /// <summary>The anchor: 75 kg rider (W/kg × 75 = its power), 8 kg bike, CdA 0.32.</summary>
+        /// <summary>The anchor: 75 kg rider (W/kg × 75 = its power), 8 kg bike, default CdA.</summary>
         public const double ReferenceRiderKg = 75;
 
         private readonly Route _route;
-        private readonly RiderPhysics _anchor = new RiderPhysics { RiderMassKg = ReferenceRiderKg, BikeMassKg = 8, CdA = 0.32 };
+        private readonly RiderPhysics _anchor = new RiderPhysics { RiderMassKg = ReferenceRiderKg, BikeMassKg = 8 };
         private readonly Dictionary<string, Member> _members = new Dictionary<string, Member>();
         private double _clockS;
 
