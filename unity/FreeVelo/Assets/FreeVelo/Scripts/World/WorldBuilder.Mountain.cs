@@ -90,8 +90,8 @@ namespace FreeVelo.World
                 // one piece with the covers' average colours: one draw call instead of eight (the phone drew up to
                 // 4,800 for these tiles alone: at 0.06 the textured level reached about 7 km).
                 var r0 = AddRenderer(go.transform, "LOD0", data.Lod0.ToMesh("MountainFar"), _coverMaterials, false);
-                var r1 = AddRenderer(go.transform, "LOD1", data.Lod1.ToPaletteMesh("MountainFar"), new[] { FarCoverMaterial() }, false);
-                var r2 = AddRenderer(go.transform, "LOD2", data.Lod2.ToPaletteMesh("MountainFar"), new[] { FarCoverMaterial() }, false);
+                var r1 = AddRenderer(go.transform, "LOD1", data.Lod1.ToMesh("MountainFar"), new[] { FarCoverMaterial() }, false);
+                var r2 = AddRenderer(go.transform, "LOD2", data.Lod2.ToMesh("MountainFar"), new[] { FarCoverMaterial() }, false);
                 tile.Far = go.AddComponent<LODGroup>();
                 tile.Far.SetLODs(new[] { new LOD(0.25f, new Renderer[] { r0 }), new LOD(0.07f, new Renderer[] { r1 }), new LOD(0.0004f, new Renderer[] { r2 }) });
                 tile.Far.RecalculateBounds();
@@ -320,37 +320,76 @@ namespace FreeVelo.World
             public readonly List<Vector2> Uvs = new List<Vector2>();
             public readonly List<int>[] Cover = Enumerable.Range(0, CoverKinds).Select(_ => new List<int>()).ToArray();
 
-            /// <summary>The Unity mesh (main thread only).</summary>
-            public Mesh ToMesh(string name) => CoverMesh(name, Vertices, Normals, Uvs, Cover);
+            /// <summary>Ready arrays with one submesh per cover (any thread).</summary>
+            public MeshArrays Covered() => new MeshArrays(Vertices.ToArray(), Normals.ToArray(), Uvs.ToArray(), Cover.Select(c => c.ToArray()).ToArray());
 
             /// <summary>
-            /// One submesh for all covers: every triangle gets its own corners whose texture coordinate points at its
-            /// cover's texel in the palette of <see cref="FarCoverMaterial"/> (main thread only).
+            /// Ready arrays with one submesh for all covers: every triangle gets its own corners whose texture coordinate
+            /// points at its cover's texel in the palette of <see cref="FarCoverMaterial"/> (any thread).
             /// </summary>
-            public Mesh ToPaletteMesh(string name)
+            public MeshArrays Palette()
             {
-                var v = new List<Vector3>();
-                var n = new List<Vector3>();
-                var uv = new List<Vector2>();
-                var t = new List<int>();
+                int count = Cover.Sum(c => c.Count);
+                var v = new Vector3[count];
+                var n = new Vector3[count];
+                var uv = new Vector2[count];
+                var t = new int[count];
+                int at = 0;
                 for (int k = 0; k < Cover.Length; k++)
                 {
                     var texel = new Vector2((k + 0.5f) / CoverKinds, 0.5f);
                     foreach (int i in Cover[k])
                     {
-                        t.Add(v.Count);
-                        v.Add(Vertices[i]);
-                        n.Add(Normals[i]);
-                        uv.Add(texel);
+                        t[at] = at;
+                        v[at] = Vertices[i];
+                        n[at] = Normals[i];
+                        uv[at] = texel;
+                        at++;
                     }
                 }
 
+                return new MeshArrays(v, n, uv, new[] { t });
+            }
+        }
+
+        /// <summary>
+        /// Mesh data prepared off the main thread (with its bounds), so the main thread only hands it to the GPU: building
+        /// the far tiles' meshes on the main thread took 2.8 s of the start on a phone.
+        /// </summary>
+        public sealed class MeshArrays
+        {
+            private readonly Vector3[] _v, _n;
+            private readonly Vector2[] _uv;
+            private readonly int[][] _sub;
+            private readonly Bounds _bounds;
+
+            public MeshArrays(Vector3[] v, Vector3[] n, Vector2[] uv, int[][] sub)
+            {
+                _v = v;
+                _n = n;
+                _uv = uv;
+                _sub = sub;
+                if (v.Length == 0) return;
+                Vector3 lo = v[0], hi = v[0];
+                foreach (var p in v)
+                {
+                    lo = Vector3.Min(lo, p);
+                    hi = Vector3.Max(hi, p);
+                }
+
+                _bounds = new Bounds((lo + hi) * 0.5f, hi - lo);
+            }
+
+            /// <summary>The Unity mesh (main thread only).</summary>
+            public Mesh ToMesh(string name)
+            {
                 var mesh = new Mesh { name = name, indexFormat = IndexFormat.UInt32 };
-                mesh.SetVertices(v);
-                mesh.SetNormals(n);
-                mesh.SetUVs(0, uv);
-                mesh.SetTriangles(t, 0);
-                mesh.RecalculateBounds();
+                mesh.SetVertices(_v);
+                mesh.SetNormals(_n);
+                mesh.SetUVs(0, _uv);
+                mesh.subMeshCount = _sub.Length;
+                for (int k = 0; k < _sub.Length; k++) mesh.SetIndices(_sub[k], MeshTopology.Triangles, k, false);
+                mesh.bounds = _bounds;
                 return mesh;
             }
         }
@@ -381,7 +420,7 @@ namespace FreeVelo.World
         {
             public int Tx, Tz;
             public Rect Area;
-            public MeshParts Lod0, Lod1, Lod2;
+            public MeshArrays Lod0, Lod1, Lod2;
         }
 
         /// <summary>
@@ -414,9 +453,11 @@ namespace FreeVelo.World
                 // The mountain's height and slope sampled once on the finest grid; the coarser levels take every 2nd and
                 // 4th point of it (they were sampled anew for every level: the far tiles took 4.8 s at start on a phone).
                 var samples = new TileSamples(terrain.Mountain, t.Area, 32f);
-                t.Lod0 = FarTileParts(terrain, homeGrid, seed, t.Area, 32f, samples);
-                t.Lod1 = t.Lod0 != null ? FarTileParts(terrain, homeGrid, seed, t.Area, 64f, samples) : null;
-                t.Lod2 = t.Lod0 != null ? FarTileParts(terrain, homeGrid, seed, t.Area, 128f, samples) : null;
+                var lod0 = FarTileParts(terrain, homeGrid, seed, t.Area, 32f, samples);
+                if (lod0 == null) return;
+                t.Lod0 = lod0.Covered();
+                t.Lod1 = FarTileParts(terrain, homeGrid, seed, t.Area, 64f, samples)?.Palette();
+                t.Lod2 = FarTileParts(terrain, homeGrid, seed, t.Area, 128f, samples)?.Palette();
             });
             foreach (var t in tiles)
             {
