@@ -83,6 +83,15 @@ namespace FreeVelo.Ble
         /// on top as "#" comment lines: the log file itself only records the Bluetooth traffic. Falls back to the
         /// log file when the copy cannot be written.
         /// </summary>
+        /// <summary>The app's recent messages as plain text, oldest first (for copying or sharing as text).</summary>
+        public string AppMessagesText()
+        {
+            var text = new System.Text.StringBuilder();
+            text.Append("FreeVelo ").Append(Application.version).Append(" · ").Append(SystemInfo.deviceModel).Append(" · ").Append(SystemInfo.operatingSystem).Append('\n');
+            for (int i = _log.Count - 1; i >= 0; i--) text.Append(_log[i].Replace("\n", " ")).Append('\n');
+            return text.ToString();
+        }
+
         public string LogFileForSharing()
         {
             string path = LogFilePath;

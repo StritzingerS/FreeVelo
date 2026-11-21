@@ -151,6 +151,7 @@ namespace FreeVelo.App
             _camera.layerCullDistances = cull;
 
             SetUpAtmosphere();
+            GraphicsQuality.Apply(AppSettings.Quality);
             WorkoutStore.ProcessImports();
 
             // Phase 3: history (old FIT files are read once in the background), training plan, Zwift controllers.

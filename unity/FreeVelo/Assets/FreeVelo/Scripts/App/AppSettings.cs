@@ -189,6 +189,13 @@ namespace FreeVelo.App
             set => SetInt("powerSource", (int)value);
         }
 
+        /// <summary>Graphics quality: 0 low, 1 medium (default), 2 high. See <see cref="GraphicsQuality"/>.</summary>
+        public static int Quality
+        {
+            get => Mathf.Clamp(PlayerPrefs.GetInt("quality", 1), 0, 2);
+            set => SetInt("quality", Mathf.Clamp(value, 0, 2));
+        }
+
         /// <summary>"de" or "en".</summary>
         public static string Language
         {

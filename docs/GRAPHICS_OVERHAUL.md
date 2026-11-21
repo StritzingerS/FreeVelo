@@ -292,7 +292,11 @@ a relative height of 0.06), and the far scenery chunks with one submesh per mate
 tiles have three levels — textured to about 2 km, then 64 m and 128 m meshes in one piece with the covers' average
 colours (a palette texture); the far scenery chunks are one piece with a palette of the materials' colours, cast no
 shadow and are culled beyond 4 km (layer 30). Editor counts: valley view 5,627 → 952 submeshes, village view
-2,493 → 636. Next measurement on the phone pending.
+2,493 → 636. Measured again on the Nord 2: 1,070–1,640 draw calls, but still 34–35 fps with the GPU at 28–29 ms and
+2.6 M triangles: the phone is bound by its GPU at the fixed settings (full resolution, 4× MSAA, HDR, soft 2048 px
+shadows to 110 m, two cascades). Third step: graphics quality in Settings → App (`GraphicsQuality`, applied to a
+runtime copy of the pipeline asset in the player only): low 70 % resolution, no MSAA, hard 1024 px shadows to 50 m,
+one cascade; medium (default) 80 %, 2× MSAA, no HDR, hard 1024 px shadows to 70 m; high as before.
 
 ### Budget for 60 fps on a mid-range phone *(estimate)*
 

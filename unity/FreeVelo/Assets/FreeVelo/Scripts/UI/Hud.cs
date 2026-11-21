@@ -685,19 +685,41 @@ namespace FreeVelo.UI
                 if (!string.IsNullOrEmpty(path))
                 {
                     // Android/data cannot be opened by other apps (Android 11+): share or copy the log from here.
-                    GUI.Label(new Rect(log.x + 16, log.yMax - 28, log.width - 380, 20), System.IO.Path.GetFileName(path), Clip(Theme.With(Theme.Caption, Theme.Faint, 13)));
+                    GUI.Label(new Rect(log.x + 16, log.yMax - 28, log.width - 560, 20), System.IO.Path.GetFileName(path), Clip(Theme.With(Theme.Caption, Theme.Faint, 13)));
+                    // Copies the app messages (start-up times, performance lines, errors) as text: works on every phone,
+                    // also where sharing or saving the file fails (it did on a OnePlus Nord 2).
+                    if (Ui.Button(new Rect(log.xMax - 534, log.yMax - 50, 170, 40), L.Get("copy_log"), ButtonKind.Secondary, Icon.Share))
+                    {
+                        GUIUtility.systemCopyBuffer = _ble.AppMessagesText();
+                        Ui.Toast("✓ " + L.Get("log_copied"));
+                    }
+
                     if (Ui.Button(new Rect(log.xMax - 356, log.yMax - 50, 170, 40), L.Get("share_log"), ButtonKind.Secondary, Icon.Share))
                     {
                         string error = FileActions.Share(_ble.LogFileForSharing(), L.Get("share_log"));
-                        if (error != null) Ui.Toast(error);
+                        if (error != null) ShareLogAsText(error);
                     }
 
                     if (Ui.Button(new Rect(log.xMax - 178, log.yMax - 50, 166, 40), L.Get("save_log"), ButtonKind.Secondary, Icon.Download))
                     {
-                        Ui.Toast(FileActions.SaveToDownloads(_ble.LogFileForSharing()));
+                        string result = FileActions.SaveToDownloads(_ble.LogFileForSharing());
+                        if (result.StartsWith("✗")) ShareLogAsText(result);
+                        else Ui.Toast(result);
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// When the log file cannot be shared or saved: the app messages are copied and offered in the share sheet as
+        /// plain text (no file provider involved); the toast says what went wrong with the file.
+        /// </summary>
+        private void ShareLogAsText(string fileError)
+        {
+            string text = _ble.AppMessagesText();
+            GUIUtility.systemCopyBuffer = text;
+            string error = FileActions.ShareText(text, L.Get("share_log"));
+            Ui.Toast(fileError + " · " + L.Get(error == null ? "log_shared_as_text" : "log_copied"));
         }
 
         private static string ProtocolName(string protocol) =>
@@ -761,7 +783,7 @@ namespace FreeVelo.UI
                 + sectionH + 280 + gap + ButtonsCardH + gap + (sim ? 160 + gap : 0) // trainer
                 + sectionH + ServerCardH + gap                     // riding together
                 + sectionH + StravaCardH + gap + BackupCardH + gap // data
-                + sectionH + 160 + gap;                            // app
+                + sectionH + 290 + gap;                            // app: language, graphics quality
             Ui.BeginScroll(3000, view, contentH);
             float x0 = 8, y = 8;
 
@@ -831,12 +853,22 @@ namespace FreeVelo.UI
 
             // ---- App: language
             y = SettingsSection(x0, y, L.Get("app"));
-            var app = new Rect(x0, y, colW, 160);
+            var app = new Rect(x0, y, colW, 290);
             Ui.Card(app);
             SectionTitle(app, L.Get("language"), Icon.Gear);
             int lang = Ui.Segmented(new Rect(app.x + 24, app.y + 80, app.width - 48, 50), new[] { "English", "Deutsch" }, AppSettings.Language == "de" ? 1 : 0);
             string newLang = lang == 1 ? "de" : "en";
             if (newLang != AppSettings.Language) AppSettings.Language = newLang;
+            // Graphics quality: resolution, edge smoothing and shadows (lower = smoother on older phones).
+            GUI.Label(new Rect(app.x + 24, app.y + 150, app.width - 48, 26), L.Get("graphics_quality"), Theme.With(Theme.Body, Theme.Text));
+            int quality = Ui.Segmented(new Rect(app.x + 24, app.y + 182, app.width - 48, 50), GraphicsQuality.Names, AppSettings.Quality);
+            if (quality != AppSettings.Quality)
+            {
+                AppSettings.Quality = quality;
+                GraphicsQuality.Apply(quality);
+            }
+
+            GUI.Label(new Rect(app.x + 24, app.y + 240, app.width - 48, 40), L.Get("graphics_quality_hint"), new GUIStyle(Theme.With(Theme.Caption, Theme.Faint, 13)) { wordWrap = true });
             Ui.EndScroll(3000, view, contentH);
         }
 
