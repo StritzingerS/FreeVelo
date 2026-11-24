@@ -33,6 +33,26 @@ public class RoadFurnitureTests
         Assert.True(approaches >= map.Bridges.Count * 3, $"only {approaches} bridge approaches");
     }
 
+    [Fact]
+    public void KerbsLineTheVillageStreetsWithGapsForLanes()
+    {
+        var (terrain, _) = World.Value;
+        var kerbs = RoadFurniture.Kerbs(terrain);
+        Console.WriteLine($"{kerbs.Count} kerbs, {kerbs.Sum(k => k.Length) / 1000:0.0} km");
+        Assert.NotEmpty(kerbs);
+        // No kerb across a lane, yard or path that meets the road.
+        foreach (var k in kerbs)
+        {
+            var e = terrain.Map.Edges[k.Edge];
+            for (double d = k.FromD; d <= k.ToD; d += 1)
+            {
+                var (x, z, _, rx, rz) = RoadFurniture.At(e, d);
+                double o = (e.Width / 2) + 0.3;
+                Assert.False(terrain.Landscape!.BuiltOn(x + (rx * k.Side * o), z + (rz * k.Side * o)), $"kerb on edge {k.Edge} at {d:0} m crosses a lane or yard");
+            }
+        }
+    }
+
     /// <summary>Section 7 of docs/GRAPHICS_OVERHAUL.md: no road furniture within lane reach of a centre line.</summary>
     [Fact]
     public void NoGuardRailInALaneOrOnAnotherRoad()

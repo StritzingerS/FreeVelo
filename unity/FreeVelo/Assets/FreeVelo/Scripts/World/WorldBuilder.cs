@@ -81,6 +81,7 @@ namespace FreeVelo.World
             Step("terrain");
             BuildRoads();
             BuildGuardRails();
+            BuildKerbs(layout.Kerbs);
             BuildBridges();
             BuildWater();
             Step("roads+water");

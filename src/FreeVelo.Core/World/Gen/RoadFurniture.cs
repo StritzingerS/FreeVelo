@@ -89,6 +89,85 @@ namespace FreeVelo.Core.World.Gen
             return rails;
         }
 
+        /// <summary>
+        /// Kerbs along the asphalt's edge in the villages (within each village's radius of its centre): interrupted at
+        /// junctions, on bridges (they have their own kerb), where a lane, yard or path meets the road (a dropped kerb,
+        /// as at a driveway) and next to another road; at least 6 m long.
+        /// </summary>
+        public static List<GuardRail> Kerbs(Terrain terrain)
+        {
+            var kerbs = new List<GuardRail>();
+            var landscape = terrain.Landscape;
+            if (landscape == null) return kerbs;
+            var map = terrain.Map;
+            foreach (var e in map.Edges)
+            {
+                if (e.Surface != Physics.RoadSurface.Asphalt) continue;
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    double start = double.NaN, last = double.NaN;
+                    for (double d = 0; d <= e.Length; d += 1)
+                    {
+                        bool ok = KerbAllowed(terrain, landscape, e, side, d);
+                        if (ok)
+                        {
+                            if (double.IsNaN(start)) start = d;
+                            last = d;
+                        }
+                        else if (!double.IsNaN(start))
+                        {
+                            if (last - start >= 6) kerbs.Add(new GuardRail(e.Id, side, start, last));
+                            start = double.NaN;
+                        }
+                    }
+
+                    if (!double.IsNaN(start) && last - start >= 6) kerbs.Add(new GuardRail(e.Id, side, start, last));
+                }
+            }
+
+            return kerbs;
+        }
+
+        private static bool KerbAllowed(Terrain terrain, Landscape landscape, RoadEdge e, int side, double d)
+        {
+            if (d < 10 || d > e.Length - 10) return false;
+            var (x, z, _, rx, rz) = At(e, d);
+            bool inVillage = false;
+            foreach (var v in landscape.Villages)
+            {
+                if (((v.X - x) * (v.X - x)) + ((v.Z - z) * (v.Z - z)) < v.Radius * v.Radius)
+                {
+                    inVillage = true;
+                    break;
+                }
+            }
+
+            if (!inVillage) return false;
+            var map = terrain.Map;
+            foreach (var b in map.Bridges)
+            {
+                if (b.Edge == e.Id && Math.Abs(b.DistanceM - d) < BridgeHalfSpan(map) + 1) return false;
+            }
+
+            double half = e.Width / 2;
+            for (double o = 0.3; o <= 1.8; o += 0.75)
+            {
+                double px = x + (rx * side * (half + o)), pz = z + (rz * side * (half + o));
+                if (landscape.BuiltOn(px, pz)) return false; // a lane, yard or path meets the road here
+                foreach (var c in terrain.Corners)
+                {
+                    if (px < c.MinX - 2 || px > c.MaxX + 2 || pz < c.MinZ - 2 || pz > c.MaxZ + 2) continue;
+                    if (c.Distance(px, pz) < 1.5) return false;
+                }
+            }
+
+            double kx = x + (rx * side * (half + 0.1)), kz = z + (rz * side * (half + 0.1));
+            double dist = terrain.DistanceToRoad(kx, kz, 12, out var road, out _, out _);
+            if (road != null && road.Id != e.Id && dist < (road.Width / 2) + 1.5) return false;
+            if (road != null && road.Id == e.Id && dist < half - 0.05) return false; // inside a tight bend over the road itself
+            return true;
+        }
+
         /// <summary>Where the bridge railings end (this far either side of the river centre, as the app builds the bridges).</summary>
         public static double BridgeHalfSpan(WorldMap map) => (map.River?.HalfWidth ?? 10) + 14;
 

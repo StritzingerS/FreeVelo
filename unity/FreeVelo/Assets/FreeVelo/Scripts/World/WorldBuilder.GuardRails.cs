@@ -127,6 +127,54 @@ namespace FreeVelo.World
             }
         }
 
+        // Kerb cross-section (u: outwards from the asphalt's edge, v: up from the road surface), road side chamfered.
+        private static readonly Vector2[] KerbProfile =
+        {
+            new Vector2(0f, -0.04f), new Vector2(0f, 0.08f), new Vector2(0.025f, 0.11f), new Vector2(0.16f, 0.11f), new Vector2(0.16f, -0.36f),
+        };
+
+        /// <summary>Concrete kerbs along the village streets (<see cref="RoadFurniture.Kerbs"/>): 11 cm high at the asphalt's edge.</summary>
+        private void BuildKerbs(List<GuardRail> kerbs)
+        {
+            if (kerbs == null || kerbs.Count == 0) return;
+            var cells = new Dictionary<(int, int), RailMesh>();
+            foreach (var kerb in kerbs)
+            {
+                var e = Map.Edges[kerb.Edge];
+                float half = (float)e.Width / 2;
+                var mid = RoadFurniture.At(e, (kerb.FromD + kerb.ToD) / 2);
+                var key = (Mathf.FloorToInt((float)mid.X / RailCell), Mathf.FloorToInt((float)mid.Z / RailCell));
+                if (!cells.TryGetValue(key, out var mesh)) cells[key] = mesh = new RailMesh();
+                int n = Mathf.Max(2, Mathf.CeilToInt((float)kerb.Length) + 1);
+                var edges = new Vector3[n];
+                var outward = new Vector3[n];
+                for (int k = 0; k < n; k++)
+                {
+                    double d = kerb.FromD + (kerb.Length * k / (n - 1));
+                    var (x, z, h, rx, rz) = RoadFurniture.At(e, d);
+                    var o = new Vector3((float)rx, 0f, (float)rz) * kerb.Side;
+                    edges[k] = new Vector3((float)x, (float)h + 0.05f, (float)z) + (o * (half - 0.02f));
+                    outward[k] = o;
+                }
+
+                mesh.Extrude(edges, outward, KerbProfile, capEnds: true);
+            }
+
+            var material = Mat(new Color(0.74f, 0.74f, 0.72f), null, 0.1f);
+            foreach (var pair in cells)
+            {
+                var go = new GameObject("Kerbs");
+                go.transform.SetParent(_root.transform, false);
+                go.AddComponent<MeshFilter>().sharedMesh = pair.Value.ToMesh();
+                var renderer = go.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = material;
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+                var lod = go.AddComponent<LODGroup>();
+                lod.SetLODs(new[] { new LOD(0.01f, new Renderer[] { renderer }) });
+                lod.RecalculateBounds();
+            }
+        }
+
         /// <summary>Vertices and triangles of the rails in one cell.</summary>
         private sealed class RailMesh
         {
@@ -167,6 +215,65 @@ namespace FreeVelo.World
                         }
                     }
                 }
+            }
+
+            /// <summary>
+            /// A closed profile swept along a line, flat-shaded (each profile side its own face), with end caps. The
+            /// profile runs road side first, so the faces point away from its inside.
+            /// </summary>
+            public void Extrude(Vector3[] line, Vector3[] outward, Vector2[] profile, bool capEnds)
+            {
+                int m = profile.Length;
+                for (int j = 0; j < m; j++)
+                {
+                    var pa = profile[j];
+                    var pb = profile[(j + 1) % m];
+                    int start = _v.Count;
+                    for (int k = 0; k < line.Length; k++)
+                    {
+                        var a = line[k] + (outward[k] * pa.x) + (Vector3.up * pa.y);
+                        var b = line[k] + (outward[k] * pb.x) + (Vector3.up * pb.y);
+                        // face normal in the profile plane: (dv, -du) rotated into the world, pointing out of the profile
+                        var n = ((outward[k] * (pb.y - pa.y)) - (Vector3.up * (pb.x - pa.x))).normalized;
+                        _v.Add(a);
+                        _v.Add(b);
+                        _n.Add(-n);
+                        _n.Add(-n);
+                    }
+
+                    for (int k = 0; k < line.Length - 1; k++)
+                    {
+                        int a = start + (k * 2), b = a + 1, c = a + 2, d = a + 3;
+                        AddQuadFacing(a, b, c, d, _n[a]);
+                    }
+                }
+
+                if (!capEnds) return;
+                foreach (int k in new[] { 0, line.Length - 1 })
+                {
+                    var along = (line[Mathf.Min(line.Length - 1, k + 1)] - line[Mathf.Max(0, k - 1)]).normalized * (k == 0 ? -1f : 1f);
+                    int start = _v.Count;
+                    foreach (var p in profile)
+                    {
+                        _v.Add(line[k] + (outward[k] * p.x) + (Vector3.up * p.y));
+                        _n.Add(along);
+                    }
+
+                    for (int j = 1; j < m - 1; j++) AddTriangleFacing(start, start + j, start + j + 1, along);
+                }
+            }
+
+            private void AddQuadFacing(int a, int b, int c, int d, Vector3 normal)
+            {
+                AddTriangleFacing(a, b, c, normal);
+                AddTriangleFacing(b, d, c, normal);
+            }
+
+            private void AddTriangleFacing(int a, int b, int c, Vector3 normal)
+            {
+                var n = Vector3.Cross(_v[b] - _v[a], _v[c] - _v[a]);
+                if (Vector3.Dot(n, normal) >= 0) _t.AddRange(new[] { a, b, c });
+                else _t.AddRange(new[] { a, c, b });
             }
 
             /// <summary>An upright box: <paramref name="basePoint"/> at the bottom centre.</summary>

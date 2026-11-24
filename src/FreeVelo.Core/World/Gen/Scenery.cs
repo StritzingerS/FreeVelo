@@ -94,6 +94,9 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>Guard rails along the roads (<see cref="RoadFurniture"/>).</summary>
         public List<GuardRail> GuardRails { get; } = new List<GuardRail>();
 
+        /// <summary>Kerbs along the village streets (same runs as rails: edge, side, from, to).</summary>
+        public List<GuardRail> Kerbs { get; } = new List<GuardRail>();
+
         /// <summary>The nature seed the streamed pieces use too (so the home grid joins them seamlessly).</summary>
         public static int NatureSeed(WorldMap map) => map.Seed + 7;
 
@@ -119,6 +122,7 @@ namespace FreeVelo.Core.World.Gen
 
             layout.Fields.AddRange(terrain.Landscape.Fields.Where(f => terrain.InGrid(f.Cx, f.Cz)));
             layout.GuardRails.AddRange(RoadFurniture.GuardRails(terrain));
+            layout.Kerbs.AddRange(RoadFurniture.Kerbs(terrain));
             return layout;
         }
     }
