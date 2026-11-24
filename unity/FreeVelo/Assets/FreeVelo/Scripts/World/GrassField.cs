@@ -34,7 +34,8 @@ namespace FreeVelo.World
         private readonly HashSet<long> _queued = new HashSet<long>();
         private Mesh[] _meshes;
         private Material[] _materials;
-        private readonly List<Matrix4x4>[] _lists = new List<Matrix4x4>[18]; // detail (0 near, 1 far) × kind × colour
+        private readonly List<Matrix4x4>[] _lists = new List<Matrix4x4>[27]; // detail (0 near, 1 simple, 2 card) × kind × colour
+        private Material[] _cardMaterials;
         private readonly Matrix4x4[] _batch = new Matrix4x4[1023];
         private readonly Plane[] _planes = new Plane[6];
 
@@ -57,10 +58,13 @@ namespace FreeVelo.World
         private static bool LowQuality => FreeVelo.App.AppSettings.Quality == FreeVelo.App.GraphicsQuality.Low;
 
         /// <summary>How far the tufts reach: less on low graphics quality.</summary>
-        private static float Radius => LowQuality ? 45f : 90f;
+        private static float Radius => LowQuality ? 45f : 160f;
 
         /// <summary>Beyond this the tufts use the simple version (a third of the blades, a little wider).</summary>
         private static float DetailRadius => LowQuality ? 18f : 30f;
+
+        /// <summary>Beyond this (high quality only) the tufts are 2D cards: three crossed quads with a cut-out picture.</summary>
+        private static float CardRadius => LowQuality ? float.MaxValue : 100f;
 
         private void LateUpdate()
         {
@@ -102,7 +106,7 @@ namespace FreeVelo.World
             }
 
             // Forget pieces far behind (memory), then draw what is in view.
-            if (_pieces.Count > 400)
+            if (_pieces.Count > 1400)
             {
                 var drop = new List<long>();
                 foreach (var key in _pieces.Keys)
@@ -122,7 +126,7 @@ namespace FreeVelo.World
             foreach (var list in _lists) list.Clear();
             GeometryUtility.CalculateFrustumPlanes(cam, _planes);
             float fadeStart = radius * 0.7f;
-            float detail = DetailRadius;
+            float detail = DetailRadius, card = CardRadius;
             foreach (var pair in _pieces)
             {
                 var tufts = pair.Value;
@@ -140,7 +144,15 @@ namespace FreeVelo.World
                     if (d > limit) continue;
                     float fade = 1f - Mathf.SmoothStep(0f, 1f, (d - (limit - 6f)) / 6f);
                     float s = t.Scale * Mathf.Max(0.05f, fade);
-                    _lists[(d > detail ? 9 : 0) + (t.Kind * 3) + t.Colour].Add(Matrix4x4.TRS(t.Position, Quaternion.Euler(0f, t.Yaw, 0f), new Vector3(s, s, s)));
+                    int level = d > card ? 2 : d > detail ? 1 : 0;
+                    if (level == 2)
+                    {
+                        // Cards: every other tuft, a little bigger (the same cover with half the instances).
+                        if (t.Rank > 0.55f) continue;
+                        s *= 1.3f;
+                    }
+
+                    _lists[(level * 9) + (t.Kind * 3) + t.Colour].Add(Matrix4x4.TRS(t.Position, Quaternion.Euler(0f, t.Yaw, 0f), new Vector3(s, s, s)));
                 }
             }
 
@@ -156,7 +168,8 @@ namespace FreeVelo.World
                 {
                     int count = Mathf.Min(_batch.Length, list.Count - start);
                     list.CopyTo(start, _batch, 0, count);
-                    Graphics.DrawMeshInstanced(_meshes[i / 3], 0, _materials[i % 3], _batch, count, null, ShadowCastingMode.Off, true);
+                    var material = i >= 18 ? _cardMaterials[i % 3] : _materials[i % 3];
+                    Graphics.DrawMeshInstanced(_meshes[i / 3], 0, material, _batch, count, null, ShadowCastingMode.Off, true);
                     DrawnTriangles += count * (int)(_meshes[i / 3].GetIndexCount(0) / 3);
                 }
             }
@@ -185,8 +198,12 @@ namespace FreeVelo.World
                     double edge = _terrain.DistanceToRoad(x, z, 12, out var road, out _, out _);
                     edge = road != null ? edge - (road.Width / 2) : 99;
                     if (edge < ShoulderWidth + 0.3) { Reject[1]++; continue; } // road and shoulder
+                    // The verge: thinner in the first metre after the shoulder (mown, trodden), thickest from about
+                    // 2 m off the asphalt, fading into the meadow from 4.5 to 6 m.
                     bool verge = edge < 4.5;
-                    float chance = verge ? 0.95f : 0.25f + (0.6f * Mathf.PerlinNoise((x / 11f) + 300f, (z / 11f) + 700f));
+                    bool nearEdge = edge < ShoulderWidth + 1.3;
+                    float meadowChance = 0.25f + (0.6f * Mathf.PerlinNoise((x / 11f) + 300f, (z / 11f) + 700f));
+                    float chance = nearEdge ? 0.7f : verge ? 0.95f : meadowChance;
                     if (Hash(gx, gz, 3) > chance) { Reject[2]++; continue; }
 
                     if (landscape != null && landscape.BuiltOn(x, z)) { Reject[3]++; continue; }
@@ -219,7 +236,7 @@ namespace FreeVelo.World
                     });
 
                     // Clumps: the verge grows thick (three more tufts round this one), the lush meadow patches a bit.
-                    int extra = verge ? 3 : chance > 0.65f ? 1 : 0;
+                    int extra = nearEdge ? 1 : verge ? 3 : edge < 6 ? 2 : chance > 0.65f ? 1 : 0;
                     for (int k = 0; k < extra; k++)
                     {
                         float ex = x + ((Hash(gx, gz, 20 + k) - 0.5f) * cell * 1.1f);
@@ -279,6 +296,9 @@ namespace FreeVelo.World
                 TuftMesh("GrassTuftShortFar", blades: 5, height: 0.3f, seed: 1, widthScale: 2f),
                 TuftMesh("GrassTuftMeadowFar", blades: 6, height: 0.48f, seed: 2, widthScale: 2f),
                 TuftMesh("GrassTuftVergeFar", blades: 8, height: 0.75f, seed: 3, widthScale: 2f),
+                CardMesh("GrassCardShort", 0.3f),
+                CardMesh("GrassCardMeadow", 0.48f),
+                CardMesh("GrassCardVerge", 0.75f),
             };
 
             var template = Resources.Load<Material>("FreeVeloLitGrass");
@@ -309,6 +329,121 @@ namespace FreeVelo.World
                 material.SetFloat("_Cull", 0f); // blades seen from both sides
                 _materials[i] = material;
             }
+
+            // Cards: the same colours on a cut-out picture of a tuft.
+            var cardTemplate = Resources.Load<Material>("FreeVeloLitGrassCard") ?? template;
+            _cardMaterials = new Material[3];
+            for (int i = 0; i < 3; i++)
+            {
+                var picture = CardPicture(bases[i], tips[i], i);
+                var material = cardTemplate != null ? new Material(cardTemplate) : new Material(Shader.Find("FreeVelo/LitWind"));
+                material.name = "GrassCard" + i;
+                material.enableInstancing = true;
+                material.EnableKeyword("_FV_GRASS");
+                material.EnableKeyword("_ALPHATEST_ON");
+                material.SetFloat("_AlphaClip", 1f);
+                material.SetFloat("_Cutoff", 0.5f);
+                material.SetTexture("_BaseMap", picture);
+                material.mainTexture = picture;
+                material.SetColor("_BaseColor", Color.white);
+                material.SetFloat("_Smoothness", 0.05f);
+                material.SetFloat("_Cull", 0f);
+                material.renderQueue = (int)RenderQueue.AlphaTest;
+                _cardMaterials[i] = material;
+            }
+        }
+
+        /// <summary>
+        /// A tuft seen from the side, 64 × 64: tapering blades fanning out from the bottom centre, coloured base to tip;
+        /// transparent around them. The alpha of the smaller mipmaps is raised so the tuft does not thin away at a
+        /// distance (alpha-tested pictures lose cover as they shrink).
+        /// </summary>
+        private static Texture2D CardPicture(Color bottom, Color tip, int seed)
+        {
+            const int size = 64;
+            var alpha = new float[size * size];
+            var random = new System.Random(100 + seed);
+            for (int b = 0; b < 16; b++)
+            {
+                float rootX = 0.5f + (((float)random.NextDouble() - 0.5f) * 0.25f);
+                float tipX = 0.5f + (((float)random.NextDouble() - 0.5f) * 0.95f);
+                float tipY = 0.55f + (0.45f * (float)random.NextDouble());
+                float width = 0.025f + (0.02f * (float)random.NextDouble());
+                for (int y = 0; y < size; y++)
+                {
+                    float v = (y + 0.5f) / size;
+                    if (v > tipY) break;
+                    float t = v / tipY;
+                    float cx = Mathf.Lerp(rootX, tipX, t * t); // curving outwards
+                    float half = width * (1f - t);
+                    for (int x = 0; x < size; x++)
+                    {
+                        float u = (x + 0.5f) / size;
+                        float a = Mathf.Clamp01(1f - (Mathf.Abs(u - cx) - half) * size);
+                        alpha[(y * size) + x] = Mathf.Max(alpha[(y * size) + x], a);
+                    }
+                }
+            }
+
+            var picture = new Texture2D(size, size, TextureFormat.RGBA32, true) { name = "GrassCard" + seed, wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                var c = Color.Lerp(bottom, tip, Mathf.Pow(y / (float)(size - 1), 0.8f));
+                for (int x = 0; x < size; x++)
+                {
+                    var p = (Color32)c; // the colour also where transparent, so no dark fringe
+                    p.a = (byte)Mathf.RoundToInt(alpha[(y * size) + x] * 255f);
+                    pixels[(y * size) + x] = p;
+                }
+            }
+
+            picture.SetPixels32(pixels);
+            picture.Apply(true, false);
+            for (int level = 1; level < picture.mipmapCount; level++)
+            {
+                var mip = picture.GetPixels32(level);
+                float boost = 1f + (0.45f * level);
+                for (int k = 0; k < mip.Length; k++) mip[k].a = (byte)Mathf.Min(255, Mathf.RoundToInt(mip[k].a * boost));
+                picture.SetPixels32(mip, level);
+            }
+
+            picture.Apply(false, true);
+            return picture;
+        }
+
+        /// <summary>A card tuft: three upright quads crossing at 60°, as wide as 1.3 × their height.</summary>
+        private static Mesh CardMesh(string name, float height)
+        {
+            var vertices = new List<Vector3>();
+            var normals = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            var tris = new List<int>();
+            float half = height * 0.65f;
+            for (int q = 0; q < 3; q++)
+            {
+                float a = q * Mathf.PI / 3f;
+                var side = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * half;
+                int first = vertices.Count;
+                vertices.Add(-side);
+                vertices.Add(side);
+                vertices.Add(-side + (Vector3.up * height));
+                vertices.Add(side + (Vector3.up * height));
+                for (int k = 0; k < 4; k++) normals.Add(Vector3.up); // soft light, as the 3D tufts' up-leaning normals
+                uvs.Add(new Vector2(0f, 0f));
+                uvs.Add(new Vector2(1f, 0f));
+                uvs.Add(new Vector2(0f, 1f));
+                uvs.Add(new Vector2(1f, 1f));
+                tris.AddRange(new[] { first, first + 2, first + 1, first + 1, first + 2, first + 3 });
+            }
+
+            var mesh = new Mesh { name = name };
+            mesh.SetVertices(vertices);
+            mesh.SetNormals(normals);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         /// <summary>
