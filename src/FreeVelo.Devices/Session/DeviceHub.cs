@@ -781,9 +781,9 @@ namespace FreeVelo.Devices.Session
             foreach (var entry in _controllers)
             {
                 var c = entry.Value;
-                if (c.State == ZwiftControllerState.Locked) continue; // a locked unit only answers with challenges
-                // Handshake, repeated as keep-alive: the Click V2 right unit sleeps after about a minute otherwise.
-                if (now - c.HandshakeMs >= ZwiftController.KeepAliveMs)
+                // Handshake until answered; a locked unit only answers with challenges, a ready one is left alone.
+                if (c.State != ZwiftControllerState.Connecting) continue;
+                if (now - c.HandshakeMs >= ZwiftController.HandshakeRetryMs)
                 {
                     c.HandshakeMs = now;
                     Send(entry.Key, ZwiftController.SyncRxChar, ZwiftController.StartCommand(c.ClickV2), null);
@@ -799,6 +799,11 @@ namespace FreeVelo.Devices.Session
                 if (answer.HasValue && answer.Value != c.State)
                 {
                     c.State = answer.Value;
+                    if (c.State == ZwiftControllerState.Ready)
+                    {
+                        Send(address, ZwiftController.SyncRxChar, ZwiftController.AfterHandshake, null);
+                    }
+
                     Log?.Invoke(c.State == ZwiftControllerState.Locked
                         ? $"{address}: Zwift controller locked (unlock it in the Zwift app, or use the right unit)"
                         : $"{address}: Zwift controller ready");

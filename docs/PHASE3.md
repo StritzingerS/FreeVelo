@@ -47,7 +47,8 @@ to wake up.
       the road in the virtual gear. On-screen + / − while riding; in ERG workout blocks + / − change the block
       intensity. (The earlier "SIM via ERG" variant is gone.)
 - [x] Zwift Click V2 (and Click / Play / Ride): own module `FreeVelo.Devices.Zwift` after the community-documented
-      protocol (RideOn handshake, keep-alive every 3 s, 0x23 button bitmap). + / A harder, − / B easier.
+      protocol (RideOn handshake retried until answered, then FF 04 00 once as BikeControl does; 0x23 button
+      bitmap with BikeControl's masks). + / A harder, − / B easier.
       The Click V2 **left** unit is locked by Zwift (unlock by connecting it to Zwift, lasts about 24 h);
       the right unit works on its own (+ harder, B easier). The devices page shows the controller next to trainer, power meter and heart rate, with "locked" for a locked unit.
 - [x] Controller settings (Settings → Trainer & shifting): what each Click V2 button does (harder / easier / nothing),
@@ -61,8 +62,9 @@ to wake up.
       block in the last repetition (all built-in workouts do: no recovery before the cool-down); discarding shows
       a revert arrow. Built-in warm-ups at most 12 min including the opener (FTP tests keep 15 min)
 - [x] Quick start on the home page: a workout that suits the form (TSB), then the workouts ridden last
-- [ ] Test with the real Click V2 (both units, keep-alive, locked left unit; the log of 2026-11-07 had the
-      handshake and battery but no button messages)
+- [x] Tested with the real Click V2 (2026-11-24): both units, all buttons incl. Z, + and −. Earlier logs had the
+      handshake but no buttons (unit not unlocked by Zwift) and wrong masks for Z / + / −; now FF 04 00 after the
+      handshake, no RideOn re-sends, BikeControl's button masks
 - [x] Built-in virtual shifting tested on the Neo 2: works (2026-11-10)
 
 ### E. The mountain – two legendary climbs

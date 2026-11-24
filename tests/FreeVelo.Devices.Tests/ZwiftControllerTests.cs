@@ -31,14 +31,16 @@ public class ZwiftControllerTests
         return bytes.ToArray();
     }
 
-    private const uint Released = 0x3FFFF;
+    private const uint Released = 0xFFFF;
 
     [Fact]
     public void DecodesClickV2Buttons()
     {
         Assert.Empty(ZwiftController.PressedButtons(Buttons(Released))!);
-        Assert.Equal(new[] { ZwiftButton.ShiftUpRight }, ZwiftController.PressedButtons(Buttons(Released & ~0x2000u))!);
-        Assert.Equal(new[] { ZwiftButton.ShiftUpLeft }, ZwiftController.PressedButtons(Buttons(Released & ~0x200u))!);
+        Assert.Equal(new[] { ZwiftButton.ShiftUpRight }, ZwiftController.PressedButtons(Buttons(Released & ~0x1000u))!);
+        Assert.Equal(new[] { ZwiftButton.ShiftUpLeft }, ZwiftController.PressedButtons(Buttons(Released & ~0x100u))!);
+        Assert.Equal(new[] { ZwiftButton.Z }, ZwiftController.PressedButtons(Buttons(Released & ~0x80u))!);
+        Assert.Equal(new[] { ZwiftButton.OnOffRight }, ZwiftController.PressedButtons(Buttons(Released & ~0x8000u))!);
         Assert.Equal(new[] { ZwiftButton.A, ZwiftButton.B }.OrderBy(b => b), ZwiftController.PressedButtons(Buttons(Released & ~0x30u))!.OrderBy(b => b));
         Assert.Null(ZwiftController.PressedButtons(new byte[] { 0x15, 0x00 })); // "empty" message
     }
@@ -69,20 +71,32 @@ public class ZwiftControllerTests
         Assert.Equal(ZwiftController.SyncRxChar, handshake.Characteristic);
         Assert.Equal("RideOn"u8.ToArray().Concat(new byte[] { 0x02, 0x03 }), handshake.Data);
 
-        hub.OnData("RIGHT", ZwiftController.SyncTxChar, "RideOn"u8.ToArray().Concat(new byte[] { 0x02, 0x03 }).ToArray());
-        Assert.Equal(ZwiftControllerState.Ready, hub.Controllers.Single().State);
-
-        // Keep-alive every 3 s
+        // Unanswered: retried every 3 s
         now += 1000; hub.Tick();
         Assert.Single(writer.Writes);
         now += 2000; hub.Tick();
         Assert.Equal(2, writer.Writes.Count);
 
+        // Answered: FF 04 00 once, then no more handshakes
+        hub.OnData("RIGHT", ZwiftController.SyncTxChar, "RideOn"u8.ToArray().Concat(new byte[] { 0x02, 0x03 }).ToArray());
+        Assert.Equal(ZwiftControllerState.Ready, hub.Controllers.Single().State);
+        Assert.Equal(new byte[] { 0xFF, 0x04, 0x00 }, writer.Writes.Last().Data);
+        Assert.Equal(ZwiftController.SyncRxChar, writer.Writes.Last().Characteristic);
+        now += 60_000; hub.Tick();
+        Assert.Equal(3, writer.Writes.Count);
+
+        // Reconnect: handshake again
+        hub.OnDisconnected("RIGHT");
+        hub.OnReady("RIGHT", new[] { ZwiftController.RideService });
+        hub.Tick();
+        Assert.Equal(4, writer.Writes.Count);
+        Assert.Equal(ZwiftController.StartCommand(true), writer.Writes.Last().Data);
+
         // One event per press, not per notification
-        hub.OnData("RIGHT", ZwiftController.AsyncChar, Buttons(Released & ~0x2000u));
-        hub.OnData("RIGHT", ZwiftController.AsyncChar, Buttons(Released & ~0x2000u));
+        hub.OnData("RIGHT", ZwiftController.AsyncChar, Buttons(Released & ~0x1000u));
+        hub.OnData("RIGHT", ZwiftController.AsyncChar, Buttons(Released & ~0x1000u));
         hub.OnData("RIGHT", ZwiftController.AsyncChar, Buttons(Released));
-        hub.OnData("RIGHT", ZwiftController.AsyncChar, Buttons(Released & ~0x2000u));
+        hub.OnData("RIGHT", ZwiftController.AsyncChar, Buttons(Released & ~0x1000u));
         Assert.Equal(new[] { ZwiftButton.ShiftUpRight, ZwiftButton.ShiftUpRight }, pressed);
     }
 

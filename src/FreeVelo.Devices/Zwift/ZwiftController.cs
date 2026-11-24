@@ -76,33 +76,45 @@ namespace FreeVelo.Devices.Zwift
         /// <summary>Start command of the Click V2: "RideOn" + 02 03 (Click 1st gen: 01 03, sent the same way).</summary>
         public static byte[] StartCommand(bool clickV2) => Concat(RideOn, clickV2 ? new byte[] { 0x02, 0x03 } : new byte[] { 0x01, 0x03 });
 
-        /// <summary>The Click V2 right unit falls asleep after about a minute without traffic: repeat the handshake.</summary>
-        public const long KeepAliveMs = 3000;
+        /// <summary>
+        /// Sent once after the handshake was answered (as BikeControl does for the Click V2). Without it the unit
+        /// answers the handshake but sends no buttons.
+        /// </summary>
+        public static readonly byte[] AfterHandshake = { 0xFF, 0x04, 0x00 };
+
+        /// <summary>
+        /// Handshake retry while unanswered. Once answered it is not repeated: re-sending "RideOn" restarts the
+        /// session on the unit. A unit that falls asleep disconnects and the reconnect does the handshake again.
+        /// </summary>
+        public const long HandshakeRetryMs = 3000;
 
         public const byte ControllerNotification = 0x23; // Click V2 / Ride / Play (new firmware)
         public const byte ClickNotification = 0x37;      // Click 1st gen
         public const byte PlayNotification = 0x07;
         public const byte BatteryNotification = 0x19;
 
-        /// <summary>Bit masks of the 0x23 button map; a bit is 0 while the button is pressed.</summary>
+        /// <summary>
+        /// Bit masks of the 0x23 button map; a bit is 0 while the button is pressed. Values as in BikeControl's
+        /// RideButtonMask (contiguous bits, used with real Click V2 / Ride units).
+        /// </summary>
         private static readonly (uint Mask, ZwiftButton Button)[] RideButtons =
         {
-            (0x00001, ZwiftButton.Left),
-            (0x00002, ZwiftButton.Up),
-            (0x00004, ZwiftButton.Right),
-            (0x00008, ZwiftButton.Down),
-            (0x00010, ZwiftButton.A),
-            (0x00020, ZwiftButton.B),
-            (0x00040, ZwiftButton.Y),
-            (0x00100, ZwiftButton.Z),
-            (0x00200, ZwiftButton.ShiftUpLeft),
-            (0x00400, ZwiftButton.ShiftDownLeft),
-            (0x00800, ZwiftButton.PowerUpLeft),
-            (0x01000, ZwiftButton.OnOffLeft),
-            (0x02000, ZwiftButton.ShiftUpRight),
-            (0x04000, ZwiftButton.ShiftDownRight),
-            (0x10000, ZwiftButton.PowerUpRight),
-            (0x20000, ZwiftButton.OnOffRight),
+            (0x0001, ZwiftButton.Left),
+            (0x0002, ZwiftButton.Up),
+            (0x0004, ZwiftButton.Right),
+            (0x0008, ZwiftButton.Down),
+            (0x0010, ZwiftButton.A),
+            (0x0020, ZwiftButton.B),
+            (0x0040, ZwiftButton.Y),
+            (0x0080, ZwiftButton.Z),
+            (0x0100, ZwiftButton.ShiftUpLeft),
+            (0x0200, ZwiftButton.ShiftDownLeft),
+            (0x0400, ZwiftButton.PowerUpLeft),
+            (0x0800, ZwiftButton.OnOffLeft),
+            (0x1000, ZwiftButton.ShiftUpRight),
+            (0x2000, ZwiftButton.ShiftDownRight),
+            (0x4000, ZwiftButton.PowerUpRight),
+            (0x8000, ZwiftButton.OnOffRight),
         };
 
         public static bool IsController(IEnumerable<Guid> services)
