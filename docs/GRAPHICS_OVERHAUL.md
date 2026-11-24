@@ -253,7 +253,7 @@ village.
 5. **Camera feel:** speed-based field of view (+6–10° at most, smoothed), roll at 20–30 % of the bike's lean,
    spring-damped follow, no head bob, a "reduced motion" toggle.
 
-### Living world (2026-11-24, built, waiting for the owner's verdict)
+### Living world (2026-11-24, approved by the owner)
 
 - Wind: `Assets/FreeVelo/Shaders/FreeVeloLitWind.shader` is a copy of URP 17.6 Lit whose forward, shadow, depth and
   depth-normals vertex functions first call `FreeVeloWind()` (`FreeVeloWind.hlsl`): the crown leans and sways
@@ -267,7 +267,7 @@ village.
   35 m a repeat, bump 0.12; water UVs are world-scaled now) and puts a generated cloud cookie on the sun (900 m a
   repeat, up to 50 % darker, drifting at 6 m/s).
 - Render shots can record sequences (`"frames": 72, "fps": 24`, fixed game time step) for videos.
-- Grass tufts (`GrassField`, asked for by the owner with a screenshot of tall verge grass): three generated tuft
+- Grass tufts (`GrassField`, asked for by the owner with a screenshot of tall verge grass; approved 2026-11-24): three generated tuft
   meshes (14/18/24 tapering, curved blades, 0.3/0.48/0.75 m) and three colourings (gradient texture, base like
   the dark ground grass, lighter or straw tips), instanced round the camera to 160 m (low quality 45 m; owner asked
   for more distance), beyond 30 m (low 18 m) a simple version with a third of the blades, twice as wide, and
