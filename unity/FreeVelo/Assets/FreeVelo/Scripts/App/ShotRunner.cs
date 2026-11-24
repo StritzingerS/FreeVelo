@@ -36,6 +36,9 @@ namespace FreeVelo.App
 
             /// <summary>Head turn of the riders in degrees (positive = right); 0 = from the road.</summary>
             public float look;
+
+            /// <summary>0 seated, 1 standing, 2 sprinting; -1 = as the ride decides.</summary>
+            public int stance = -1;
         }
 
         [Serializable]
@@ -109,6 +112,7 @@ namespace FreeVelo.App
             FreeVeloApp.CameraOverride = null;
             RiderAvatar.ShotCrank = null;
             RiderAvatar.ShotLook = null;
+            RiderAvatar.ShotStance = null;
             result.seconds = Time.realtimeSinceStartup - started;
             try
             {
@@ -138,6 +142,7 @@ namespace FreeVelo.App
 
                 RiderAvatar.ShotCrank = shot.crank >= 0 ? shot.crank : (float?)null;
                 RiderAvatar.ShotLook = shot.look != 0 ? shot.look : (float?)null;
+                RiderAvatar.ShotStance = shot.stance >= 0 ? shot.stance : (int?)null;
                 var shotPos = new Vector3(shot.pos[0], shot.pos[1], shot.pos[2]);
                 var shotTarget = new Vector3(shot.target[0], shot.target[1], shot.target[2]);
                 if (shot.rider)

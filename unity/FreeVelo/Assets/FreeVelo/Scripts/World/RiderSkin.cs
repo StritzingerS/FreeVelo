@@ -52,6 +52,11 @@ namespace FreeVelo.World
         private readonly int[] _upperArm = new int[2], _lowerArm = new int[2], _hand = new int[2];
         private readonly float[] _thigh = new float[2], _shin = new float[2], _upper = new float[2], _fore = new float[2];
         private readonly Vector3[] _elbowBend = new Vector3[2];
+        private readonly float[] _armReach = new float[2];
+
+        // Per-frame scratch (no allocations per rider and frame)
+        private readonly Vector3[] _ankles = new Vector3[2], _balls = new Vector3[2], _wrists = new Vector3[2];
+        private readonly bool[] _hasFoot = new bool[2];
         private readonly Data _d;
 
         /// <summary>Renderers per level of detail (0 = full, 1 = distant riders).</summary>
@@ -113,6 +118,7 @@ namespace FreeVelo.World
                 var el = d.RestPos[_lowerArm[s]];
                 var axis = (wr - sh).normalized;
                 _elbowBend[s] = (el - sh) - (Vector3.Dot(el - sh, axis) * axis);
+                _armReach[s] = Vector3.Distance(sh, wr);
             }
 
             for (int lod = 0; lod < d.Lods.Count; lod++)
@@ -155,8 +161,13 @@ namespace FreeVelo.World
         /// <param name="crankDegrees">Right crank: 0° = up, 90° = forward.</param>
         /// <param name="pedalling">0–1: how much of the pedalling motion to show (0 when coasting).</param>
         /// <param name="lookDegrees">Head turn, positive = to the right.</param>
-        public void Apply(Dictionary<AvatarNode, NodePose> pose, float stopped, float crankDegrees = 0f, float pedalling = 0f, float lookDegrees = 0f)
+        /// <param name="stand">0–1: out of the saddle (hips up and forward over the bottom bracket).</param>
+        /// <param name="sprint">0–1: sprinting (further forward and lower than climbing out of the saddle).</param>
+        /// <param name="bikeRock">How the bike is rocked under the rider (pedals and hoods move with it).</param>
+        public void Apply(Dictionary<AvatarNode, NodePose> pose, float stopped, float crankDegrees = 0f, float pedalling = 0f, float lookDegrees = 0f,
+            float stand = 0f, float sprint = 0f, Quaternion? bikeRock = null)
         {
+            var rock = bikeRock ?? Quaternion.identity;
             for (int i = 0; i < _bones.Length; i++)
             {
                 _bones[i].localPosition = _restLocalPos[i];
@@ -175,46 +186,100 @@ namespace FreeVelo.World
                 _bones[_hips].rotation = _rig.rotation * (r * _d.RestRot[_hips]);
             }
 
+            // Where feet and hands go: pedals and hoods of the (rocked) bike.
+            var ankles = _ankles;
+            var balls = _balls;
+            var wrists = _wrists;
+            var hasFoot = _hasFoot;
+            for (int s = 0; s < 2; s++)
+            {
+                hasFoot[s] = false;
+                wrists[s] = rock * _d.RestPos[_hand[s]];
+                if (!pose.TryGetValue(s == 0 ? AvatarNode.FootRight : AvatarNode.FootLeft, out var footPose)) continue;
+                hasFoot[s] = true;
+
+                // Ball of the foot on the cleat, foot pitched by the avatar's ankling.
+                var cleat = rock * V(footPose.Position);
+                var footRot = rock * Q(footPose.Rotation);
+                balls[s] = cleat + (rock * new Vector3(0, _d.BallHeight, 0));
+                var dir = footRot * new Vector3(0, -Mathf.Sin(_d.FootDrop), Mathf.Cos(_d.FootDrop));
+                ankles[s] = balls[s] - (dir * _d.FootLength);
+            }
+
+            // Out of the saddle: hips up and forward, but never further than the legs reach (so they bob with the
+            // stroke); then the upper body pitches until the arms are as long as in the approved pose.
+            float st = Mathf.Clamp01(stand) * (1f - t);
+            float spineAngle = 0f;
+            if (st > 0f)
+            {
+                var hips = RigPos(_hips) + (Vector3.Lerp(StandOffset, SprintOffset, sprint) * st);
+                for (int s = 0; s < 2; s++)
+                {
+                    if (!hasFoot[s]) continue;
+                    var joint = hips + (_d.RestPos[_upperLeg[s]] - _d.RestPos[_hips]);
+                    var d = joint - ankles[s];
+                    float reach = 0.965f * (_thigh[s] + _shin[s]);
+                    float flat = (d.x * d.x) + (d.z * d.z);
+                    float maxY = flat < reach * reach ? Mathf.Sqrt((reach * reach) - flat) : 0f;
+                    if (d.y > maxY) hips.y -= d.y - maxY;
+                }
+
+                _bones[_hips].position = _rig.TransformPoint(hips);
+
+                var spineRot = _bones[_spine].rotation;
+                float lo = -40f, hi = 40f;
+                for (int i = 0; i < 12; i++)
+                {
+                    spineAngle = 0.5f * (lo + hi);
+                    _bones[_spine].rotation = spineRot;
+                    RotateRig(_spine, Quaternion.AngleAxis(spineAngle, Vector3.right));
+                    float err = 0f;
+                    for (int s = 0; s < 2; s++) err += Vector3.Distance(RigPos(_upperArm[s]), wrists[s]) - _armReach[s];
+                    if (err > 0f) lo = spineAngle; // arms too long: pitch further forward
+                    else hi = spineAngle;
+                }
+            }
+
             // Pelvis rock with the pedal stroke, taken back up the spine (degrees; positive roll lifts the right).
+            // Out of the saddle the hips swing more.
             float m = Mathf.Clamp01(pedalling) * (1f - t);
             float push = Mathf.Sin(crankDegrees * Mathf.Deg2Rad); // +1: right leg pushing, -1: left leg
-            float roll = -PelvisRollDeg * m * push;
-            float yaw = -PelvisYawDeg * m * push;
+            float roll = -PelvisRollDeg * m * push * (1f + st);
+            float yaw = -PelvisYawDeg * m * push * (1f + (1.5f * st));
             RotateRig(_hips, Quaternion.AngleAxis(yaw, Vector3.up) * Quaternion.AngleAxis(roll, Vector3.forward));
             RotateRig(_spine, Quaternion.AngleAxis(-0.6f * yaw, Vector3.up) * Quaternion.AngleAxis(-0.45f * roll, Vector3.forward));
             RotateRig(_chest, Quaternion.AngleAxis(-0.3f * yaw, Vector3.up) * Quaternion.AngleAxis(-0.3f * roll, Vector3.forward));
-            RotateRig(_neck, Quaternion.AngleAxis((-0.1f * yaw) + (0.4f * lookDegrees), Vector3.up) * Quaternion.AngleAxis(-0.25f * roll, Vector3.forward));
-            RotateRig(_head, Quaternion.AngleAxis(0.6f * lookDegrees, Vector3.up));
+            // The head keeps looking up the road when the upper body pitches.
+            RotateRig(_neck, Quaternion.AngleAxis((-0.1f * yaw) + (0.4f * lookDegrees), Vector3.up) * Quaternion.AngleAxis(-0.25f * roll, Vector3.forward) * Quaternion.AngleAxis(-0.5f * spineAngle, Vector3.right));
+            RotateRig(_head, Quaternion.AngleAxis(0.6f * lookDegrees, Vector3.up) * Quaternion.AngleAxis(-0.3f * spineAngle, Vector3.right));
 
             for (int s = 0; s < 2; s++)
             {
                 float sign = s == 0 ? 1f : -1f;
-                if (!pose.TryGetValue(s == 0 ? AvatarNode.FootRight : AvatarNode.FootLeft, out var footPose)) continue;
-
-                // Legs: ball of the foot on the cleat, foot pitched by the avatar's ankling, knee bent forward.
-                var cleat = V(footPose.Position);
-                var footRot = Q(footPose.Rotation);
-                var ball = cleat + new Vector3(0, _d.BallHeight, 0);
-                var dir = footRot * new Vector3(0, -Mathf.Sin(_d.FootDrop), Mathf.Cos(_d.FootDrop));
-                var ankle = ball - (dir * _d.FootLength);
-                var hip = RigPos(_upperLeg[s]);
-                var knee = Solve(hip, ankle, _thigh[s], _shin[s], new Vector3(sign * (0.08f + (0.25f * t)), 0.25f, 1f));
-                Aim(_upperLeg[s], _lowerLeg[s], knee);
-                Aim(_lowerLeg[s], _foot[s], ankle);
-                Aim(_foot[s], _toes[s], ball);
-
-                // Arms: follow the moving body; the hands stay where the approved pose put them.
-                if (t > 0f || m > 0f)
+                if (hasFoot[s])
                 {
-                    var wrist = _d.RestPos[_hand[s]];
+                    // Legs: knee bent forward (and outwards while stopping).
+                    var hip = RigPos(_upperLeg[s]);
+                    var knee = Solve(hip, ankles[s], _thigh[s], _shin[s], rock * new Vector3(sign * (0.08f + (0.25f * t)), 0.25f, 1f));
+                    Aim(_upperLeg[s], _lowerLeg[s], knee);
+                    Aim(_lowerLeg[s], _foot[s], ankles[s]);
+                    Aim(_foot[s], _toes[s], balls[s]);
+                }
+
+                // Arms: follow the moving body and the rocking bike; the hands stay on the hoods as approved.
+                if (t > 0f || m > 0f || st > 0f)
+                {
                     var shoulder = RigPos(_upperArm[s]);
-                    var elbow = Solve(shoulder, wrist, _upper[s], _fore[s], _elbowBend[s]);
+                    var elbow = Solve(shoulder, wrists[s], _upper[s], _fore[s], rock * _elbowBend[s]);
                     Aim(_upperArm[s], _lowerArm[s], elbow);
-                    Aim(_lowerArm[s], _hand[s], wrist);
-                    _bones[_hand[s]].rotation = _rig.rotation * _d.RestRot[_hand[s]];
+                    Aim(_lowerArm[s], _hand[s], wrists[s]);
+                    _bones[_hand[s]].rotation = _rig.rotation * (rock * _d.RestRot[_hand[s]]);
                 }
             }
         }
+
+        /// <summary>Hips out of the saddle relative to seated (m): climbing, sprinting (lowered if the legs cannot reach).</summary>
+        private static readonly Vector3 StandOffset = new Vector3(0f, 0.18f, 0.21f), SprintOffset = new Vector3(0f, 0.14f, 0.28f);
 
         /// <summary>How far the pelvis rolls and turns with the pedal stroke at full pedalling (degrees).</summary>
         private const float PelvisRollDeg = 2.5f, PelvisYawDeg = 1.5f;

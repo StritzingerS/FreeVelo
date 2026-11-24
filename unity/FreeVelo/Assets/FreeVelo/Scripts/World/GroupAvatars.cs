@@ -83,7 +83,8 @@ namespace FreeVelo.World
                 var right = Quaternion.Euler(0, heading, 0) * Vector3.right;
                 var position = new Vector3((float)sample.X, (float)sample.Y + 0.05f, (float)sample.Z) + (right * Lateral(r.LaneM));
                 remote.Avatar.transform.SetPositionAndRotation(position, Quaternion.Euler(pitch, heading, -(remote.Lean + remote.Avatar.StopLeanDeg)));
-                remote.Avatar.Animate(r.SpeedMps, r.CadenceRpm, dt, (float)route.CurvatureAt(r.DistanceM + 12));
+                // Other riders' FTP is not known: their W/kg against a typical 3.5 W/kg.
+                remote.Avatar.Animate(r.SpeedMps, r.CadenceRpm, dt, (float)route.CurvatureAt(r.DistanceM + 12), (float)sample.GradePercent, r.Wkg / 3.5f);
                 Visible.Add((r, position + (Vector3.up * 2.0f)));
             }
 

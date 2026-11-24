@@ -87,7 +87,9 @@ namespace FreeVelo.World
 
         /// <summary>Turns wheels and cranks and moves the legs. Call every frame.</summary>
         /// <param name="curvature">Of the road just ahead (1/m, positive = right-hand bend): the head looks into it.</param>
-        public void Animate(float speedMps, float cadenceRpm, float dt, float curvature = 0f)
+        /// <param name="gradePercent">Of the road here: steep climbs make the rider stand.</param>
+        /// <param name="intensity">Power relative to FTP (1 = threshold): at about twice FTP the rider sprints.</param>
+        public void Animate(float speedMps, float cadenceRpm, float dt, float curvature = 0f, float gradePercent = 0f, float intensity = 0f)
         {
             float wheelDegrees = speedMps / (2f * Mathf.PI * AvatarModel.WheelRadius) * 360f * dt;
             _wheelAngle = Mathf.Repeat(_wheelAngle + wheelDegrees, 360f);
@@ -112,12 +114,18 @@ namespace FreeVelo.World
             }
 
             AvatarModel.Pose(_crankAngle, _wheelAngle, _pose, _stopped);
+
+            // Out of the saddle (only with the skinned rider): the bike rocks under the rider with the pedal stroke,
+            // away from the pushing leg, about the line where the tyres touch the road.
+            UpdateStance(cadenceRpm, gradePercent, intensity, dt);
+            float rockDeg = _skin == null ? 0f : _stand * Mathf.Lerp(6f, 9f, _sprint) * Mathf.Sin(_crankAngle * Mathf.Deg2Rad);
+            var rock = Quaternion.AngleAxis(rockDeg, Vector3.forward);
             foreach (var pair in _nodes)
             {
                 if (!_pose.TryGetValue(pair.Key, out var pose)) continue;
                 var q = pose.Rotation.ToQuaternion();
-                pair.Value.localPosition = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
-                pair.Value.localRotation = new Quaternion(q.X, q.Y, q.Z, q.W);
+                pair.Value.localPosition = rock * new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
+                pair.Value.localRotation = rock * new Quaternion(q.X, q.Y, q.Z, q.W);
             }
 
             if (_skin != null)
@@ -129,12 +137,49 @@ namespace FreeVelo.World
                 float look = Mathf.Clamp(curvature * 12.5f * Mathf.Rad2Deg, -30f, 30f);
                 _look = dt > 0 ? Mathf.Lerp(_look, look, 1f - Mathf.Exp(-dt / 0.5f)) : look;
                 if (ShotLook.HasValue) _look = ShotLook.Value;
-                _skin.Apply(_pose, _stopped, _crankAngle, _pedalling, _look);
+                _skin.Apply(_pose, _stopped, _crankAngle, _pedalling, _look, _stand, _sprint, rock);
             }
         }
 
         private RiderSkin _skin;
         private float _pedalling, _look;
+
+        // Out of the saddle: what the rider wants (0 seated, 1 climbing, 2 sprinting), since when, and the blends.
+        private int _stance;
+        private float _stanceTime, _stand, _sprint;
+
+        /// <summary>
+        /// Seated, standing on a climb, or sprinting, from the road and the effort, with hysteresis so the rider
+        /// does not bob up and down: climbing out of the saddle from 7 % at 30–75 rpm and at least 80 % of FTP
+        /// (back down below 5.5 %, above 82 rpm or below 60 % of FTP); sprinting from twice FTP at 60 rpm or more
+        /// (until under 1.5 × FTP). A new stance holds for at least 1.5 s; the blend takes about 0.4 s.
+        /// </summary>
+        private void UpdateStance(float cadenceRpm, float gradePercent, float intensity, float dt)
+        {
+            int want;
+            bool pedalling = cadenceRpm > 5f;
+            if (!pedalling || _stopped > 0f) want = 0;
+            else if ((intensity >= 2f && cadenceRpm >= 60f) || (_stance == 2 && intensity >= 1.5f)) want = 2;
+            else if (_stance == 1)
+                want = gradePercent >= 5.5f && cadenceRpm <= 82f && intensity >= 0.6f ? 1 : 0;
+            else
+                want = gradePercent >= 7f && cadenceRpm >= 30f && cadenceRpm <= 75f && intensity >= 0.8f ? 1 : 0;
+
+            _stanceTime += dt;
+            if (want != _stance && (_stanceTime >= 1.5f || !pedalling || _stopped > 0f))
+            {
+                _stance = want;
+                _stanceTime = 0f;
+            }
+
+            int stance = ShotStance ?? _stance;
+            float k = dt > 0 ? 1f - Mathf.Exp(-dt / 0.4f) : 1f;
+            _stand = ShotStance.HasValue ? (stance > 0 ? 1f : 0f) : Mathf.Lerp(_stand, stance > 0 ? 1f : 0f, k);
+            _sprint = ShotStance.HasValue ? (stance == 2 ? 1f : 0f) : Mathf.Lerp(_sprint, stance == 2 ? 1f : 0f, k);
+        }
+
+        /// <summary>Render-shot tooling: 0 seated, 1 standing, 2 sprinting for every rider.</summary>
+        public static int? ShotStance;
 
         /// <summary>Render-shot tooling: head turn (degrees, positive = right) for every rider.</summary>
         public static float? ShotLook;
@@ -147,6 +192,7 @@ namespace FreeVelo.World
         {
             ShotCrank = null;
             ShotLook = null;
+            ShotStance = null;
         }
 
         /// <summary>Nodes of the bike (kept when the skinned rider replaces the generated one).</summary>

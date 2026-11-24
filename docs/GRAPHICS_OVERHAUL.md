@@ -273,11 +273,18 @@ village.
   renders). Not yet measured on the phone. `RiderAvatar` keeps only the generated bike's nodes when the bake is present.
 - Render shots can now be placed in the rider's frame (`"rider": true`) and hold a crank angle (`"crank": 90`) and a
   head turn (`"look": 25`).
-- Body motion (2026-11-24, waiting for the owner's verdict): the pelvis rolls ±2.5° and turns ±1.5° with the pedal
+- Body motion (2026-11-24, approved by the owner): the pelvis rolls ±2.5° and turns ±1.5° with the pedal
   stroke (hip on the pushing side down and forward), spine and chest take most of it back, neck and head the rest;
   the head turns into bends (gaze about 25 m ahead from the curvature 12 m ahead, at most 30°, eased over 0.5 s); the
   arms follow by IK so the hands stay on the hoods. It fades in with pedalling and out when coasting or stopping.
-  Still to come: standing on climbs, sprint, power-dependent amplitude.
+- Out of the saddle (2026-11-24, waiting for the owner's verdict): `RiderAvatar.UpdateStance` stands on climbs from
+  7 % at 30–75 rpm and at least 80 % of FTP (sits again below 5.5 %, above 82 rpm or below 60 % of FTP) and sprints
+  from twice FTP at 60 rpm or more (until under 1.5 × FTP); each stance holds at least 1.5 s, blends over 0.4 s.
+  Other riders use their W/kg against 3.5 W/kg (their FTP is not sent). Standing: hips 18 cm up and 21 cm forward
+  (sprint 14 / 28 cm), lowered whenever a leg would be over-stretched, so they bob with the stroke; the spine pitches
+  until the arms are as long as in the approved pose; the bike rocks ±6° (sprint ±9°) about the tyre contact line,
+  away from the pushing leg, and pedals, hoods, feet and hands go with it. Render shots: `"stance": 0/1/2`.
+- Still to come: power-dependent amplitude of the seated motion.
 
 - No road-cycling mocap pack with seated, standing and sprint clips was found.
 - Licences: Mixamo files and Asset Store assets may not be committed to a public repository.

@@ -321,7 +321,9 @@ namespace FreeVelo.App
             float cadence = riding && !_ride.IsBraking ? (float)(_ble.Hub.Live.CadenceRpm ?? 0) : 0;
             float speed = riding ? (float)_ride.SpeedMps : 0f; // wheels stand still outside a ride (menus, summary)
             float ahead = riding ? (float)_ride.Route.CurvatureAt(_ride.DistanceM + 12) : 0f; // the head looks into bends
-            _avatar.Animate(speed, cadence, dt, ahead);
+            // Out of the saddle on steep climbs and in sprints: power relative to the rider's FTP.
+            float intensity = riding && AppSettings.FtpW > 0 ? (_ble.Hub.Live.PowerW ?? 0) / (float)AppSettings.FtpW : 0f;
+            _avatar.Animate(speed, cadence, dt, ahead, riding ? (float)sample.GradePercent : 0f, intensity);
 
             Vector3 target;
             if (riding)
