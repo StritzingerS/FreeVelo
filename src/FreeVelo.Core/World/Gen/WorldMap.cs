@@ -336,6 +336,22 @@ namespace FreeVelo.Core.World.Gen
             }
 
             var route = new Route(name, points, isLoop);
+
+            // Junctions (where two steps meet at a node with three or more roads) are ridden on the arc of the
+            // road's rounded corner (JunctionCorners.Radius at the edge, plus half the narrower road's width).
+            double joint = startDistanceM;
+            for (int s = 0; s < steps.Count; s++)
+            {
+                var e = Edges[steps[s].Edge];
+                joint += e.Length;
+                bool last = s == steps.Count - 1;
+                if (last && !isLoop) break;
+                var next = Edges[steps[last ? 0 : s + 1].Edge];
+                int node = steps[s].Forward ? e.To : e.From;
+                if (Nodes[node].Edges.Count < 3) continue;
+                route.RoundJunction(last ? startDistanceM : joint, JunctionCorners.Radius + (Math.Min(e.Width, next.Width) / 2));
+            }
+
             var climbs = new List<ClimbSegment>();
             double at = startDistanceM;
             foreach (var step in steps)

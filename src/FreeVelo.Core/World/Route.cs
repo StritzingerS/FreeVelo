@@ -109,12 +109,8 @@ namespace FreeVelo.Core.World
             // −window to +window, which is the heading.
             // (open routes: around the clamped distance, so the rider never goes past the end of the road)
             double c = IsLoop ? distanceM : d;
-            var (x, z) = Average(c - HeadingWindowM, c + HeadingWindowM);
-            var (bx, bz) = LinePoint(c - HeadingWindowM);
-            var (ax, az) = LinePoint(c + HeadingWindowM);
-            double heading = (ax - bx) * (ax - bx) + ((az - bz) * (az - bz)) > 1e-6
-                ? Math.Atan2(ax - bx, az - bz)
-                : Math.Atan2(b.X - a.X, b.Z - a.Z);
+            // (through a junction: on the arc of the road's rounded corner, see RoundJunction)
+            if (!TryTurn(c, out double x, out double z, out double heading)) (x, z, heading) = Smoothed(c, a, b);
             return new RouteSample(
                 x,
                 Lerp(a.ElevationM, b.ElevationM, f),
@@ -122,6 +118,25 @@ namespace FreeVelo.Core.World
                 heading,
                 Lerp(a.GradePercent, b.GradePercent, f),
                 f < 0.5 ? a.Surface : b.Surface);
+        }
+
+        /// <summary>The averaged road line at <paramref name="c"/> and its direction (the chord over the window).</summary>
+        private (double X, double Z, double Heading) Smoothed(double c, RoutePoint a, RoutePoint b)
+        {
+            var (x, z) = Average(c - HeadingWindowM, c + HeadingWindowM);
+            var (bx, bz) = LinePoint(c - HeadingWindowM);
+            var (ax, az) = LinePoint(c + HeadingWindowM);
+            double heading = ((ax - bx) * (ax - bx)) + ((az - bz) * (az - bz)) > 1e-6
+                ? Math.Atan2(ax - bx, az - bz)
+                : Math.Atan2(b.X - a.X, b.Z - a.Z);
+            return (x, z, heading);
+        }
+
+        private (double X, double Z, double Heading) Smoothed(double c)
+        {
+            double d = Clamp(c);
+            int lo = Segment(d);
+            return Smoothed(IsLoop ? c : d, Points[lo], Points[lo + 1]);
         }
 
         /// <summary>Mean position of the road line between two distances (exact, segment by segment).</summary>
@@ -194,6 +209,96 @@ namespace FreeVelo.Core.World
         {
             double lean = Math.Atan(speedMps * speedMps * curvature / 9.81) * 180 / Math.PI;
             return Math.Max(-35, Math.Min(35, lean));
+        }
+
+        /// <summary>A turn at a junction, ridden on a smooth arc from (X0, Z0) to (X1, Z1) (cubic Bézier, nearly circular).</summary>
+        private readonly struct Turn
+        {
+            public Turn(double from, double to, double[] p)
+            {
+                From = from;
+                To = to;
+                P = p;
+            }
+
+            public double From { get; }
+
+            public double To { get; }
+
+            /// <summary>Control points x0 z0 x1 z1 x2 z2 x3 z3.</summary>
+            public double[] P { get; }
+        }
+
+        private readonly List<Turn> _turns = new List<Turn>();
+
+        /// <summary>Junctions ridden on an arc (<see cref="RoundJunction"/>).</summary>
+        public int RoundedJunctions => _turns.Count;
+
+        /// <summary>Smallest change of direction at a junction that is ridden as an arc (straight on stays on the line).</summary>
+        public const double MinTurnDeg = 50;
+
+        /// <summary>
+        /// Rides the junction at <paramref name="distanceM"/> on an arc of <paramref name="radiusM"/> (the road line's
+        /// radius, i.e. the rounded corner's radius at the road edge plus half the road width) instead of the averaged
+        /// road line, whose radius at a 90° junction was only about 5 m: the rider cut the corner and used little of the
+        /// road. The arc touches the road line where it would reach the corner's rounding; it replaces only the
+        /// position and heading in <see cref="Sample"/> (distances, length and grades stay as they are). Turns under
+        /// <see cref="MinTurnDeg"/>, overlapping turns and turns too short for the averaging window are left alone.
+        /// </summary>
+        public void RoundJunction(double distanceM, double radiusM)
+        {
+            var (px, pz) = LinePoint(distanceM - 3);
+            var (vx, vz) = LinePoint(distanceM);
+            var (nx, nz) = LinePoint(distanceM + 3);
+            double h0 = Math.Atan2(vx - px, vz - pz), h1 = Math.Atan2(nx - vx, nz - vz);
+            double phi = Math.Abs(Math.IEEERemainder(h1 - h0, 2 * Math.PI));
+            if (phi < MinTurnDeg * Math.PI / 180 || phi > 170 * Math.PI / 180) return;
+            double t = radiusM * Math.Tan(phi / 2);
+            if (t < HeadingWindowM + 0.5) return;
+            double from = distanceM - t, to = distanceM + t;
+            if (!IsLoop && (from < Points[0].DistanceM || to > LengthM)) return;
+            if (IsLoop && 2 * t > LengthM / 4) return;
+            foreach (var other in _turns)
+            {
+                double gap = IsLoop ? Math.Abs(Math.IEEERemainder(((from + to) / 2) - ((other.From + other.To) / 2), LengthM)) : Math.Abs(((from + to) / 2) - ((other.From + other.To) / 2));
+                if (gap < t + ((other.To - other.From) / 2) + HeadingWindowM) return;
+            }
+
+            // Ends exactly where the averaged path is, in its direction (no jump in position or heading there).
+            var (x0, z0, hs) = Smoothed(from);
+            var (x3, z3, he) = Smoothed(to);
+            double k = 4.0 / 3.0 * Math.Tan(phi / 4) * radiusM; // a cubic's handle length for a circular arc
+            var p = new[]
+            {
+                x0, z0,
+                x0 + (Math.Sin(hs) * k), z0 + (Math.Cos(hs) * k),
+                x3 - (Math.Sin(he) * k), z3 - (Math.Cos(he) * k),
+                x3, z3,
+            };
+            _turns.Add(new Turn(from, to, p));
+        }
+
+        private bool TryTurn(double c, out double x, out double z, out double heading)
+        {
+            x = z = heading = 0;
+            if (_turns.Count == 0) return false;
+            double d = IsLoop ? Mod(c, LengthM) : c;
+            foreach (var turn in _turns)
+            {
+                double span = turn.To - turn.From;
+                double rel = IsLoop ? Mod(d - turn.From, LengthM) : d - turn.From; // loops: also across the start
+                if (rel < 0 || rel > span) continue;
+                double u = rel / span, v = 1 - u;
+                var p = turn.P;
+                x = (v * v * v * p[0]) + (3 * v * v * u * p[2]) + (3 * v * u * u * p[4]) + (u * u * u * p[6]);
+                z = (v * v * v * p[1]) + (3 * v * v * u * p[3]) + (3 * v * u * u * p[5]) + (u * u * u * p[7]);
+                double dx = (3 * v * v * (p[2] - p[0])) + (6 * v * u * (p[4] - p[2])) + (3 * u * u * (p[6] - p[4]));
+                double dz = (3 * v * v * (p[3] - p[1])) + (6 * v * u * (p[5] - p[3])) + (3 * u * u * (p[7] - p[5]));
+                heading = Math.Atan2(dx, dz);
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>Open routes may start at any distance (a path through the road network): clamp to their range.</summary>
