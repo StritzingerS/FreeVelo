@@ -264,8 +264,13 @@ village.
   thumb and index finger, fingers closed until they touch hood, lever and bar), skin checked against the bike mesh.
 - Known: the index fingertip reaches about 6 mm into the horn and the palm about 6 mm into the hood (glove
   thickness).
-- Next: drive the skinned mesh in Unity from `AvatarModel.Pose()` with the same rules, recolour the jersey per rider
-  via the mask, a lighter LOD for group riders.
+- In the game since 2026-11-24: `rider_on_bike.py bake=… mask=…` writes `Resources/FreeVeloRider.bytes` (approved
+  pose as rest pose, Unity coordinates, 67 bones, LOD0 11.6k / LOD1 2.9k triangles, 1024 px texture whose alpha
+  marks the jersey). `RiderSkin.cs` builds one SkinnedMeshRenderer per LOD, solves the legs onto the pedals every
+  frame from `AvatarModel.Pose()` (ball of the foot on the cleat, ankling, knee forward), follows the "Rider" node
+  when stopping with the hands kept on the hoods, and recolours the jersey per colour (one texture per colour,
+  about 5 MB each uncompressed). `RiderAvatar` keeps only the generated bike's nodes when the bake is present.
+- Render shots can now be placed in the rider's frame (`"rider": true`) and hold a crank angle (`"crank": 90`).
 
 - No road-cycling mocap pack with seated, standing and sprint clips was found.
 - Licences: Mixamo files and Asset Store assets may not be committed to a public repository.

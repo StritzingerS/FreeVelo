@@ -13,7 +13,7 @@ import math
 import sys
 
 import bpy
-from mathutils import Quaternion, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 args = sys.argv[sys.argv.index("--") + 1:]
 rig_path, bike_path, out, crank, scale = args[0], args[1], args[2], float(args[3]), float(args[4])
@@ -612,6 +612,138 @@ for f in ("Thumb", "Index", "Middle", "Ring", "Pinky"):
     k = arm.matrix_world @ pb[f"Right_{f}Proximal"].head
     t = arm.matrix_world @ pb[f"Right_{f}DistalEnd"].head
     print(f"POS {f}: base ({k.x:.3f},{k.y:.3f},{k.z:.3f}) tip ({t.x:.3f},{t.y:.3f},{t.z:.3f})")
+# Bake for the game (bake=<out.bytes> mask=<jersey_mask.png>): the posed rider becomes the rest pose of a skinned
+# mesh in Unity coordinates (x right, y up, z forward; Blender (x, y, z) -> Unity (x, z, y)). Layout, little endian:
+#   "FVSK" int32 version=1
+#   float ballHeight, footDrop(rad), footLength   (from the unposed rig: ball of the foot above the sole etc.)
+#   int32 bones; per bone: name (int32 length + UTF-8), int32 parent, float3 position, float4 rotation (x, y, z, w)
+#   int32 lods; per lod: int32 n; n*float3 positions; n*float3 normals; n*float2 uv;
+#                        n*(4*uint16 bone, 4*float weight); int32 m; m*int32 indices (clockwise for Unity)
+#   int32 png length; PNG (RGB colour; alpha 0 = jersey, its RGB the jersey shading around 0.5)
+BAKE = next((a[5:] for a in args[5:] if a.startswith("bake=")), None)
+if BAKE:
+    import struct
+    import numpy as np
+
+    def u(v):
+        return (v[0], v[2], v[1])
+
+    P = Matrix(((1, 0, 0), (0, 0, 1), (0, 1, 0)))
+    rider = next(o for o in scene.objects if o.type == "MESH" and o.find_armature() == arm)
+    deps = bpy.context.evaluated_depsgraph_get()
+
+    # Unposed foot geometry (rest armature, scaled like the rider)
+    s = arm.matrix_world.to_scale()[0]
+    fb = arm.data.bones["Right_Foot"].head_local * s
+    tb = arm.data.bones["Right_Toes"].head_local * s
+    foot_v = tb - fb
+    ball_height = tb.z
+    foot_drop = math.atan2(-foot_v.z, math.hypot(foot_v.x, foot_v.y))
+    foot_len = foot_v.length
+
+    names = [b.name for b in arm.data.bones]
+    index = {n: i for i, n in enumerate(names)}
+    out = bytearray(b"FVSK") + struct.pack("<i", 1) + struct.pack("<3f", ball_height, foot_drop, foot_len)
+    out += struct.pack("<i", len(names))
+    for n in names:
+        pbn = pb[n]
+        m = arm.matrix_world @ pbn.matrix
+        rot = m.to_3x3().normalized()
+        ru = (P @ rot @ P).to_quaternion()
+        pos = u(m.translation)
+        nb = n.encode("utf-8")
+        parent = index[pbn.parent.name] if pbn.parent else -1
+        out += struct.pack("<i", len(nb)) + nb + struct.pack("<i", parent) + struct.pack("<3f", *pos) + struct.pack("<4f", ru.x, ru.y, ru.z, ru.w)
+
+    def mesh_block(obj):
+        ev = obj.evaluated_get(deps)
+        me = ev.to_mesh()
+        me.calc_loop_triangles()
+        uvl = me.uv_layers.active.data
+        cn = me.corner_normals
+        gmap = {g.index: index.get(g.name, -1) for g in obj.vertex_groups}
+        weights = []
+        for v in me.vertices:
+            ws = sorted(((g.weight, gmap.get(g.group, -1)) for g in v.groups if gmap.get(g.group, -1) >= 0 and g.weight > 0), reverse=True)[:4]
+            tot = sum(w for w, _ in ws) or 1.0
+            ws = [(w / tot, b) for w, b in ws] + [(0.0, 0)] * (4 - len(ws))
+            weights.append(ws)
+        mw_ = obj.matrix_world
+        nm_ = mw_.to_3x3().inverted().transposed()
+        key_index, pos, nrm, uvs, wts, idx = {}, [], [], [], [], []
+        for tri in me.loop_triangles:
+            corners = []
+            for li in tri.loops:
+                vi = me.loops[li].vertex_index
+                uv = tuple(round(c, 5) for c in uvl[li].uv)
+                nn = (nm_ @ Vector(cn[li].vector)).normalized()
+                key = (vi, uv, tuple(round(c, 3) for c in nn))
+                k = key_index.get(key)
+                if k is None:
+                    k = len(pos)
+                    key_index[key] = k
+                    pos.append(u(mw_ @ me.vertices[vi].co))
+                    nrm.append(u(nn))
+                    uvs.append(uv)
+                    wts.append(weights[vi])
+                corners.append(k)
+            idx += [corners[0], corners[2], corners[1]]   # mirrored axes: reverse the winding
+        blk = struct.pack("<i", len(pos))
+        blk += b"".join(struct.pack("<3f", *p) for p in pos)
+        blk += b"".join(struct.pack("<3f", *n) for n in nrm)
+        blk += b"".join(struct.pack("<2f", *t) for t in uvs)
+        blk += b"".join(struct.pack("<4H", *(b for _, b in w)) + struct.pack("<4f", *(x for x, _ in w)) for w in wts)
+        blk += struct.pack("<i", len(idx)) + struct.pack(f"<{len(idx)}i", *idx)
+        ev.to_mesh_clear()
+        print(f"BAKE lod {obj.name}: {len(pos)} vertices, {len(idx) // 3} triangles")
+        return blk
+
+    LOW = float(next((a[4:] for a in args[5:] if a.startswith("low=")), "0.25"))
+    low_obj = rider.copy()
+    low_obj.data = rider.data.copy()
+    scene.collection.objects.link(low_obj)
+    dec = low_obj.modifiers.new("dec", "DECIMATE")
+    dec.ratio = LOW
+    bpy.context.view_layer.update()
+    deps = bpy.context.evaluated_depsgraph_get()
+    out += struct.pack("<i", 2) + mesh_block(rider) + mesh_block(low_obj)
+    bpy.data.objects.remove(low_obj)
+
+    # Texture: 1024 px; jersey (mask) as alpha 0 with its shading normalised around 0.5
+    mat = rider.data.materials[0]
+    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    img = bsdf.inputs["Base Color"].links[0].from_node.image
+    TEX = int(next((a[4:] for a in args[5:] if a.startswith("tex=")), "1024"))
+    img2 = img.copy()
+    img2.scale(TEX, TEX)
+    px = np.array(img2.pixels[:], dtype=np.float32).reshape(TEX, TEX, 4)
+    mask_path = next((a[5:] for a in args[5:] if a.startswith("mask=")), None)
+    mimg = bpy.data.images.load(mask_path)
+    mimg.scale(TEX, TEX)
+    mk = np.array(mimg.pixels[:], dtype=np.float32).reshape(TEX, TEX, 4)[:, :, 0] > 0.5
+    lum = px[:, :, :3].mean(axis=2)
+    ref = float(np.median(lum[mk])) if mk.any() else 0.5
+    shade = np.clip(lum / max(ref, 1e-3) * 0.5, 0, 1)
+    px[mk, 0] = shade[mk]
+    px[mk, 1] = shade[mk]
+    px[mk, 2] = shade[mk]
+    px[:, :, 3] = np.where(mk, 0.0, 1.0)
+    img3 = bpy.data.images.new("rider_bake", TEX, TEX, alpha=True)
+    img3.alpha_mode = "STRAIGHT"
+    img3.pixels[:] = px.ravel()
+    png_path = BAKE + ".tmp.png"
+    img3.filepath_raw = png_path
+    img3.file_format = "PNG"
+    img3.save()
+    with open(png_path, "rb") as fh:
+        png = fh.read()
+    import os
+    os.remove(png_path)
+    out += struct.pack("<i", len(png)) + png
+    with open(BAKE, "wb") as fh:
+        fh.write(out)
+    print(f"BAKE wrote {BAKE}: {len(out) // 1024} KiB, foot ball {ball_height:.3f} drop {math.degrees(foot_drop):.1f} len {foot_len:.3f}")
+
 VIEWS = next((a[6:] for a in args[5:] if a.startswith("views=")), None)
 # Render
 for e in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):

@@ -36,13 +36,19 @@ namespace FreeVelo.World
             var style = new AvatarStyle { Jersey = new Num.Vector3(jersey.r, jersey.g, jersey.b) };
             var materials = new Dictionary<string, Material>();
             var high = LoadModel("FreeVeloAvatar", style, includeBike: custom == null) ?? AvatarModel.Build(style, custom == null, detail: 0.6f);
-            var highRenderers = avatar.BuildMeshes(world, high, materials, "LOD0");
+
+            // The skinned rider (if baked) replaces the generated one; the generated bike stays.
+            avatar._skin = RiderSkin.Create(root.transform, jersey, world);
+            bool bikeOnly = avatar._skin != null;
+            var highRenderers = avatar.BuildMeshes(world, high, materials, "LOD0", bikeOnly);
+            if (bikeOnly) highRenderers.AddRange(avatar._skin.Lod0);
 
             // Low-detail version for riders further away (if baked).
             var low = LoadModel("FreeVeloAvatarLow", style, includeBike: custom == null);
             if (low != null)
             {
-                var lowRenderers = avatar.BuildMeshes(world, low, materials, "LOD1");
+                var lowRenderers = avatar.BuildMeshes(world, low, materials, "LOD1", bikeOnly);
+                if (bikeOnly) lowRenderers.AddRange(avatar._skin.Lod1.Count > 0 ? avatar._skin.Lod1 : avatar._skin.Lod0);
                 var group = root.AddComponent<LODGroup>();
                 group.SetLODs(new[]
                 {
@@ -98,6 +104,11 @@ namespace FreeVelo.World
             float stopTarget = speedMps < 0.3f ? 1f : 0f;
             _stopped = Mathf.MoveTowards(_stopped, stopTarget, dt / 1.2f);
             if (_stopped >= 1f) _crankAngle = AvatarModel.ParkedCrankDegrees; // push off from "2 o'clock"
+            if (ShotCrank.HasValue)
+            {
+                _stopped = 0f;
+                _crankAngle = ShotCrank.Value;
+            }
 
             AvatarModel.Pose(_crankAngle, _wheelAngle, _pose, _stopped);
             foreach (var pair in _nodes)
@@ -107,13 +118,29 @@ namespace FreeVelo.World
                 pair.Value.localPosition = new Vector3(pose.Position.X, pose.Position.Y, pose.Position.Z);
                 pair.Value.localRotation = new Quaternion(q.X, q.Y, q.Z, q.W);
             }
+
+            _skin?.Apply(_pose, _stopped);
         }
 
-        private List<Renderer> BuildMeshes(WorldBuilder world, AvatarModel model, Dictionary<string, Material> materials, string lodName)
+        private RiderSkin _skin;
+
+        /// <summary>Render-shot tooling: hold every rider riding at this crank angle.</summary>
+        public static float? ShotCrank;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics() => ShotCrank = null;
+
+        /// <summary>Nodes of the bike (kept when the skinned rider replaces the generated one).</summary>
+        private static bool IsBikeNode(AvatarNode node) =>
+            node == AvatarNode.Bike || node == AvatarNode.FrontWheel || node == AvatarNode.RearWheel ||
+            node == AvatarNode.Crankset || node == AvatarNode.PedalRight || node == AvatarNode.PedalLeft;
+
+        private List<Renderer> BuildMeshes(WorldBuilder world, AvatarModel model, Dictionary<string, Material> materials, string lodName, bool bikeOnly)
         {
             var renderers = new List<Renderer>();
             foreach (var part in model.Parts)
             {
+                if (bikeOnly && !IsBikeNode(part.Node)) continue;
                 if (!_nodes.TryGetValue(part.Node, out var node))
                 {
                     node = new GameObject(part.Node.ToString()).transform;

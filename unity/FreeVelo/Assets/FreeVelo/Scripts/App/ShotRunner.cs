@@ -27,6 +27,12 @@ namespace FreeVelo.App
 
             /// <summary>Extra seconds to wait before the picture (e.g. for an animation to reach a pose).</summary>
             public float settle;
+
+            /// <summary>Position and target in the own rider's frame (x right, y up, z forward) instead of the world.</summary>
+            public bool rider;
+
+            /// <summary>0–360: the rider rides with the cranks held at this angle (instead of standing in the menu).</summary>
+            public float crank = -1;
         }
 
         [Serializable]
@@ -98,6 +104,7 @@ namespace FreeVelo.App
             }
 
             FreeVeloApp.CameraOverride = null;
+            RiderAvatar.ShotCrank = null;
             result.seconds = Time.realtimeSinceStartup - started;
             try
             {
@@ -125,7 +132,24 @@ namespace FreeVelo.App
                     continue;
                 }
 
-                FreeVeloApp.CameraOverride = (new Vector3(shot.pos[0], shot.pos[1], shot.pos[2]), new Vector3(shot.target[0], shot.target[1], shot.target[2]));
+                RiderAvatar.ShotCrank = shot.crank >= 0 ? shot.crank : (float?)null;
+                var shotPos = new Vector3(shot.pos[0], shot.pos[1], shot.pos[2]);
+                var shotTarget = new Vector3(shot.target[0], shot.target[1], shot.target[2]);
+                if (shot.rider)
+                {
+                    if (shot.crank >= 0) yield return null; // let the rider take the pose first
+                    var riderGo = GameObject.Find("Rider");
+                    if (riderGo == null)
+                    {
+                        result.errors.Add(shot.name + ": no rider");
+                        continue;
+                    }
+
+                    shotPos = riderGo.transform.TransformPoint(shotPos);
+                    shotTarget = riderGo.transform.TransformPoint(shotTarget);
+                }
+
+                FreeVeloApp.CameraOverride = (shotPos, shotTarget);
                 float oldFov = cam.fieldOfView;
                 cam.fieldOfView = shot.fov > 1 ? shot.fov : 60;
 
