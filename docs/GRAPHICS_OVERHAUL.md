@@ -281,7 +281,8 @@ village.
   7 % at 30–75 rpm and at least 80 % of FTP (sits again below 5.5 %, above 82 rpm or below 60 % of FTP) and sprints
   from twice FTP at 60 rpm or more (until under 1.5 × FTP); each stance holds at least 1.5 s, blends over 0.4 s.
   Other riders use their W/kg against 3.5 W/kg (their FTP is not sent). Standing: hips 18 cm up and 21 cm forward
-  (sprint 14 / 28 cm), lowered whenever a leg would be over-stretched, so they bob with the stroke; the spine pitches
+  (sprint 14 / 28 cm), lowered so the legs still reach the pedal at the bottom of the stroke, then held at that
+  height (bobbing with the stroke looked like too much up and down to the owner); the spine pitches
   until the arms are as long as in the approved pose; the bike rocks ±6° (sprint ±9°) about the tyre contact line,
   away from the pushing leg, and pedals, hoods, feet and hands go with it. Render shots: `"stance": 0/1/2`.
 - Still to come: power-dependent amplitude of the seated motion.

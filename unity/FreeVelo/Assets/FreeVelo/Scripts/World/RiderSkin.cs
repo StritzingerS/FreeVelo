@@ -57,6 +57,9 @@ namespace FreeVelo.World
         // Per-frame scratch (no allocations per rider and frame)
         private readonly Vector3[] _ankles = new Vector3[2], _balls = new Vector3[2], _wrists = new Vector3[2];
         private readonly bool[] _hasFoot = new bool[2];
+
+        /// <summary>Right ankle with the right crank at the bottom (rig space): limits the hips out of the saddle.</summary>
+        private readonly Vector3 _bottomAnkle;
         private readonly Data _d;
 
         /// <summary>Renderers per level of detail (0 = full, 1 = distant riders).</summary>
@@ -119,6 +122,14 @@ namespace FreeVelo.World
                 var axis = (wr - sh).normalized;
                 _elbowBend[s] = (el - sh) - (Vector3.Dot(el - sh, axis) * axis);
                 _armReach[s] = Vector3.Distance(sh, wr);
+            }
+
+            var bottomPose = AvatarModel.Pose(180f, 0f);
+            if (bottomPose.TryGetValue(AvatarNode.FootRight, out var bottomFoot))
+            {
+                var ball = V(bottomFoot.Position) + new Vector3(0, d.BallHeight, 0);
+                var dir = Q(bottomFoot.Rotation) * new Vector3(0, -Mathf.Sin(d.FootDrop), Mathf.Cos(d.FootDrop));
+                _bottomAnkle = ball - (dir * d.FootLength);
             }
 
             for (int lod = 0; lod < d.Lods.Count; lod++)
@@ -206,18 +217,20 @@ namespace FreeVelo.World
                 ankles[s] = balls[s] - (dir * _d.FootLength);
             }
 
-            // Out of the saddle: hips up and forward, but never further than the legs reach (so they bob with the
-            // stroke); then the upper body pitches until the arms are as long as in the approved pose.
+            // Out of the saddle: hips up and forward, but never further than the legs reach at the bottom of the
+            // stroke; then the upper body pitches until the arms are as long as in the approved pose.
             float st = Mathf.Clamp01(stand) * (1f - t);
             float spineAngle = 0f;
             if (st > 0f)
             {
+                // The height is limited by the ankle at the bottom of the stroke (not the current one), so the hips
+                // stay at one height through the stroke instead of bobbing.
                 var hips = RigPos(_hips) + (Vector3.Lerp(StandOffset, SprintOffset, sprint) * st);
                 for (int s = 0; s < 2; s++)
                 {
-                    if (!hasFoot[s]) continue;
                     var joint = hips + (_d.RestPos[_upperLeg[s]] - _d.RestPos[_hips]);
-                    var d = joint - ankles[s];
+                    var bottom = s == 0 ? _bottomAnkle : new Vector3(-_bottomAnkle.x, _bottomAnkle.y, _bottomAnkle.z);
+                    var d = joint - bottom; // the rock lifts the pedal at the bottom, so no extra reach is needed
                     float reach = 0.965f * (_thigh[s] + _shin[s]);
                     float flat = (d.x * d.x) + (d.z * d.z);
                     float maxY = flat < reach * reach ? Mathf.Sqrt((reach * reach) - flat) : 0f;
