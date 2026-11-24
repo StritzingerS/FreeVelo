@@ -16,8 +16,8 @@ public class RoadFurnitureTests
     {
         var (_, rails) = World.Value;
         double total = rails.Sum(r => r.Length);
-        Console.WriteLine($"{rails.Count} guard rails, {total / 1000:0.0} km");
         var map = World.Value.Terrain.Map;
+        Console.WriteLine($"{rails.Count} guard rails, {total / 1000:0.0} km");
         foreach (var r in rails.OrderByDescending(r => r.Length).Take(6))
         {
             var e = map.Edges[r.Edge];
@@ -26,7 +26,11 @@ public class RoadFurnitureTests
             Console.WriteLine($"  edge {r.Edge} side {r.Side} {r.FromD:0}-{r.ToD:0} m ({r.Length:0} m): at 15 m ({x:0.0}, {h:0.0}, {z:0.0}) forward ({x2 - x:0.00}, {z2 - z:0.00}) right ({rx:0.00}, {rz:0.00})");
         }
         Assert.NotEmpty(rails);
-        Assert.All(rails, r => Assert.True(r.Length >= 20, $"rail on edge {r.Edge} is {r.Length:0} m"));
+        Assert.All(rails.Where(r => !r.JoinsAtStart && !r.JoinsAtEnd), r => Assert.True(r.Length >= 20, $"rail on edge {r.Edge} is {r.Length:0} m"));
+        // The bridge railings continue on land (not where a yard or lane starts right at the bridge end).
+        var approaches = rails.Count(r => r.JoinsAtStart || r.JoinsAtEnd);
+        Console.WriteLine($"{approaches} bridge approaches for {map.Bridges.Count} bridges");
+        Assert.True(approaches >= map.Bridges.Count * 3, $"only {approaches} bridge approaches");
     }
 
     /// <summary>Section 7 of docs/GRAPHICS_OVERHAUL.md: no road furniture within lane reach of a centre line.</summary>

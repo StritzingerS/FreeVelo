@@ -533,7 +533,8 @@ namespace FreeVelo.World
                         var (cn, _) = OnEdge(e, d + 2f);
                         var nextEdge = cn + (right * (s * (half + 0.55f)));
                         railing.Tube(edge + (Vector3.up * 1.32f), nextEdge + (Vector3.up * 1.32f), 0.045f, 0.045f, 6, false);
-                        railing.Tube(edge + (Vector3.up * 0.85f), nextEdge + (Vector3.up * 0.85f), 0.025f, 0.025f, 5, false);
+                        railing.Tube(edge + (Vector3.up * 0.95f), nextEdge + (Vector3.up * 0.95f), 0.025f, 0.025f, 5, false);
+                        railing.Tube(edge + (Vector3.up * 0.62f), nextEdge + (Vector3.up * 0.62f), 0.025f, 0.025f, 5, false);
                     }
                 }
 
@@ -548,7 +549,7 @@ namespace FreeVelo.World
             }
 
             CreateMesh("Bridges", concrete.ToMesh("Bridges"), Mat(WorldMaterial.Concrete), true);
-            CreateMesh("Railings", railing.ToMesh("Railings"), Mat(WorldMaterial.Railing), true);
+            CreateMesh("Railings", railing.ToMesh("Railings"), Galvanised(), true);
         }
 
         private static (Vector3 Position, Vector3 Forward) OnEdge(RoadEdge e, float d)

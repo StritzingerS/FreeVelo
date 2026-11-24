@@ -6,13 +6,21 @@ namespace FreeVelo.Core.World.Gen
     /// <summary>A guard rail along one side of a road: from <see cref="FromD"/> to <see cref="ToD"/> metres along the edge.</summary>
     public readonly struct GuardRail
     {
-        public GuardRail(int edge, int side, double fromD, double toD)
+        public GuardRail(int edge, int side, double fromD, double toD, bool joinsAtStart = false, bool joinsAtEnd = false)
         {
             Edge = edge;
             Side = side;
             FromD = fromD;
             ToD = toD;
+            JoinsAtStart = joinsAtStart;
+            JoinsAtEnd = joinsAtEnd;
         }
+
+        /// <summary>The rail meets a bridge railing at its start (no sloping end there).</summary>
+        public bool JoinsAtStart { get; }
+
+        /// <summary>The rail meets a bridge railing at its end (no sloping end there).</summary>
+        public bool JoinsAtEnd { get; }
 
         public int Edge { get; }
 
@@ -77,7 +85,52 @@ namespace FreeVelo.Core.World.Gen
                 }
             }
 
+            AddBridgeApproaches(terrain, rails);
             return rails;
+        }
+
+        /// <summary>Where the bridge railings end (this far either side of the river centre, as the app builds the bridges).</summary>
+        public static double BridgeHalfSpan(WorldMap map) => (map.River?.HalfWidth ?? 10) + 14;
+
+        /// <summary>Length of the guard rail that continues a bridge railing on the approach.</summary>
+        private const double ApproachLength = 18;
+
+        /// <summary>
+        /// At each corner of a bridge the guard rail continues the railing for about 18 m on land (as on real bridges),
+        /// joined to it at the bridge end and sloping into the ground at the other; cut short where a rail may not stand.
+        /// </summary>
+        private static void AddBridgeApproaches(Terrain terrain, List<GuardRail> rails)
+        {
+            var map = terrain.Map;
+            double half = BridgeHalfSpan(map);
+            foreach (var b in map.Bridges)
+            {
+                var e = map.Edges[b.Edge];
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    // before the bridge: from the approach end up to the railing
+                    double end = b.DistanceM - half;
+                    double start = end;
+                    for (double d = end - 1; d >= end - ApproachLength && Allowed(terrain, e, side, d, ignoreBridges: true); d -= 1) start = d;
+                    if (end - start >= 8 && !Overlaps(rails, e.Id, side, start, end)) rails.Add(new GuardRail(e.Id, side, start, end, joinsAtEnd: true));
+
+                    // after the bridge: from the railing on
+                    start = b.DistanceM + half;
+                    end = start;
+                    for (double d = start + 1; d <= start + ApproachLength && Allowed(terrain, e, side, d, ignoreBridges: true); d += 1) end = d;
+                    if (end - start >= 8 && !Overlaps(rails, e.Id, side, start, end)) rails.Add(new GuardRail(e.Id, side, start, end, joinsAtStart: true));
+                }
+            }
+        }
+
+        private static bool Overlaps(List<GuardRail> rails, int edge, int side, double from, double to)
+        {
+            foreach (var r in rails)
+            {
+                if (r.Edge == edge && r.Side == side && r.FromD < to && r.ToD > from) return true;
+            }
+
+            return false;
         }
 
         private static void Add(Terrain terrain, List<GuardRail> rails, RoadEdge e, int side, double from, double to)
@@ -121,21 +174,23 @@ namespace FreeVelo.Core.World.Gen
         }
 
         /// <summary>A rail may stand here: away from junctions and bridges, not in a village, a lane, the water or on another road.</summary>
-        public static bool Allowed(Terrain terrain, RoadEdge e, int side, double d)
+        public static bool Allowed(Terrain terrain, RoadEdge e, int side, double d, bool ignoreBridges = false)
         {
             if (d < JunctionClear || d > e.Length - JunctionClear) return false;
             var map = terrain.Map;
             foreach (var b in map.Bridges)
             {
-                double span = (map.River?.HalfWidth ?? 10) + 20;
-                if (b.Edge == e.Id && Math.Abs(b.DistanceM - d) < span) return false;
+                if (b.Edge != e.Id) continue;
+                double reach = Math.Abs(b.DistanceM - d);
+                if (ignoreBridges ? reach < BridgeHalfSpan(map) - 0.01 : reach < BridgeHalfSpan(map) + 6) return false;
             }
 
             var (x, z, _, rx, rz) = At(e, d);
             double o = (e.Width / 2) + RailOffset + 0.2;
             double px = x + (rx * side * o), pz = z + (rz * side * o);
             var landscape = terrain.Landscape;
-            if (landscape != null && (landscape.Blocked(px, pz) || landscape.BuiltOn(px, pz))) return false;
+            // Bridge approaches also in villages (the bridges lie in them); otherwise no rails in villages.
+            if (landscape != null && ((!ignoreBridges && landscape.Blocked(px, pz)) || landscape.BuiltOn(px, pz))) return false;
             if (terrain.IsWater(px, pz, 1)) return false;
             foreach (var c in terrain.Corners)
             {

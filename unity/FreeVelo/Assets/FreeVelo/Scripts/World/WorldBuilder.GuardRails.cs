@@ -20,6 +20,20 @@ namespace FreeVelo.World
         private const float RailEndSlope = 4f;
         private const float PostSpacing = 2f;
 
+        /// <summary>The bridge railing's line beyond the asphalt (see <see cref="BuildBridges"/>).</summary>
+        private const float BridgeRailingOffset = 0.55f;
+
+        private Material _galvanised;
+
+        /// <summary>Galvanised steel: guard rails and bridge railings.</summary>
+        private Material Galvanised()
+        {
+            if (_galvanised != null) return _galvanised;
+            _galvanised = new Material(Mat(new Color(0.68f, 0.7f, 0.72f), null, 0.55f)) { name = "Galvanised" };
+            if (_galvanised.HasProperty("_Metallic")) _galvanised.SetFloat("_Metallic", 0.55f);
+            return _galvanised;
+        }
+
         /// <summary>A guard rail stands on this side of the edge here (the delineator posts make way).</summary>
         private bool HasRail(int edge, int side, double d)
         {
@@ -59,13 +73,19 @@ namespace FreeVelo.World
                     double d = rail.FromD + (rail.Length * k / (n - 1));
                     var (x, z, h, rx, rz) = RoadFurniture.At(e, d);
                     var o = new Vector3((float)rx, 0f, (float)rz) * rail.Side;
-                    var p = new Vector3((float)x, 0f, (float)z) + (o * (half + (float)RoadFurniture.RailOffset));
+                    // Where the rail meets a bridge railing it swings in to the railing's line over the last 4 m.
+                    float fromStart = (float)(d - rail.FromD), toEnd = (float)(rail.ToD - d);
+                    float joinT = 1f;
+                    if (rail.JoinsAtStart) joinT = Mathf.Min(joinT, Mathf.SmoothStep(0f, 1f, fromStart / RailEndSlope));
+                    if (rail.JoinsAtEnd) joinT = Mathf.Min(joinT, Mathf.SmoothStep(0f, 1f, toEnd / RailEndSlope));
+                    float offset = Mathf.Lerp(BridgeRailingOffset, (float)RoadFurniture.RailOffset, joinT);
+                    var p = new Vector3((float)x, 0f, (float)z) + (o * (half + offset));
                     float ground = (float)_terrain.SurfaceHeight(p.x, p.z);
                     float road = (float)h + 0.05f;
                     float beam = road + RailBeamHeight;
 
-                    // The ends slope down until the beam's top meets the ground.
-                    float fromEnd = Mathf.Min((float)(d - rail.FromD), (float)(rail.ToD - d));
+                    // Free ends slope down until the beam's top meets the ground.
+                    float fromEnd = Mathf.Min(rail.JoinsAtStart ? float.MaxValue : fromStart, rail.JoinsAtEnd ? float.MaxValue : toEnd);
                     if (fromEnd < RailEndSlope)
                     {
                         float t = Mathf.SmoothStep(0f, 1f, fromEnd / RailEndSlope);
@@ -91,8 +111,7 @@ namespace FreeVelo.World
                 }
             }
 
-            var material = new Material(Mat(new Color(0.68f, 0.7f, 0.72f), null, 0.55f)) { name = "GuardRail" };
-            if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0.55f);
+            var material = Galvanised();
             foreach (var pair in cells)
             {
                 var go = new GameObject("GuardRails");
