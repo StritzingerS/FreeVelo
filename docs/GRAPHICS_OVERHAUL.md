@@ -253,6 +253,20 @@ village.
 5. **Camera feel:** speed-based field of view (+6–10° at most, smoothed), roll at 20–30 % of the bike's lean,
    spring-damped follow, no head bob, a "reduced motion" toggle.
 
+### Tripo rider (2026-11-24, pose approved, not yet in the game)
+
+- Source: Tripo text-to-image → multiview → model, rigged by Tripo (biped, Unity spec, task in the source notes),
+  `tools/blender/sources/rider_tripo_rigged.glb`; jersey smoothed and recolourable with a texture mask
+  (`tools/blender/rider_jersey.py` → `rider_tripo_jersey.glb`, `rider_tripo_jersey_mask.png`).
+- Seated pose on our bike checked in Blender with `tools/blender/rider_on_bike.py` (the approved arguments are in
+  its header; picture `docs/rider_grip_approved.png`): legs solved analytically onto the pedals, back bent forward
+  from the pelvis (no hollow back), hands on the hoods as on real photos (back of the hand outwards, horn between
+  thumb and index finger, fingers closed until they touch hood, lever and bar), skin checked against the bike mesh.
+- Known: the index fingertip reaches about 6 mm into the horn and the palm about 6 mm into the hood (glove
+  thickness).
+- Next: drive the skinned mesh in Unity from `AvatarModel.Pose()` with the same rules, recolour the jersey per rider
+  via the mask, a lighter LOD for group riders.
+
 - No road-cycling mocap pack with seated, standing and sprint clips was found.
 - Licences: Mixamo files and Asset Store assets may not be committed to a public repository.
   **Check:** `.gitignore` does not exclude `Resources/FreeVeloBicycle` (the local Asset Store bike).

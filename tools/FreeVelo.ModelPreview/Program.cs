@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using FreeVelo.Core.Avatar;
 using FreeVelo.ModelPreview;
@@ -141,6 +141,33 @@ if (args.Length > 1 && args[0] == "--bake")
         Console.WriteLine($"baked {check.TriangleCount} triangles, {baked.Length / 1024} KiB -> {path}");
     }
 
+    return;
+}
+
+if (args.Length > 1 && args[0] == "--bikeobj")
+{
+    // The posed bike (no rider) as OBJ in Blender axes (x right, y forward, z up), for fitting other riders onto it.
+    float crankDeg = args.Length > 2 ? float.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : 110f;
+    var bikeModel = AvatarModel.Build(detail: 0.5f);
+    var bikePose = AvatarModel.Pose(crankDeg, 0f);
+    using var obj = new StreamWriter(args[1]);
+    int baseIndex = 1;
+    foreach (var part in bikeModel.Parts.Where(p => AvatarModel.IsBikeNode(p.Node)))
+    {
+        var np = bikePose[part.Node];
+        obj.WriteLine($"o {part.Node}_{part.Material.Id}");
+        foreach (var v in part.Mesh.Vertices)
+        {
+            var wp = np.Apply(v);
+            obj.WriteLine(FormattableString.Invariant($"v {wp.X:0.#####} {wp.Z:0.#####} {wp.Y:0.#####} {part.Material.Color.X:0.###} {part.Material.Color.Y:0.###} {part.Material.Color.Z:0.###}"));
+        }
+
+        var tris = part.Mesh.Triangles;
+        for (int i = 0; i < tris.Count; i += 3) obj.WriteLine($"f {tris[i] + baseIndex} {tris[i + 2] + baseIndex} {tris[i + 1] + baseIndex}");
+        baseIndex += part.Mesh.Vertices.Count;
+    }
+
+    Console.WriteLine($"bike -> {args[1]}");
     return;
 }
 
