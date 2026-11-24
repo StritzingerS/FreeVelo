@@ -47,7 +47,7 @@ namespace FreeVelo.World
         private readonly Transform[] _bones;
         private readonly Vector3[] _restLocalPos;
         private readonly Quaternion[] _restLocalRot;
-        private readonly int _hips;
+        private readonly int _hips, _spine, _chest, _neck, _head;
         private readonly int[] _upperLeg = new int[2], _lowerLeg = new int[2], _foot = new int[2], _toes = new int[2];
         private readonly int[] _upperArm = new int[2], _lowerArm = new int[2], _hand = new int[2];
         private readonly float[] _thigh = new float[2], _shin = new float[2], _upper = new float[2], _fore = new float[2];
@@ -88,6 +88,10 @@ namespace FreeVelo.World
             }
 
             _hips = Index("Hips");
+            _spine = Index("Spine");
+            _chest = Index("Chest");
+            _neck = Index("Neck");
+            _head = Index("Head");
             string[] sides = { "Right", "Left" };
             for (int s = 0; s < 2; s++)
             {
@@ -144,8 +148,14 @@ namespace FreeVelo.World
         /// <summary>
         /// Poses the rider for the avatar pose of this frame (crank angle, stopping blend). Call after
         /// <see cref="AvatarModel.Pose(float, float, Dictionary{AvatarNode, NodePose}, float)"/>.
+        /// Body motion: the pelvis rocks with the pedal stroke (the hip on the pushing side drops and comes forward a
+        /// little), spine and chest take most of it back so the shoulders stay calm, neck and head cancel the rest
+        /// and turn the gaze into bends; the arms follow so the hands stay on the hoods.
         /// </summary>
-        public void Apply(Dictionary<AvatarNode, NodePose> pose, float stopped)
+        /// <param name="crankDegrees">Right crank: 0° = up, 90° = forward.</param>
+        /// <param name="pedalling">0–1: how much of the pedalling motion to show (0 when coasting).</param>
+        /// <param name="lookDegrees">Head turn, positive = to the right.</param>
+        public void Apply(Dictionary<AvatarNode, NodePose> pose, float stopped, float crankDegrees = 0f, float pedalling = 0f, float lookDegrees = 0f)
         {
             for (int i = 0; i < _bones.Length; i++)
             {
@@ -165,6 +175,17 @@ namespace FreeVelo.World
                 _bones[_hips].rotation = _rig.rotation * (r * _d.RestRot[_hips]);
             }
 
+            // Pelvis rock with the pedal stroke, taken back up the spine (degrees; positive roll lifts the right).
+            float m = Mathf.Clamp01(pedalling) * (1f - t);
+            float push = Mathf.Sin(crankDegrees * Mathf.Deg2Rad); // +1: right leg pushing, -1: left leg
+            float roll = -PelvisRollDeg * m * push;
+            float yaw = -PelvisYawDeg * m * push;
+            RotateRig(_hips, Quaternion.AngleAxis(yaw, Vector3.up) * Quaternion.AngleAxis(roll, Vector3.forward));
+            RotateRig(_spine, Quaternion.AngleAxis(-0.6f * yaw, Vector3.up) * Quaternion.AngleAxis(-0.45f * roll, Vector3.forward));
+            RotateRig(_chest, Quaternion.AngleAxis(-0.3f * yaw, Vector3.up) * Quaternion.AngleAxis(-0.3f * roll, Vector3.forward));
+            RotateRig(_neck, Quaternion.AngleAxis((-0.1f * yaw) + (0.4f * lookDegrees), Vector3.up) * Quaternion.AngleAxis(-0.25f * roll, Vector3.forward));
+            RotateRig(_head, Quaternion.AngleAxis(0.6f * lookDegrees, Vector3.up));
+
             for (int s = 0; s < 2; s++)
             {
                 float sign = s == 0 ? 1f : -1f;
@@ -182,8 +203,8 @@ namespace FreeVelo.World
                 Aim(_lowerLeg[s], _foot[s], ankle);
                 Aim(_foot[s], _toes[s], ball);
 
-                // Arms: only needed when the body moves; the hands stay where the approved pose put them.
-                if (t > 0f)
+                // Arms: follow the moving body; the hands stay where the approved pose put them.
+                if (t > 0f || m > 0f)
                 {
                     var wrist = _d.RestPos[_hand[s]];
                     var shoulder = RigPos(_upperArm[s]);
@@ -193,6 +214,16 @@ namespace FreeVelo.World
                     _bones[_hand[s]].rotation = _rig.rotation * _d.RestRot[_hand[s]];
                 }
             }
+        }
+
+        /// <summary>How far the pelvis rolls and turns with the pedal stroke at full pedalling (degrees).</summary>
+        private const float PelvisRollDeg = 2.5f, PelvisYawDeg = 1.5f;
+
+        /// <summary>Turns <paramref name="bone"/> about its joint by <paramref name="delta"/> given in rig axes.</summary>
+        private void RotateRig(int bone, Quaternion delta)
+        {
+            var b = _bones[bone];
+            b.rotation = _rig.rotation * delta * Quaternion.Inverse(_rig.rotation) * b.rotation;
         }
 
         private Vector3 RigPos(int bone) => _rig.InverseTransformPoint(_bones[bone].position);

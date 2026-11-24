@@ -86,7 +86,8 @@ namespace FreeVelo.World
         public float StopLeanDeg => AvatarModel.StopLeanDeg(_stopped);
 
         /// <summary>Turns wheels and cranks and moves the legs. Call every frame.</summary>
-        public void Animate(float speedMps, float cadenceRpm, float dt)
+        /// <param name="curvature">Of the road just ahead (1/m, positive = right-hand bend): the head looks into it.</param>
+        public void Animate(float speedMps, float cadenceRpm, float dt, float curvature = 0f)
         {
             float wheelDegrees = speedMps / (2f * Mathf.PI * AvatarModel.WheelRadius) * 360f * dt;
             _wheelAngle = Mathf.Repeat(_wheelAngle + wheelDegrees, 360f);
@@ -119,16 +120,34 @@ namespace FreeVelo.World
                 pair.Value.localRotation = new Quaternion(q.X, q.Y, q.Z, q.W);
             }
 
-            _skin?.Apply(_pose, _stopped);
+            if (_skin != null)
+            {
+                // Body motion fades in with pedalling (about 0.3 s) and out when coasting or stopping.
+                float pedalling = cadenceRpm > 5f || ShotCrank.HasValue ? 1f : 0f;
+                _pedalling = dt > 0 ? Mathf.Lerp(_pedalling, pedalling, 1f - Mathf.Exp(-dt / 0.3f)) : pedalling;
+                // Gaze to a point about 25 m ahead on the bend: half the heading change over that distance.
+                float look = Mathf.Clamp(curvature * 12.5f * Mathf.Rad2Deg, -30f, 30f);
+                _look = dt > 0 ? Mathf.Lerp(_look, look, 1f - Mathf.Exp(-dt / 0.5f)) : look;
+                if (ShotLook.HasValue) _look = ShotLook.Value;
+                _skin.Apply(_pose, _stopped, _crankAngle, _pedalling, _look);
+            }
         }
 
         private RiderSkin _skin;
+        private float _pedalling, _look;
+
+        /// <summary>Render-shot tooling: head turn (degrees, positive = right) for every rider.</summary>
+        public static float? ShotLook;
 
         /// <summary>Render-shot tooling: hold every rider riding at this crank angle.</summary>
         public static float? ShotCrank;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetStatics() => ShotCrank = null;
+        private static void ResetStatics()
+        {
+            ShotCrank = null;
+            ShotLook = null;
+        }
 
         /// <summary>Nodes of the bike (kept when the skinned rider replaces the generated one).</summary>
         private static bool IsBikeNode(AvatarNode node) =>

@@ -271,7 +271,13 @@ village.
   when stopping with the hands kept on the hoods, and recolours the jersey per colour (one texture per colour,
   compressed at runtime to DXT1 or ETC: about 0.7 MB each instead of 5.3 MB; no visible difference in the Unity
   renders). Not yet measured on the phone. `RiderAvatar` keeps only the generated bike's nodes when the bake is present.
-- Render shots can now be placed in the rider's frame (`"rider": true`) and hold a crank angle (`"crank": 90`).
+- Render shots can now be placed in the rider's frame (`"rider": true`) and hold a crank angle (`"crank": 90`) and a
+  head turn (`"look": 25`).
+- Body motion (2026-11-24, waiting for the owner's verdict): the pelvis rolls ±2.5° and turns ±1.5° with the pedal
+  stroke (hip on the pushing side down and forward), spine and chest take most of it back, neck and head the rest;
+  the head turns into bends (gaze about 25 m ahead from the curvature 12 m ahead, at most 30°, eased over 0.5 s); the
+  arms follow by IK so the hands stay on the hoods. It fades in with pedalling and out when coasting or stopping.
+  Still to come: standing on climbs, sprint, power-dependent amplitude.
 
 - No road-cycling mocap pack with seated, standing and sprint clips was found.
 - Licences: Mixamo files and Asset Store assets may not be committed to a public repository.

@@ -320,7 +320,8 @@ namespace FreeVelo.App
             // Braking for a bend: the rider stops pedalling and freewheels.
             float cadence = riding && !_ride.IsBraking ? (float)(_ble.Hub.Live.CadenceRpm ?? 0) : 0;
             float speed = riding ? (float)_ride.SpeedMps : 0f; // wheels stand still outside a ride (menus, summary)
-            _avatar.Animate(speed, cadence, dt);
+            float ahead = riding ? (float)_ride.Route.CurvatureAt(_ride.DistanceM + 12) : 0f; // the head looks into bends
+            _avatar.Animate(speed, cadence, dt, ahead);
 
             Vector3 target;
             if (riding)

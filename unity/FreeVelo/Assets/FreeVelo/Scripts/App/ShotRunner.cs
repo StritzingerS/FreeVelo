@@ -33,6 +33,9 @@ namespace FreeVelo.App
 
             /// <summary>0–360: the rider rides with the cranks held at this angle (instead of standing in the menu).</summary>
             public float crank = -1;
+
+            /// <summary>Head turn of the riders in degrees (positive = right); 0 = from the road.</summary>
+            public float look;
         }
 
         [Serializable]
@@ -105,6 +108,7 @@ namespace FreeVelo.App
 
             FreeVeloApp.CameraOverride = null;
             RiderAvatar.ShotCrank = null;
+            RiderAvatar.ShotLook = null;
             result.seconds = Time.realtimeSinceStartup - started;
             try
             {
@@ -133,6 +137,7 @@ namespace FreeVelo.App
                 }
 
                 RiderAvatar.ShotCrank = shot.crank >= 0 ? shot.crank : (float?)null;
+                RiderAvatar.ShotLook = shot.look != 0 ? shot.look : (float?)null;
                 var shotPos = new Vector3(shot.pos[0], shot.pos[1], shot.pos[2]);
                 var shotTarget = new Vector3(shot.target[0], shot.target[1], shot.target[2]);
                 if (shot.rider)
