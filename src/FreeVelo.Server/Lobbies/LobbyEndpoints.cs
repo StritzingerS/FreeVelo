@@ -30,9 +30,10 @@ public static class LobbyEndpoints
             return Results.Ok(new LobbyList { lobbies = visible.Select(l => Summary(l, lobbies, riders, friendRiders)).ToArray() });
         });
 
-        group.MapPost(ApiRoutes.Lobbies, (CreateLobbyRequest req, ClaimsPrincipal user, LobbyRegistry lobbies, RiderStore riders) =>
+        group.MapPost(ApiRoutes.Lobbies, (CreateLobbyRequest req, HttpRequest http, ClaimsPrincipal user, LobbyRegistry lobbies, RiderStore riders) =>
         {
             if (Http.CurrentRider(user, riders) is not { } rider) return Results.Unauthorized();
+            if (Http.WorldMismatch(http)) return Http.Error(ApiErrors.WorldMismatch, HttpStatusCode.Conflict);
             if (!LobbyRegistry.IsValid(req)) return Http.Error(ApiErrors.InvalidLobby);
             return Results.Json(Details(lobbies.Create(req, rider.Id), lobbies, riders), statusCode: StatusCodes.Status201Created);
         });
@@ -44,16 +45,18 @@ public static class LobbyEndpoints
             return lobbies.Of(rider.Id) is { } lobby ? Results.Ok(Details(lobby, lobbies, riders)) : Results.NoContent();
         });
 
-        group.MapPost(ApiRoutes.JoinByCode, (JoinByCodeRequest req, ClaimsPrincipal user, LobbyRegistry lobbies, RiderStore riders) =>
+        group.MapPost(ApiRoutes.JoinByCode, (JoinByCodeRequest req, HttpRequest http, ClaimsPrincipal user, LobbyRegistry lobbies, RiderStore riders) =>
         {
             if (Http.CurrentRider(user, riders) is not { } rider) return Results.Unauthorized();
+            if (Http.WorldMismatch(http)) return Http.Error(ApiErrors.WorldMismatch, HttpStatusCode.Conflict);
             return Joined(lobbies.JoinByCode(req.code ?? "", rider.Id), lobbies, riders);
         }).RequireRateLimiting(CodeRateLimit);
 
         // Join from the list: public rides, or private rides of friends (friend codes in the body).
-        group.MapPost("/api/v1/lobbies/{id}/join", (string id, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] FriendCodesRequest? req, ClaimsPrincipal user, LobbyRegistry lobbies, RiderStore riders, FriendService friends) =>
+        group.MapPost("/api/v1/lobbies/{id}/join", (string id, [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] FriendCodesRequest? req, HttpRequest http, ClaimsPrincipal user, LobbyRegistry lobbies, RiderStore riders, FriendService friends) =>
         {
             if (Http.CurrentRider(user, riders) is not { } rider) return Results.Unauthorized();
+            if (Http.WorldMismatch(http)) return Http.Error(ApiErrors.WorldMismatch, HttpStatusCode.Conflict);
             var friendRiders = friends.RidersOf(req?.friendCodes ?? Array.Empty<string>());
             return Joined(lobbies.JoinPublic(id, rider.Id, l => lobbies.Members(l).RiderIds.Any(friendRiders.Contains)), lobbies, riders);
         });

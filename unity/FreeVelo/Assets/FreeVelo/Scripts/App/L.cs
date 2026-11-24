@@ -362,6 +362,7 @@ namespace FreeVelo.App
             ["err_name"] = ("The name needs 2 to 24 characters.", "Der Name braucht 2 bis 24 Zeichen."),
             ["err_code"] = ("No open ride with this code.", "Keine offene Fahrt mit diesem Code."),
             ["err_full"] = ("This ride is full.", "Diese Fahrt ist voll."),
+            ["err_world"] = ("The server runs another version of the world. Update the app (or ask whoever runs the server to update it).", "Der Server läuft mit einem anderen Stand der Welt. Bitte die App aktualisieren (oder den Server aktualisieren lassen)."),
             ["err_lobby"] = ("Check the ride name (2 to 40 characters).", "Prüfe den Namen der Fahrt (2 bis 40 Zeichen)."),
             ["err_too_many"] = ("Too many attempts – wait a minute.", "Zu viele Versuche – warte eine Minute."),
             ["friends"] = ("Friends", "Freunde"),

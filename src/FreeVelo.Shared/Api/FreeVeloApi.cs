@@ -62,6 +62,12 @@ namespace FreeVelo.Shared.Api
         public string FriendCode { get; set; } = "";
 
         /// <summary>
+        /// The app's world version (FreeVelo.Core's WorldContract.Version), sent as <see cref="ApiHeaders.WorldVersion"/>;
+        /// the server refuses group rides for a different one (<see cref="ApiErrors.WorldMismatch"/>). Empty: not sent.
+        /// </summary>
+        public string WorldVersion { get; set; } = "";
+
+        /// <summary>
         /// Called when the server no longer knew the rider (e.g. a free host that forgets its data on restart) and the
         /// rider was registered again with the same name: the app stores the new credentials.
         /// </summary>
@@ -213,6 +219,7 @@ namespace FreeVelo.Shared.Api
                 using var request = new HttpRequestMessage(method, path);
                 if (body != null) request.Content = new StringContent(_json.Serialize(body), Encoding.UTF8, "application/json");
                 if (authorized) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await AccessTokenAsync(ct));
+                if (WorldVersion.Length > 0) request.Headers.TryAddWithoutValidation(ApiHeaders.WorldVersion, WorldVersion);
 
                 using var response = await _http.SendAsync(request, ct).ConfigureAwait(true);
                 string text = response.Content != null ? await response.Content.ReadAsStringAsync().ConfigureAwait(true) : "";

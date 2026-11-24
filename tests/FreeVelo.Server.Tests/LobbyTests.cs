@@ -173,6 +173,33 @@ public sealed class LobbyTests : IDisposable
         Assert.Equal("", LobbyRules.NormalizeCode(null));
     }
 
+    /// <summary>An app on another world version (roads or ride logic) can neither create nor join a group ride.</summary>
+    [Fact]
+    public async Task AppWithAnotherWorldVersionIsRefused()
+    {
+        var sami = await TestRider.Create(_server, "Sami");
+        var anna = await TestRider.Create(_server, "Anna");
+
+        // Same version (and no header at all, older apps): fine.
+        sami.Client.DefaultRequestHeaders.Add(ApiHeaders.WorldVersion, FreeVelo.Core.World.WorldContract.Version);
+        var created = await Create(sami, new CreateLobbyRequest { name = "Sunday" });
+
+        anna.Client.DefaultRequestHeaders.Add(ApiHeaders.WorldVersion, "1-000000000000");
+        var join = await anna.Client.Post(ApiRoutes.JoinByCode, new JoinByCodeRequest { code = created.code });
+        Assert.Equal(HttpStatusCode.Conflict, join.StatusCode);
+        Assert.Equal(ApiErrors.WorldMismatch, (await join.Read<ApiError>()).error);
+        var create = await anna.Client.Post(ApiRoutes.Lobbies, new CreateLobbyRequest { name = "Mine" });
+        Assert.Equal(HttpStatusCode.Conflict, create.StatusCode);
+
+        // The client library sends the header itself.
+        var api = new FreeVeloApi(_server.CreateClient(), new TestJson()) { WorldVersion = "1-000000000000" };
+        await api.CreateRiderAsync("Ben");
+        var e = await Assert.ThrowsAsync<ApiException>(() => api.JoinByCodeAsync(created.code));
+        Assert.Equal(ApiErrors.WorldMismatch, e.Code);
+        api.WorldVersion = FreeVelo.Core.World.WorldContract.Version;
+        Assert.Equal(created.id, (await api.JoinByCodeAsync(created.code)).id);
+    }
+
     private static async Task<LobbyDetails> Create(TestRider rider, CreateLobbyRequest request)
     {
         var response = await rider.Client.Post(ApiRoutes.Lobbies, request);

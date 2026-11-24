@@ -54,6 +54,15 @@ namespace FreeVelo.Shared.Api
         public const string StravaDenied = "strava_denied";
         public const string StravaFailed = "strava_failed";
         public const string InvalidState = "invalid_state";
+
+        /// <summary>The app's world version (roads and ride logic) differs from the server's: update app or server.</summary>
+        public const string WorldMismatch = "world_mismatch";
+    }
+
+    public static class ApiHeaders
+    {
+        /// <summary>The app's world version (FreeVelo.Core's WorldContract.Version), sent with every request.</summary>
+        public const string WorldVersion = "X-FreeVelo-World";
     }
 
     public static class RiderRules

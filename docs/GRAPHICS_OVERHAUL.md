@@ -488,6 +488,13 @@ Thermals are the real limit: use about 60 % of the frame time so the phone holds
 7. A play-mode check: a ray cast down at route samples hits the road; the camera stays above ground.
 8. Server/client contract-version mismatch test.
 
+**Done (24 Nov 2026):** 1 and 2 (`WorldContractTests`), and the world version: `WorldContract.Version` in the core
+("2-" + the first 12 hex digits of the road hash; `RideLogicVersion` is raised by hand when route distances,
+curvature, cornering or Keep Together change without the roads changing). The app sends it as `X-FreeVelo-World`
+with every request; the server refuses creating or joining a group ride for another version (409
+`world_mismatch`, the app says to update), apps without the header still pass; `/health` shows the server's
+version. Tests: `WorldContractTests.WorldVersionIsKnown`, `LobbyTests.AppWithAnotherWorldVersionIsRefused`.
+
 ## 8. Order of work
 
 1. **Safety net:** the golden tests (section 7) and the "nothing floats" invariant suite with audit renders

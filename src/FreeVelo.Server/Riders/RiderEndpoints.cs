@@ -71,6 +71,13 @@ internal static class Http
     public static IResult Error(string code, HttpStatusCode status = HttpStatusCode.BadRequest) =>
         Results.Json(new ApiError { error = code }, statusCode: (int)status);
 
+    /// <summary>
+    /// The app sent a world version other than this server's (FreeVelo.Core.World.WorldContract.Version): a group ride
+    /// would put riders on different roads or brake them differently. Apps without the header (older builds) pass.
+    /// </summary>
+    public static bool WorldMismatch(HttpRequest request) =>
+        request.Headers.TryGetValue(ApiHeaders.WorldVersion, out var sent) && sent.Count > 0 && sent[0] != FreeVelo.Core.World.WorldContract.Version;
+
     public static Rider? CurrentRider(ClaimsPrincipal user, RiderStore riders) =>
         TokenService.RiderId(user) is { } id ? riders.Find(id) : null;
 

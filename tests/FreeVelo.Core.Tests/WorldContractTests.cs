@@ -37,6 +37,19 @@ public class WorldContractTests
         }
 
         Assert.True(Hash(text) == RoadsFingerprint, $"Road network changed: fingerprint {Hash(text)}");
+        // The version app and server compare is built from the same data.
+        Assert.StartsWith(RoadsFingerprint, WorldContract.RoadHash(map));
+    }
+
+    /// <summary>
+    /// The world version app and server compare (WorldContract). When it changes, apps and server must be updated
+    /// together: update the value here in the same commit, and raise WorldContract.RideLogicVersion for ride logic
+    /// changes that leave the roads alone.
+    /// </summary>
+    [Fact]
+    public void WorldVersionIsKnown()
+    {
+        Assert.True(WorldContract.Version == "2-" + RoadsFingerprint[..12], $"World version is now {WorldContract.Version}");
     }
 
     [Theory]

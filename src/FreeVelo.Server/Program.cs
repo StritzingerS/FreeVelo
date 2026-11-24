@@ -105,7 +105,8 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+// The world version (roads and ride logic) shows which build is running, e.g. after a deploy.
+app.MapGet("/health", () => Results.Ok(new { status = "ok", world = FreeVelo.Core.World.WorldContract.Version }));
 app.MapRiderEndpoints();
 app.MapLobbyEndpoints();
 app.MapFriendEndpoints();

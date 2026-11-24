@@ -372,6 +372,8 @@ namespace FreeVelo.Net
                 {
                     // The server forgot the rider (free hosting without storage restarted): keep the new identity.
                     CredentialsReplaced = credentials => AppSettings.Rider = credentials,
+                    // The server refuses group rides for another world version (roads or ride logic).
+                    WorldVersion = FreeVelo.Core.World.WorldContract.Version,
                 };
                 _apiServer = server;
             }
@@ -420,6 +422,7 @@ namespace FreeVelo.Net
                 case ApiErrors.LobbyFull: return L.Get("err_full");
                 case ApiErrors.InvalidLobby: return L.Get("err_lobby");
                 case ApiErrors.TooManyRequests: return L.Get("err_too_many");
+                case ApiErrors.WorldMismatch: return L.Get("err_world");
                 default: return L.Get("server_error") + $" ({(int)e.Status})";
             }
         }
