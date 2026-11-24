@@ -165,8 +165,10 @@ namespace FreeVelo.Ride
         /// <summary>Power averaged over the last 3 seconds (for display).</summary>
         public double Power3s { get; private set; }
 
-        /// <summary>Power for the display: the 3 s average (steady; 1 s showed every small surge).</summary>
+        /// <summary>Power for the display: the 3 s average in a free ride, 1 s in workouts and group rides.</summary>
         public double PowerShown { get; private set; }
+
+        private bool _steadyPowerDisplay;
 
         private readonly Queue<(float T, double P)> _powerWindow = new Queue<(float, double)>();
 
@@ -245,6 +247,7 @@ namespace FreeVelo.Ride
             }
             else if (!_fixedRoute && Path != null) Route = Path.Route;
             string title = workout != null ? workout.Name.Get(AppSettings.Language) : IsGroupRide ? Group.Lobby.name : L.Get("free_ride");
+            _steadyPowerDisplay = workout == null && !IsGroupRide;
             _recording = new RideRecording(DateTime.UtcNow, title);
             _lastSegmentIndex = -1;
             _workoutComplete = false;
@@ -761,9 +764,10 @@ namespace FreeVelo.Ride
             _powerWindow.Enqueue((now, power));
             while (_powerWindow.Count > 0 && now - _powerWindow.Peek().T > 3f) _powerWindow.Dequeue();
             Power3s = _powerWindow.Average(x => x.P);
-            // The display uses the 3 s average too (owner, 24 Nov 2026): with 1 s every small surge showed (on the flat
-            // at 33 km/h the trainer's simulated inertia swings the power by ±50 W at the same cadence).
-            PowerShown = Power3s;
+            // Free ride: the display uses the 3 s average (owner, 24 Nov 2026): with 1 s every small surge showed (on the
+            // flat at 33 km/h the trainer's simulated inertia swings the power by ±50 W at the same cadence). Workouts and
+            // group rides keep 1 s, to hold a target or react to the group.
+            PowerShown = _steadyPowerDisplay ? Power3s : _powerWindow.Where(x => now - x.T <= 1f).Select(x => x.P).DefaultIfEmpty(power).Average();
         }
 
         private void ShowCue(string text)
