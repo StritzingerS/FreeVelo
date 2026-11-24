@@ -27,6 +27,9 @@ namespace FreeVelo.World
 
         private const int MaxBuildsAtOnce = 2;
 
+        private float _lastStreamTime;
+        private bool _streamWorkLeft = true;
+
         private sealed class MountainTile
         {
             public int Tx;
@@ -36,6 +39,12 @@ namespace FreeVelo.World
             public GameObject Near;
             public Task<NearTileData> Building;
             public readonly List<SceneryChunkData> Scenery = new List<SceneryChunkData>();
+
+            // The far tile's finest level (32 m, textured) is only made near the camera (FineTileRadius); until then the
+            // 64 m level stands in for it.
+            public bool HasFine;
+            public Task<MeshArrays> FineBuilding;
+            public Renderer R1, R2;
         }
 
         /// <summary>Heights and items of one detailed tile, computed off the main thread.</summary>
@@ -78,6 +87,7 @@ namespace FreeVelo.World
 
             // Far tiles over the whole mountain area (not over the home grid): computed in the background while the
             // world loads (ComputeFarTiles); only the meshes are made here.
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             var farTiles = far ?? ComputeFarTiles(_terrain);
             var farRoot = new GameObject("Mountain");
             farRoot.transform.SetParent(_root.transform, false);
@@ -89,20 +99,47 @@ namespace FreeVelo.World
                 // Textured, one piece per cover, only up to about 2 km (relative height 0.25 of a 512 m tile); beyond,
                 // one piece with the covers' average colours: one draw call instead of eight (the phone drew up to
                 // 4,800 for these tiles alone: at 0.06 the textured level reached about 7 km).
-                var r0 = AddRenderer(go.transform, "LOD0", data.Lod0.ToMesh("MountainFar"), _coverMaterials, false);
                 var r1 = AddRenderer(go.transform, "LOD1", data.Lod1.ToMesh("MountainFar"), new[] { FarCoverMaterial() }, false);
                 var r2 = AddRenderer(go.transform, "LOD2", data.Lod2.ToMesh("MountainFar"), new[] { FarCoverMaterial() }, false);
                 tile.Far = go.AddComponent<LODGroup>();
-                tile.Far.SetLODs(new[] { new LOD(0.25f, new Renderer[] { r0 }), new LOD(0.07f, new Renderer[] { r1 }), new LOD(0.0004f, new Renderer[] { r2 }) });
+                tile.R1 = r1;
+                tile.R2 = r2;
+                if (data.Lod0 != null) AddFineLevel(tile, data.Lod0);
+                else tile.Far.SetLODs(new[] { new LOD(0.07f, new Renderer[] { r1 }), new LOD(0.0004f, new Renderer[] { r2 }) });
                 tile.Far.RecalculateBounds();
                 _tiles[(data.Tx, data.Tz)] = tile;
             }
 
+            long tilesMs = clock.ElapsedMilliseconds;
+            clock.Restart();
             BuildSummitSigns();
             BuildVillageSigns();
+            long signsMs = clock.ElapsedMilliseconds;
+            clock.Restart();
             BuildLanes();
+            long lanesMs = clock.ElapsedMilliseconds;
+            clock.Restart();
             BuildSurfaces();
+            MountainTimes = $"tiles {tilesMs}, signs {signsMs}, lanes {lanesMs}, surfaces {clock.ElapsedMilliseconds}";
         }
+
+        /// <summary>Where BuildMountain's time went (for the start-up line in the log).</summary>
+        public string MountainTimes { get; private set; } = "";
+
+        /// <summary>The far tile's textured 32 m level (one piece per cover), shown up to about 2 km.</summary>
+        private void AddFineLevel(MountainTile tile, MeshArrays lod0)
+        {
+            var r0 = AddRenderer(tile.Far.transform, "LOD0", lod0.ToMesh("MountainFar"), _coverMaterials, false);
+            tile.Far.SetLODs(new[] { new LOD(0.25f, new Renderer[] { r0 }), new LOD(0.07f, new Renderer[] { tile.R1 }), new LOD(0.0004f, new Renderer[] { tile.R2 }) });
+            tile.HasFine = true;
+        }
+
+        /// <summary>
+        /// Far tiles get their textured 32 m level only within this distance (it shows up to about 2 km). Computing it for
+        /// every tile at start was most of the far tiles' work (about 2 s of the start on a phone); the rest follow in the
+        /// background as the rider comes near.
+        /// </summary>
+        public const float FineTileRadius = 2600f;
 
         /// <summary>Number of ground covers (submeshes of the mountain pieces).</summary>
         private static readonly int CoverKinds = System.Enum.GetValues(typeof(GroundKind)).Length;
@@ -123,22 +160,24 @@ namespace FreeVelo.World
             if (landscape == null || landscape.Lanes.Count == 0) return;
             var paved = new Strips();
             var gravel = new Strips();
-            foreach (var (ax, az, bx, bz, isGravel) in landscape.Lanes)
+            var lanes = landscape.Lanes;
+            var terrain = _terrain;
+            // The heights every 2 m along each lane, on all cores (a road search per point).
+            var heights = new float[lanes.Count][];
+            System.Threading.Tasks.Parallel.For(0, lanes.Count, n =>
             {
+                var (ax, az, bx, bz, _) = lanes[n];
                 float length = Mathf.Sqrt((float)(((bx - ax) * (bx - ax)) + ((bz - az) * (bz - az))));
-                if (length < 1) continue;
-                var along = new Vector3((float)(bx - ax), 0, (float)(bz - az)) / length;
-                var right = new Vector3(along.z, 0, -along.x);
-                float half = isGravel ? 1.5f : 1.7f;
-                var strip = isGravel ? gravel : paved;
-                strip.Begin();
+                if (length < 1) return;
+                double fx = (bx - ax) / length, fz = (bz - az) / length;
                 int steps = Mathf.CeilToInt(length / 2f);
+                var h = new float[steps + 1];
                 for (int k = 0; k <= steps; k++)
                 {
                     float t = length * k / steps;
-                    double x = ax + (along.x * t), z = az + (along.z * t);
-                    float y = (float)_terrain.SurfaceHeight(x, z) + 0.08f;
-                    double d = _terrain.DistanceToRoad(x, z, 12, out var road, out double roadHeight, out _);
+                    double x = ax + (fx * t), z = az + (fz * t);
+                    float y = (float)terrain.SurfaceHeight(x, z) + 0.08f;
+                    double d = terrain.DistanceToRoad(x, z, 12, out var road, out double roadHeight, out _);
                     if (road != null)
                     {
                         // Up onto the road where the lane joins it, then down to the meadow over a couple of metres.
@@ -147,7 +186,28 @@ namespace FreeVelo.World
                         y = Mathf.Max(y, Mathf.Lerp(y, (float)roadHeight + 0.03f, blend));
                     }
 
-                    var c = new Vector3((float)x, y, (float)z);
+                    h[k] = y;
+                }
+
+                heights[n] = h;
+            });
+
+            for (int n = 0; n < lanes.Count; n++)
+            {
+                var (ax, az, bx, bz, isGravel) = lanes[n];
+                if (heights[n] == null) continue;
+                float length = Mathf.Sqrt((float)(((bx - ax) * (bx - ax)) + ((bz - az) * (bz - az))));
+                var along = new Vector3((float)(bx - ax), 0, (float)(bz - az)) / length;
+                var right = new Vector3(along.z, 0, -along.x);
+                float half = isGravel ? 1.5f : 1.7f;
+                var strip = isGravel ? gravel : paved;
+                strip.Begin();
+                int steps = heights[n].Length - 1;
+                for (int k = 0; k <= steps; k++)
+                {
+                    float t = length * k / steps;
+                    double x = ax + (along.x * t), z = az + (along.z * t);
+                    var c = new Vector3((float)x, heights[n][k], (float)z);
                     strip.Add(c - (right * half), c + (right * half), t / (half * 2));
                 }
             }
@@ -166,8 +226,42 @@ namespace FreeVelo.World
             var landscape = _terrain.Landscape;
             if (landscape == null || landscape.Surfaces.Count == 0) return;
             var byMaterial = new Dictionary<WorldMaterial, (List<Vector3> V, List<Vector2> UV, List<int> T)>();
-            foreach (var s in landscape.Surfaces)
+
+            // The heights of every 1 m grid point (ground as drawn, raised onto a road next to it): on all cores, they
+            // were 0.6 s of the start on a PC (a road search per point), several times that on a phone.
+            var surfaces = landscape.Surfaces;
+            var heights = new float[surfaces.Count][];
+            var terrain = _terrain;
+            System.Threading.Tasks.Parallel.For(0, surfaces.Count, k =>
             {
+                var s = surfaces[k];
+                int nu = Mathf.Max(1, Mathf.CeilToInt((float)(s.HalfLength * 2))), nv = Mathf.Max(1, Mathf.CeilToInt((float)(s.HalfWidth * 2)));
+                var h = new float[(nu + 1) * (nv + 1)];
+                for (int j = 0; j <= nv; j++)
+                {
+                    for (int i = 0; i <= nu; i++)
+                    {
+                        double u = -s.HalfLength + (s.HalfLength * 2 * i / nu), v = -s.HalfWidth + (s.HalfWidth * 2 * j / nv);
+                        var (x, z) = s.Point(u, v);
+                        float y = (float)terrain.SurfaceHeight(x, z) + 0.04f;
+                        double d = terrain.DistanceToRoad(x, z, 8, out var road, out double roadHeight, out _);
+                        if (road != null)
+                        {
+                            float over = (float)(d - (road.Width / 2));
+                            float blend = Mathf.Clamp01(1 - (over / 2.5f));
+                            y = Mathf.Max(y, Mathf.Lerp(y, (float)roadHeight + 0.02f, blend));
+                        }
+
+                        h[(j * (nu + 1)) + i] = y;
+                    }
+                }
+
+                heights[k] = h;
+            });
+
+            for (int k = 0; k < surfaces.Count; k++)
+            {
+                var s = surfaces[k];
                 if (!byMaterial.TryGetValue(s.Crop, out var m)) byMaterial[s.Crop] = m = (new List<Vector3>(), new List<Vector2>(), new List<int>());
                 float tile = SurfaceTextures.TileM(s.Crop);
                 int nu = Mathf.Max(1, Mathf.CeilToInt((float)(s.HalfLength * 2))), nv = Mathf.Max(1, Mathf.CeilToInt((float)(s.HalfWidth * 2)));
@@ -178,16 +272,7 @@ namespace FreeVelo.World
                     {
                         double u = -s.HalfLength + (s.HalfLength * 2 * i / nu), v = -s.HalfWidth + (s.HalfWidth * 2 * j / nv);
                         var (x, z) = s.Point(u, v);
-                        float y = (float)_terrain.SurfaceHeight(x, z) + 0.04f;
-                        double d = _terrain.DistanceToRoad(x, z, 8, out var road, out double roadHeight, out _);
-                        if (road != null)
-                        {
-                            float over = (float)(d - (road.Width / 2));
-                            float blend = Mathf.Clamp01(1 - (over / 2.5f));
-                            y = Mathf.Max(y, Mathf.Lerp(y, (float)roadHeight + 0.02f, blend));
-                        }
-
-                        m.V.Add(new Vector3((float)x, y, (float)z));
+                        m.V.Add(new Vector3((float)x, heights[k][(j * (nu + 1)) + i], (float)z));
                         m.UV.Add(SurfaceUV(s.Crop, (float)x, (float)z, tile));
                     }
                 }
@@ -427,7 +512,10 @@ namespace FreeVelo.World
         /// All far tiles of the mountain (pure maths, in parallel): run in the background while the world loads, so
         /// the main thread only creates the meshes.
         /// </summary>
-        public static List<FarTileData> ComputeFarTiles(FreeVelo.Core.World.Gen.Terrain terrain)
+        public static List<FarTileData> ComputeFarTiles(FreeVelo.Core.World.Gen.Terrain terrain) => ComputeFarTiles(terrain, null);
+
+        /// <param name="fineAround">With a start point: the textured 32 m level only for tiles within <see cref="FineTileRadius"/> of it.</param>
+        public static List<FarTileData> ComputeFarTiles(FreeVelo.Core.World.Gen.Terrain terrain, Vector2? fineAround)
         {
             var result = new List<FarTileData>();
             var m = terrain.Mountain;
@@ -453,15 +541,14 @@ namespace FreeVelo.World
                 // The mountain's height and slope sampled once on the finest grid; the coarser levels take every 2nd and
                 // 4th point of it (they were sampled anew for every level: the far tiles took 4.8 s at start on a phone).
                 var samples = new TileSamples(terrain.Mountain, t.Area, 32f);
-                var lod0 = FarTileParts(terrain, homeGrid, seed, t.Area, 32f, samples);
-                if (lod0 == null) return;
-                t.Lod0 = lod0.Covered();
+                bool fine = !fineAround.HasValue || Distance(t.Area, fineAround.Value) < FineTileRadius;
+                if (fine) t.Lod0 = FarTileParts(terrain, homeGrid, seed, t.Area, 32f, samples)?.Covered();
                 t.Lod1 = FarTileParts(terrain, homeGrid, seed, t.Area, 64f, samples)?.Palette();
                 t.Lod2 = FarTileParts(terrain, homeGrid, seed, t.Area, 128f, samples)?.Palette();
             });
             foreach (var t in tiles)
             {
-                if (t.Lod0 != null && t.Lod1 != null && t.Lod2 != null) result.Add(t);
+                if (t.Lod1 != null && t.Lod2 != null) result.Add(t);
             }
 
             return result;
@@ -617,10 +704,26 @@ namespace FreeVelo.World
                 break;
             }
 
-            if ((eye - _lastStreamCheck).sqrMagnitude < 400f) return;
+            // Finished fine far levels → meshes (one per frame)
+            foreach (var tile in _tiles.Values)
+            {
+                if (tile.FineBuilding == null || !tile.FineBuilding.IsCompleted) continue;
+                var task = tile.FineBuilding;
+                tile.FineBuilding = null;
+                if (task.IsFaulted) Debug.LogException(task.Exception);
+                else if (task.Result != null && tile.Far != null) AddFineLevel(tile, task.Result);
+                else tile.HasFine = true; // nothing to show at that level
+                break;
+            }
+
+            // Every 20 m of camera travel, and every half second while work is queued (after a jump many tiles want it).
+            bool moved = (eye - _lastStreamCheck).sqrMagnitude >= 400f;
+            if (!moved && (Time.realtimeSinceStartup - _lastStreamTime < 0.5f || !_streamWorkLeft)) return;
             _lastStreamCheck = eye;
+            _lastStreamTime = Time.realtimeSinceStartup;
             var p = new Vector2(eye.x, eye.z);
-            int running = _tiles.Values.Count(t => t.Building != null);
+            int running = _tiles.Values.Count(t => t.Building != null || t.FineBuilding != null);
+            _streamWorkLeft = _tiles.Values.Any(t => (!t.HasFine && t.Far != null && Distance(t.Area, p) < FineTileRadius) || (t.Near == null && Distance(t.Area, p) < DetailTileRadius));
             foreach (var tile in _tiles.Values.OrderBy(t => Distance(t.Area, p)))
             {
                 float d = Distance(tile.Area, p);
@@ -635,6 +738,16 @@ namespace FreeVelo.World
                 else if (d > DropTileRadius && tile.Near != null)
                 {
                     DropNearTile(tile);
+                }
+
+                if (d < FineTileRadius && !tile.HasFine && tile.FineBuilding == null && tile.Far != null && running < MaxBuildsAtOnce)
+                {
+                    var t = tile;
+                    var terrain = _terrain;
+                    var homeGrid = _homeGrid;
+                    int seed = Map.Seed + 7;
+                    t.FineBuilding = Task.Run(() => FarTileParts(terrain, homeGrid, seed, t.Area, 32f, new TileSamples(terrain.Mountain, t.Area, 32f))?.Covered());
+                    running++;
                 }
             }
         }

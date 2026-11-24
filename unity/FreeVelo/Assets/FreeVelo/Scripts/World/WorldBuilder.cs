@@ -46,7 +46,7 @@ namespace FreeVelo.World
         public static WorldBuilder Current { get; private set; }
 
         /// <summary>Detailed ground tiles are still being computed around the camera.</summary>
-        public bool IsStreaming => _tiles.Values.Any(t => t.Building != null) || (_grass != null && _grass.Busy);
+        public bool IsStreaming => _tiles.Values.Any(t => t.Building != null || t.FineBuilding != null) || (_grass != null && _grass.Busy);
 
         private GrassField _grass;
 
@@ -80,12 +80,15 @@ namespace FreeVelo.World
             BuildTerrain();
             Step("terrain");
             BuildRoads();
+            Step("roads");
             BuildGuardRails();
             BuildKerbs(layout.Kerbs);
+            Step("rails+kerbs");
             BuildBridges();
             BuildWater();
-            Step("roads+water");
+            Step("bridges+water");
             BuildFields(layout);
+            Step("fields");
             BuildScenery(layout);
             _grass = GetComponent<GrassField>();
             if (_grass == null) _grass = gameObject.AddComponent<GrassField>();
@@ -98,8 +101,10 @@ namespace FreeVelo.World
             birds.Init(this);
             Step("scenery");
             BuildMountains();
+            Step("backdrop");
             BuildMountain(far);
             Step("mountain");
+            times.Append($" [{MountainTimes}]");
             times.Append($" (surface textures {SurfaceTextures.GenerateMs})");
             BuildTimes = times.ToString();
             Debug.Log(BuildTimes);

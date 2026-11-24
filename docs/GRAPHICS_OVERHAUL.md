@@ -558,6 +558,15 @@ Still only measurable on the phone: frame rate, heat and battery.
     PC, several times that on a phone. A spatial lookup for the building pads is in; the rest belongs to the
     `PlotPlanner` redesign (section 4). Options: faster placement (spatial index for footprints and lanes), or
     baking the layout like the terrain (keyed by the map fingerprint; date-dependent items stay at runtime).
+- **Start-up, 25 Nov 2026** (phone log of 24 Nov: background 4.1 s = world 0.2, layout 1.8, far tiles 2.1; scene
+  build 3.5 s, of it mountain 1.8). Baking the layout like the terrain was looked at and left: the layout changes
+  the terrain (pads) and is queried all ride long, and caching the far tiles would be over 100 MB. Instead:
+  - guard rails and kerbs: the cheap test first, roads on all cores (layout on a PC: rails 140 → 35 ms);
+  - far tiles: the textured 32 m level (about 70 % of their work) only within 2.6 km of the start; the others get
+    it in the background when the rider comes within 2.6 km (`WorldBuilder.FineTileRadius`, two at a time);
+  - yards/paths and lanes: their heights (a road search per point) on all cores (PC: surfaces 605 → 113 ms);
+  - the build line in the log now names each step (roads, rails+kerbs, bridges+water, fields, scenery, mountain
+    [tiles, signs, lanes, surfaces]). PC main thread: about 2.9 → 2.3 s. Not yet measured on the phone.
 - **Recording in the background works:** during the test the rider watched a video in another app for about
   8 minutes and had the phone locked for 2 minutes. The FIT file lost only about 15 s in total (10 gaps of 2–4 s at
   the moments of switching; the log shows "Background: N trainer commands scheduled" there). Left as it is.

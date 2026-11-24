@@ -59,10 +59,14 @@ namespace FreeVelo.Core.World.Gen
         public static List<GuardRail> GuardRails(Terrain terrain)
         {
             var map = terrain.Map;
-            var rails = new List<GuardRail>();
-            foreach (var e in map.Edges)
+            // Each road on its own core (reads only); the results joined in road order, so the list is always the same.
+            var perEdge = new List<GuardRail>[map.Edges.Count];
+            System.Threading.Tasks.Parallel.For(0, map.Edges.Count, id =>
             {
-                if (e.Surface != Physics.RoadSurface.Asphalt) continue;
+                var e = map.Edges[id];
+                var found = new List<GuardRail>();
+                perEdge[id] = found;
+                if (e.Surface != Physics.RoadSurface.Asphalt) return;
                 for (int side = -1; side <= 1; side += 2)
                 {
                     double runStart = double.NaN, lastHit = double.NaN;
@@ -76,15 +80,17 @@ namespace FreeVelo.Core.World.Gen
                         }
                         else if (!double.IsNaN(runStart) && d - lastHit > Step * 1.5)
                         {
-                            Add(terrain, rails, e, side, runStart, lastHit);
+                            Add(terrain, found, e, side, runStart, lastHit);
                             runStart = double.NaN;
                         }
                     }
 
-                    if (!double.IsNaN(runStart)) Add(terrain, rails, e, side, runStart, lastHit);
+                    if (!double.IsNaN(runStart)) Add(terrain, found, e, side, runStart, lastHit);
                 }
-            }
+            });
 
+            var rails = new List<GuardRail>();
+            foreach (var found in perEdge) rails.AddRange(found);
             AddBridgeApproaches(terrain, rails);
             return rails;
         }
@@ -96,13 +102,16 @@ namespace FreeVelo.Core.World.Gen
         /// </summary>
         public static List<GuardRail> Kerbs(Terrain terrain)
         {
-            var kerbs = new List<GuardRail>();
             var landscape = terrain.Landscape;
-            if (landscape == null) return kerbs;
+            if (landscape == null) return new List<GuardRail>();
             var map = terrain.Map;
-            foreach (var e in map.Edges)
+            var perEdge = new List<GuardRail>[map.Edges.Count];
+            System.Threading.Tasks.Parallel.For(0, map.Edges.Count, id =>
             {
-                if (e.Surface != Physics.RoadSurface.Asphalt) continue;
+                var e = map.Edges[id];
+                var kerbs = new List<GuardRail>();
+                perEdge[id] = kerbs;
+                if (e.Surface != Physics.RoadSurface.Asphalt) return;
                 for (int side = -1; side <= 1; side += 2)
                 {
                     double start = double.NaN, last = double.NaN;
@@ -123,9 +132,11 @@ namespace FreeVelo.Core.World.Gen
 
                     if (!double.IsNaN(start) && last - start >= 6) kerbs.Add(new GuardRail(e.Id, side, start, last));
                 }
-            }
+            });
 
-            return kerbs;
+            var all = new List<GuardRail>();
+            foreach (var found in perEdge) all.AddRange(found);
+            return all;
         }
 
         /// <summary>
@@ -274,17 +285,25 @@ namespace FreeVelo.Core.World.Gen
 
         private static bool NeedsRail(Terrain terrain, RoadEdge e, int side, double d)
         {
-            if (!Allowed(terrain, e, side, d)) return false;
+            // The cheap test first (does the land fall away at all?); where is a rail allowed is expensive.
             var (x, z, h, rx, rz) = At(e, d);
             double half = e.Width / 2;
             double far = terrain.Height(x + (rx * side * (half + DropReach)), z + (rz * side * (half + DropReach)));
             double drop = h - far;
-            if (drop >= SteepDrop) return true;
+            bool needed;
+            if (drop >= SteepDrop)
+            {
+                needed = true;
+            }
+            else
+            {
+                // Tight bend: the outside is the side away from the turn.
+                double k = Curvature(e, d);
+                bool outside = (k > 0 && side < 0) || (k < 0 && side > 0); // k > 0: turning right
+                needed = outside && Math.Abs(k) > 1 / BendRadius && drop >= BendDrop;
+            }
 
-            // Tight bend: the outside is the side away from the turn.
-            double k = Curvature(e, d);
-            bool outside = (k > 0 && side < 0) || (k < 0 && side > 0); // k > 0: turning right
-            return outside && Math.Abs(k) > 1 / BendRadius && drop >= BendDrop;
+            return needed && Allowed(terrain, e, side, d);
         }
 
         /// <summary>A rail may stand here: away from junctions and bridges, not in a village, a lane, the water or on another road.</summary>

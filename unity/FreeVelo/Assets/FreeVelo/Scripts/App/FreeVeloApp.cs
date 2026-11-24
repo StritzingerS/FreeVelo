@@ -111,7 +111,9 @@ namespace FreeVelo.App
                 var layout = SceneryLayout.Generate(terrain);
                 long layoutMs = clock.ElapsedMilliseconds;
                 clock.Restart();
-                var farTiles = WorldBuilder.ComputeFarTiles(terrain);
+                // the textured far level only round the start; the rest follows while riding
+                var start = path.Route.Sample(path.Route.Points[0].DistanceM);
+                var farTiles = WorldBuilder.ComputeFarTiles(terrain, new Vector2((float)start.X, (float)start.Z));
                 long farMs = clock.ElapsedMilliseconds;
                 BackgroundTimes = $"world {(loaded ? "loaded" : "generated")} {terrainMs}, scenery layout {layoutMs} [{terrain.Landscape?.Timings}], far tiles {farMs}";
                 return (terrain, layout, farTiles);
