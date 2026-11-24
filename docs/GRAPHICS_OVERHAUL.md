@@ -269,8 +269,9 @@ village.
 - Render shots can record sequences (`"frames": 72, "fps": 24`, fixed game time step) for videos.
 - Grass tufts (`GrassField`, asked for by the owner with a screenshot of tall verge grass): three generated tuft
   meshes (14/18/24 tapering, curved blades, 0.3/0.48/0.75 m) and three colourings (gradient texture, base like
-  the dark ground grass, lighter or straw tips), instanced round the camera to 45 m (low quality 25 m), no shadows,
-  thinning and shrinking towards the edge. Per 1.2 m cell (deterministic): dense clumps on the verge (up to 4.5 m
+  the dark ground grass, lighter or straw tips), instanced round the camera to 90 m (low quality 45 m; owner asked
+  for more distance), beyond 30 m (low 18 m) a simple version with a third of the blades, twice as wide; no
+  shadows, thinning and shrinking towards the edge. Start village: about 2,800 tufts, 156k triangles. Per 1.2 m cell (deterministic): dense clumps on the verge (up to 4.5 m
   from the road edge, four tufts a cell), patchy meadow tufts elsewhere, short ones above the treeline. Never on
   road plus shoulder (0.9 m + 0.3), junction corners, water, `Landscape.BuiltOn` (new, 2 m cells: buildings, yards,
   lanes, gardens, fields; unlike `Blocked` not whole villages or pastures), steep slopes (> 0.75), rock or snow.

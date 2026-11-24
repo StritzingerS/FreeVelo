@@ -34,12 +34,12 @@ namespace FreeVelo.World
         private readonly HashSet<long> _queued = new HashSet<long>();
         private Mesh[] _meshes;
         private Material[] _materials;
-        private readonly List<Matrix4x4>[] _lists = new List<Matrix4x4>[9];
+        private readonly List<Matrix4x4>[] _lists = new List<Matrix4x4>[18]; // detail (0 near, 1 far) × kind × colour
         private readonly Matrix4x4[] _batch = new Matrix4x4[1023];
         private readonly Plane[] _planes = new Plane[6];
 
         /// <summary>Tufts drawn in the last frame and held in the computed pieces (for the render-shot breakdown).</summary>
-        public static int Drawn, Computed;
+        public static int Drawn, DrawnTriangles, Computed;
         /// <summary>Debug: cells turned down, by rule (outside, road, chance, built, water, slope, ground).</summary>
         public static readonly int[] Reject = new int[7];
 
@@ -54,8 +54,13 @@ namespace FreeVelo.World
             _queued.Clear();
         }
 
+        private static bool LowQuality => FreeVelo.App.AppSettings.Quality == FreeVelo.App.GraphicsQuality.Low;
+
         /// <summary>How far the tufts reach: less on low graphics quality.</summary>
-        private static float Radius => FreeVelo.App.AppSettings.Quality == FreeVelo.App.GraphicsQuality.Low ? 25f : 45f;
+        private static float Radius => LowQuality ? 45f : 90f;
+
+        /// <summary>Beyond this the tufts use the simple version (a third of the blades, a little wider).</summary>
+        private static float DetailRadius => LowQuality ? 18f : 30f;
 
         private void LateUpdate()
         {
@@ -117,6 +122,7 @@ namespace FreeVelo.World
             foreach (var list in _lists) list.Clear();
             GeometryUtility.CalculateFrustumPlanes(cam, _planes);
             float fadeStart = radius * 0.7f;
+            float detail = DetailRadius;
             foreach (var pair in _pieces)
             {
                 var tufts = pair.Value;
@@ -134,11 +140,12 @@ namespace FreeVelo.World
                     if (d > limit) continue;
                     float fade = 1f - Mathf.SmoothStep(0f, 1f, (d - (limit - 6f)) / 6f);
                     float s = t.Scale * Mathf.Max(0.05f, fade);
-                    _lists[(t.Kind * 3) + t.Colour].Add(Matrix4x4.TRS(t.Position, Quaternion.Euler(0f, t.Yaw, 0f), new Vector3(s, s, s)));
+                    _lists[(d > detail ? 9 : 0) + (t.Kind * 3) + t.Colour].Add(Matrix4x4.TRS(t.Position, Quaternion.Euler(0f, t.Yaw, 0f), new Vector3(s, s, s)));
                 }
             }
 
             Drawn = 0;
+            DrawnTriangles = 0;
             Computed = 0;
             foreach (var p in _pieces.Values) Computed += p.Length;
             for (int i = 0; i < _lists.Length; i++)
@@ -150,6 +157,7 @@ namespace FreeVelo.World
                     int count = Mathf.Min(_batch.Length, list.Count - start);
                     list.CopyTo(start, _batch, 0, count);
                     Graphics.DrawMeshInstanced(_meshes[i / 3], 0, _materials[i % 3], _batch, count, null, ShadowCastingMode.Off, true);
+                    DrawnTriangles += count * (int)(_meshes[i / 3].GetIndexCount(0) / 3);
                 }
             }
         }
@@ -267,6 +275,10 @@ namespace FreeVelo.World
                 TuftMesh("GrassTuftShort", blades: 14, height: 0.3f, seed: 1),
                 TuftMesh("GrassTuftMeadow", blades: 18, height: 0.48f, seed: 2),
                 TuftMesh("GrassTuftVerge", blades: 24, height: 0.75f, seed: 3),
+                // Far: a third of the blades, wider, so the tuft keeps its bulk at a distance.
+                TuftMesh("GrassTuftShortFar", blades: 5, height: 0.3f, seed: 1, widthScale: 2f),
+                TuftMesh("GrassTuftMeadowFar", blades: 6, height: 0.48f, seed: 2, widthScale: 2f),
+                TuftMesh("GrassTuftVergeFar", blades: 8, height: 0.75f, seed: 3, widthScale: 2f),
             };
 
             var template = Resources.Load<Material>("FreeVeloLitGrass");
@@ -303,7 +315,7 @@ namespace FreeVelo.World
         /// A tuft: blades from a small root circle, leaning outwards and curving over, tapering to a point. Normals
         /// lean up (soft, meadow-like light from both sides).
         /// </summary>
-        private static Mesh TuftMesh(string name, int blades, float height, int seed)
+        private static Mesh TuftMesh(string name, int blades, float height, int seed, float widthScale = 1f)
         {
             var random = new System.Random(seed);
             var vertices = new List<Vector3>();
@@ -319,7 +331,7 @@ namespace FreeVelo.World
                 var root = outward * (0.02f + (0.09f * (float)random.NextDouble()));
                 float h = height * (0.55f + (0.55f * (float)random.NextDouble()));
                 float lean = 0.1f + (0.4f * (float)random.NextDouble()); // outward reach at the tip, relative to height
-                float width = 0.018f + (0.016f * (float)random.NextDouble());
+                float width = (0.018f + (0.016f * (float)random.NextDouble())) * widthScale;
                 // the blade's face turns a little, so the tuft is not a perfect star
                 side = Quaternion.AngleAxis(((float)random.NextDouble() - 0.5f) * 50f, Vector3.up) * side;
                 var normal = (Vector3.up * 0.75f + outward * 0.45f).normalized;

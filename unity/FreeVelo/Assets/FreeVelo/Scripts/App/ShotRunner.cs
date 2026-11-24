@@ -263,7 +263,7 @@ namespace FreeVelo.App
             }
 
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"renderers {totalR}, submeshes {totalS}, triangles {totalT / 1000}k; instanced scenery {WorldBuilder.InstancesDrawn} in {WorldBuilder.InstanceDrawCalls} calls, {WorldBuilder.InstanceTriangles / 1000}k tris; grass tufts {GrassField.Drawn} drawn of {GrassField.Computed} (cells turned down: {string.Join("/", GrassField.Reject)}); far clip {cam.farClipPlane:0} m");
+            sb.AppendLine($"renderers {totalR}, submeshes {totalS}, triangles {totalT / 1000}k; instanced scenery {WorldBuilder.InstancesDrawn} in {WorldBuilder.InstanceDrawCalls} calls, {WorldBuilder.InstanceTriangles / 1000}k tris; grass tufts {GrassField.Drawn} drawn ({GrassField.DrawnTriangles / 1000}k tris) of {GrassField.Computed} (cells turned down: {string.Join("/", GrassField.Reject)}); far clip {cam.farClipPlane:0} m");
             foreach (var p in rows.OrderByDescending(p => p.Value.S)) sb.AppendLine($"{p.Value.S,6} submeshes {p.Value.R,5} renderers {p.Value.T / 1000,6}k tris  {p.Key}");
             return sb.ToString();
         }
