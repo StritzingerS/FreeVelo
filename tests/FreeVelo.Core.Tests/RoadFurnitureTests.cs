@@ -40,6 +40,19 @@ public class RoadFurnitureTests
         var kerbs = RoadFurniture.Kerbs(terrain);
         Console.WriteLine($"{kerbs.Count} kerbs, {kerbs.Sum(k => k.Length) / 1000:0.0} km");
         Assert.NotEmpty(kerbs);
+        var corners = RoadFurniture.KerbedCorners(terrain);
+        Console.WriteLine($"{corners.Count} of {terrain.Corners.Count} junction corners with a kerb");
+        Assert.NotEmpty(corners);
+        // The arc lies outside both roads (the kerb must not stand on the asphalt).
+        foreach (int k in corners)
+        {
+            var c = terrain.Corners[k];
+            for (int j = c.ArcStart + 1; j < c.ArcStart + c.ArcCount - 1; j++)
+            {
+                double dist = terrain.DistanceToRoad(c.X[j], c.Z[j], 12, out var road, out _, out _);
+                Assert.True(road == null || dist >= (road.Width / 2) - 0.05, $"corner {k} arc point {j} lies {dist:0.00} m from a road centre");
+            }
+        }
         // No kerb across a lane, yard or path that meets the road.
         foreach (var k in kerbs)
         {

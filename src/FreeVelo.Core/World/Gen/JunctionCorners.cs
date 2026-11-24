@@ -29,6 +29,10 @@ namespace FreeVelo.Core.World.Gen
 
         public double MinX, MinZ, MaxX, MaxZ;
 
+        /// <summary>The rounded edge: outline points ArcStart … ArcStart + ArcCount − 1, a circular arc round (ArcCX, ArcCZ), which lies in the grass.</summary>
+        public int ArcStart, ArcCount;
+        public double ArcCX, ArcCZ;
+
         /// <summary>0 inside; otherwise the distance to the outline.</summary>
         public double Distance(double x, double z)
         {
@@ -108,6 +112,7 @@ namespace FreeVelo.Core.World.Gen
                     while (sweep < -Math.PI) sweep += 2 * Math.PI;
                     double ra = Math.Sqrt(Sq(pa.X - ox) + Sq(pa.Z - oz)), rb = Math.Sqrt(Sq(pb.X - ox) + Sq(pb.Z - oz));
                     const int segments = 16;
+                    int arcStart = rx.Count;
                     for (int j = 0; j <= segments; j++)
                     {
                         double t = j / (double)segments, ang = a0 + (sweep * t), r = ra + ((rb - ra) * t);
@@ -122,6 +127,7 @@ namespace FreeVelo.Core.World.Gen
                         ReachA = sa + reach, ReachB = sb + reach,
                         Asphalt = a.Edge.Surface == RoadSurface.Asphalt || b.Edge.Surface == RoadSurface.Asphalt,
                         CX = x.X, CY = x.Y, CZ = x.Z, X = rx.ToArray(), Y = ry.ToArray(), Z = rz.ToArray(),
+                        ArcStart = arcStart, ArcCount = segments + 1, ArcCX = ox, ArcCZ = oz,
                         MinX = rx.Min(), MaxX = rx.Max(), MinZ = rz.Min(), MaxZ = rz.Max(),
                     });
                 }

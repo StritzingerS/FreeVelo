@@ -128,6 +128,41 @@ namespace FreeVelo.Core.World.Gen
             return kerbs;
         }
 
+        /// <summary>
+        /// The junction corners (indices into <see cref="Terrain.Corners"/>) whose rounded edge gets a kerb: paved corners
+        /// in a village where no lane, yard or path meets the curve.
+        /// </summary>
+        public static List<int> KerbedCorners(Terrain terrain)
+        {
+            var result = new List<int>();
+            var landscape = terrain.Landscape;
+            if (landscape == null) return result;
+            for (int k = 0; k < terrain.Corners.Count; k++)
+            {
+                var c = terrain.Corners[k];
+                if (!c.Asphalt || c.ArcCount < 2) continue;
+                bool inVillage = false;
+                foreach (var v in landscape.Villages)
+                {
+                    if (((v.X - c.CX) * (v.X - c.CX)) + ((v.Z - c.CZ) * (v.Z - c.CZ)) < v.Radius * v.Radius) inVillage = true;
+                }
+
+                if (!inVillage) continue;
+                bool free = true;
+                for (int j = c.ArcStart; j < c.ArcStart + c.ArcCount && free; j++)
+                {
+                    // half a metre behind the kerb, towards the grass
+                    double dx = c.ArcCX - c.X[j], dz = c.ArcCZ - c.Z[j], l = Math.Sqrt((dx * dx) + (dz * dz));
+                    if (l < 1e-6) continue;
+                    if (landscape.BuiltOn(c.X[j] + (dx / l * 0.5), c.Z[j] + (dz / l * 0.5))) free = false;
+                }
+
+                if (free) result.Add(k);
+            }
+
+            return result;
+        }
+
         private static bool KerbAllowed(Terrain terrain, Landscape landscape, RoadEdge e, int side, double d)
         {
             if (d < 10 || d > e.Length - 10) return false;

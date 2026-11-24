@@ -160,6 +160,37 @@ namespace FreeVelo.World
                 mesh.Extrude(edges, outward, KerbProfile, capEnds: true);
             }
 
+            // Round the junction corners: along the arc, and 3 m on along each road's edge to meet the straight kerbs.
+            foreach (int index in RoadFurniture.KerbedCorners(_terrain))
+            {
+                var c = _terrain.Corners[index];
+                var ea = Map.Edges[c.EdgeA];
+                var eb = Map.Edges[c.EdgeB];
+                var points = new List<Vector3>();
+                var outward = new List<Vector3>();
+                void AddEdgePoint(RoadEdge e, bool start, int side, double s)
+                {
+                    var p = JunctionCorners.Side(e, start, s, side, 0);
+                    var centre = JunctionCorners.Side(e, start, s, side, e.Width / 2);
+                    var o = new Vector3((float)(p.X - centre.X), 0f, (float)(p.Z - centre.Z)).normalized;
+                    points.Add(KerbBase(p.X, p.Y, p.Z) - (o * 0.02f));
+                    outward.Add(o);
+                }
+
+                for (double t = 3; t > 0.25; t -= 0.5) AddEdgePoint(ea, c.StartA, c.SideA, c.ReachA + t);
+                for (int j = c.ArcStart; j < c.ArcStart + c.ArcCount; j++)
+                {
+                    var o = new Vector3((float)(c.ArcCX - c.X[j]), 0f, (float)(c.ArcCZ - c.Z[j])).normalized;
+                    points.Add(KerbBase(c.X[j], c.Y[j], c.Z[j]) - (o * 0.02f));
+                    outward.Add(o);
+                }
+
+                for (double t = 0.5; t <= 3.01; t += 0.5) AddEdgePoint(eb, c.StartB, c.SideB, c.ReachB + t);
+                var key = (Mathf.FloorToInt((float)c.CX / RailCell), Mathf.FloorToInt((float)c.CZ / RailCell));
+                if (!cells.TryGetValue(key, out var mesh)) cells[key] = mesh = new RailMesh();
+                mesh.Extrude(points.ToArray(), outward.ToArray(), KerbProfile, capEnds: true);
+            }
+
             var material = Mat(new Color(0.74f, 0.74f, 0.72f), null, 0.1f);
             foreach (var pair in cells)
             {
@@ -174,6 +205,10 @@ namespace FreeVelo.World
                 lod.RecalculateBounds();
             }
         }
+
+        /// <summary>The kerb's foot on a corner's edge: on the paving as the app lifts it (see <see cref="BuildJunctionCorners"/>).</summary>
+        private Vector3 KerbBase(double x, double y, double z) =>
+            new Vector3((float)x, Mathf.Max((float)y + 0.05f, (float)_terrain.Height(x, z) + 0.06f), (float)z);
 
         /// <summary>Vertices and triangles of the rails in one cell.</summary>
         private sealed class RailMesh
