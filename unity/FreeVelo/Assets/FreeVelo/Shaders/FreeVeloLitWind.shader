@@ -187,6 +187,7 @@ Shader "FreeVelo/LitWind"
 
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitForwardPass.hlsl"
+            #pragma shader_feature_local_vertex _FV_GRASS
             #include "FreeVeloWind.hlsl"
             Varyings WindLitPassVertex(Attributes input) { UNITY_SETUP_INSTANCE_ID(input); input.positionOS.xyz = FreeVeloWind(input.positionOS.xyz); return LitPassVertex(input); }
             ENDHLSL
@@ -239,6 +240,7 @@ Shader "FreeVelo/LitWind"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl"
+            #pragma shader_feature_local_vertex _FV_GRASS
             #include "FreeVeloWind.hlsl"
             Varyings WindShadowPassVertex(Attributes input) { UNITY_SETUP_INSTANCE_ID(input); input.positionOS.xyz = FreeVeloWind(input.positionOS.xyz); return ShadowPassVertex(input); }
             ENDHLSL
@@ -376,6 +378,7 @@ Shader "FreeVelo/LitWind"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/DepthOnlyPass.hlsl"
+            #pragma shader_feature_local_vertex _FV_GRASS
             #include "FreeVeloWind.hlsl"
             Varyings WindDepthOnlyVertex(Attributes input) { UNITY_SETUP_INSTANCE_ID(input); input.position.xyz = FreeVeloWind(input.position.xyz); return DepthOnlyVertex(input); }
             ENDHLSL
@@ -433,6 +436,7 @@ Shader "FreeVelo/LitWind"
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/LitDepthNormalsPass.hlsl"
+            #pragma shader_feature_local_vertex _FV_GRASS
             #include "FreeVeloWind.hlsl"
             Varyings WindDepthNormalsVertex(Attributes input) { UNITY_SETUP_INSTANCE_ID(input); input.positionOS.xyz = FreeVeloWind(input.positionOS.xyz); return DepthNormalsVertex(input); }
             ENDHLSL

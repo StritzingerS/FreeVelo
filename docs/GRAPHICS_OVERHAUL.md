@@ -267,7 +267,17 @@ village.
   35 m a repeat, bump 0.12; water UVs are world-scaled now) and puts a generated cloud cookie on the sun (900 m a
   repeat, up to 50 % darker, drifting at 6 m/s).
 - Render shots can record sequences (`"frames": 72, "fps": 24`, fixed game time step) for videos.
-- Not yet: grass, chimney smoke, birds; cost on the phone not measured (the wind adds vertex work for every
+- Grass tufts (`GrassField`, asked for by the owner with a screenshot of tall verge grass): three generated tuft
+  meshes (14/18/24 tapering, curved blades, 0.3/0.48/0.75 m) and three colourings (gradient texture, base like
+  the dark ground grass, lighter or straw tips), instanced round the camera to 45 m (low quality 25 m), no shadows,
+  thinning and shrinking towards the edge. Per 1.2 m cell (deterministic): dense clumps on the verge (up to 4.5 m
+  from the road edge, four tufts a cell), patchy meadow tufts elsewhere, short ones above the treeline. Never on
+  road plus shoulder (0.9 m + 0.3), junction corners, water, `Landscape.BuiltOn` (new, 2 m cells: buildings, yards,
+  lanes, gardens, fields; unlike `Blocked` not whole villages or pastures), steep slopes (> 0.75), rock or snow.
+  Each stands on `Terrain.SurfaceHeight` 5 cm sunk in. Wind: the same shader with `_FV_GRASS` (template
+  `Resources/FreeVeloLitGrass.mat`), bending from the root. In the start village view: about 1,200 tufts drawn,
+  roughly 100k triangles – to be measured on the phone.
+- Not yet: chimney smoke, birds; cost on the phone not measured (the wind adds vertex work for every
   foliage vertex, including shadows).
 
 ### Camera feel (2026-11-24, built, waiting for the owner's verdict from a real ride)

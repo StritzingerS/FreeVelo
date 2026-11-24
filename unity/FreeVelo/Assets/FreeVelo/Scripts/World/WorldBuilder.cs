@@ -46,7 +46,9 @@ namespace FreeVelo.World
         public static WorldBuilder Current { get; private set; }
 
         /// <summary>Detailed ground tiles are still being computed around the camera.</summary>
-        public bool IsStreaming => _tiles.Values.Any(t => t.Building != null);
+        public bool IsStreaming => _tiles.Values.Any(t => t.Building != null) || (_grass != null && _grass.Busy);
+
+        private GrassField _grass;
 
         /// <summary>Set when generating the world failed (the app goes on without it instead of loading forever).</summary>
         public bool Failed { get; set; }
@@ -82,6 +84,9 @@ namespace FreeVelo.World
             Step("roads+water");
             BuildFields(layout);
             BuildScenery(layout);
+            _grass = GetComponent<GrassField>();
+            if (_grass == null) _grass = gameObject.AddComponent<GrassField>();
+            _grass.Init(terrain);
             Step("scenery");
             BuildMountains();
             BuildMountain(far);

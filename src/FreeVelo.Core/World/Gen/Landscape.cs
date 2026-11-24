@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -79,6 +79,7 @@ namespace FreeVelo.Core.World.Gen
             var patch = new FieldPatch(cx, cz, (v1 - v0) / 2, (u1 - u0) / 2, rotationDeg * Math.PI / 180, material);
             Surfaces.Add(patch);
             BlockPatch(patch, 0.5);
+            MarkBuilt(patch, 0.3);
         }
         private readonly Dictionary<long, List<SceneryItem>> _itemsByChunk = new Dictionary<long, List<SceneryItem>>();
         private readonly Dictionary<long, List<FieldPatch>> _fieldsByChunk = new Dictionary<long, List<FieldPatch>>();
@@ -478,6 +479,7 @@ namespace FreeVelo.Core.World.Gen
                 Items.Add(new SceneryItem { Kind = k, Variant = variant, X = (float)px, Y = (float)(_terrain.Height(px, pz) - 0.05), Z = (float)pz, RotationDeg = (float)r, Scale = 1 });
                 _footprints.Add((px, pz, SceneryModels.Radius(k)));
                 BlockCircle(px, pz, SceneryModels.Radius(k) + 1);
+                MarkBuilt(px, pz, SceneryModels.Radius(k) + 0.3);
             }
 
             // A gravel apron in front of the doors (as the old yard plates: the building's width, 6 m deep).
@@ -740,6 +742,7 @@ namespace FreeVelo.Core.World.Gen
 
                 _footprints.Add((c.X, c.Z, 7.5));  // reaches the corners of the levelled pad
                 BlockCircle(c.X, c.Z, 7.5);
+                MarkBuilt(c.X, c.Z, 7.5);
                 return;
             }
         }
@@ -841,6 +844,7 @@ namespace FreeVelo.Core.World.Gen
             }
 
             for (double t = 2.5; t < length; t += 5) BlockCircle(ax + (dx * t), az + (dz * t), 3);
+            for (double t = 0; t < length + 1; t += 1.5) MarkBuilt(ax + (dx * t), az + (dz * t), 2.2);
             _lanes.Add((ax, az, bx, bz));
             Lanes.Add((ax, az, bx, bz, gravel));
             return true;
@@ -879,7 +883,9 @@ namespace FreeVelo.Core.World.Gen
         private void BlockPlot((double X, double Z) c, double halfU, double halfV, double ax, double az)
         {
             double angle = Math.Atan2(ax, az);
-            BlockPatch(new FieldPatch(c.X, c.Z, halfU, halfV, angle, WorldMaterial.Meadow), 1);
+            var plot = new FieldPatch(c.X, c.Z, halfU, halfV, angle, WorldMaterial.Meadow);
+            BlockPatch(plot, 1);
+            MarkBuilt(plot, 0.3);
         }
 
         /// <summary>
@@ -1281,6 +1287,7 @@ namespace FreeVelo.Core.World.Gen
             Items.Add(item);
             _footprints.Add((x, z, r));
             if (block) BlockCircle(x, z, r + 3);
+            if (IsBuilding(kind)) MarkBuilt(x, z, r + 1);
             if (IsBuilding(kind))
             {
                 var (pw, pd) = PadSize(kind, variant);
@@ -1375,6 +1382,7 @@ namespace FreeVelo.Core.World.Gen
         {
             Fields.Add(field);
             BlockPatch(field, 2);
+            MarkBuilt(field, 0.5);
             double reach = Math.Sqrt((field.HalfLength * field.HalfLength) + (field.HalfWidth * field.HalfWidth));
             int c0x = (int)Math.Floor((field.Cx - reach) / IndexCell), c1x = (int)Math.Floor((field.Cx + reach) / IndexCell);
             int c0z = (int)Math.Floor((field.Cz - reach) / IndexCell), c1z = (int)Math.Floor((field.Cz + reach) / IndexCell);
@@ -1385,6 +1393,42 @@ namespace FreeVelo.Core.World.Gen
                     long key = Key(cx, cz);
                     if (!_fieldsByChunk.TryGetValue(key, out var list)) _fieldsByChunk[key] = list = new List<FieldPatch>();
                     list.Add(field);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Really built on or tilled (finer than <see cref="Blocked"/>, which also keeps the forest out of whole villages
+        /// and the pastures): buildings, yards and paths, side lanes, gardens and fields. Grass tufts grow everywhere else.
+        /// </summary>
+        public bool BuiltOn(double x, double z) => _built.Contains(Key((int)Math.Floor(x / BuiltCell), (int)Math.Floor(z / BuiltCell)));
+
+        private const double BuiltCell = 2;
+        private readonly HashSet<long> _built = new HashSet<long>();
+
+        private void MarkBuilt(double x, double z, double r)
+        {
+            int c0 = (int)Math.Floor((x - r) / BuiltCell), c1 = (int)Math.Floor((x + r) / BuiltCell);
+            int d0 = (int)Math.Floor((z - r) / BuiltCell), d1 = (int)Math.Floor((z + r) / BuiltCell);
+            for (int i = c0; i <= c1; i++)
+            {
+                for (int j = d0; j <= d1; j++)
+                {
+                    if (Dist((i + 0.5) * BuiltCell, (j + 0.5) * BuiltCell, x, z) <= r + (BuiltCell * 0.7)) _built.Add(Key(i, j));
+                }
+            }
+        }
+
+        private void MarkBuilt(FieldPatch p, double margin)
+        {
+            double reach = Math.Sqrt((p.HalfLength * p.HalfLength) + (p.HalfWidth * p.HalfWidth)) + margin;
+            int c0 = (int)Math.Floor((p.Cx - reach) / BuiltCell), c1 = (int)Math.Floor((p.Cx + reach) / BuiltCell);
+            int d0 = (int)Math.Floor((p.Cz - reach) / BuiltCell), d1 = (int)Math.Floor((p.Cz + reach) / BuiltCell);
+            for (int i = c0; i <= c1; i++)
+            {
+                for (int j = d0; j <= d1; j++)
+                {
+                    if (p.Contains((i + 0.5) * BuiltCell, (j + 0.5) * BuiltCell, margin + (BuiltCell * 0.7))) _built.Add(Key(i, j));
                 }
             }
         }
