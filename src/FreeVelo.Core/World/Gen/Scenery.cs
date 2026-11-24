@@ -91,6 +91,9 @@ namespace FreeVelo.Core.World.Gen
         /// <summary>Fields within the home grid (draped meshes); outside it, fields are a ground cover.</summary>
         public List<FieldPatch> Fields { get; } = new List<FieldPatch>();
 
+        /// <summary>Guard rails along the roads (<see cref="RoadFurniture"/>).</summary>
+        public List<GuardRail> GuardRails { get; } = new List<GuardRail>();
+
         /// <summary>The nature seed the streamed pieces use too (so the home grid joins them seamlessly).</summary>
         public static int NatureSeed(WorldMap map) => map.Seed + 7;
 
@@ -115,6 +118,7 @@ namespace FreeVelo.Core.World.Gen
             foreach (var chunk in perChunk) layout.Items.AddRange(chunk);
 
             layout.Fields.AddRange(terrain.Landscape.Fields.Where(f => terrain.InGrid(f.Cx, f.Cz)));
+            layout.GuardRails.AddRange(RoadFurniture.GuardRails(terrain));
             return layout;
         }
     }

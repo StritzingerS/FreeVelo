@@ -1,0 +1,190 @@
+using System;
+using System.Collections.Generic;
+
+namespace FreeVelo.Core.World.Gen
+{
+    /// <summary>A guard rail along one side of a road: from <see cref="FromD"/> to <see cref="ToD"/> metres along the edge.</summary>
+    public readonly struct GuardRail
+    {
+        public GuardRail(int edge, int side, double fromD, double toD)
+        {
+            Edge = edge;
+            Side = side;
+            FromD = fromD;
+            ToD = toD;
+        }
+
+        public int Edge { get; }
+
+        /// <summary>−1 left, +1 right (looking from the edge's From node to its To node).</summary>
+        public int Side { get; }
+
+        public double FromD { get; }
+
+        public double ToD { get; }
+
+        public double Length => ToD - FromD;
+    }
+
+    /// <summary>
+    /// Road furniture placed along the roads (deterministic, from the road data and the ground only). Guard rails stand
+    /// where the land falls away steeply beside the road and on the outside of tight bends, never at junctions, on
+    /// bridges, in villages, across side lanes or on another road.
+    /// </summary>
+    public static class RoadFurniture
+    {
+        /// <summary>Shoulder width beside the asphalt (as the app draws it).</summary>
+        public const double ShoulderWidth = 0.9;
+
+        /// <summary>The rail's face: this far beyond the asphalt's edge.</summary>
+        public const double RailOffset = ShoulderWidth + 0.25;
+
+        private const double Step = 5;
+        private const double DropReach = 8;      // how far beyond the edge the fall is measured
+        private const double SteepDrop = 2.5;    // metres lower there: a rail
+        private const double BendRadius = 45;    // tighter bends get a rail on the outside ...
+        private const double BendDrop = 0.8;     // ... if the land falls at least this much there
+        private const double JunctionClear = 22;
+        private const double MinLength = 20;
+        private const double EndExtension = 6;   // beyond the last dangerous point (the ends slope down to the ground)
+
+        public static List<GuardRail> GuardRails(Terrain terrain)
+        {
+            var map = terrain.Map;
+            var rails = new List<GuardRail>();
+            foreach (var e in map.Edges)
+            {
+                if (e.Surface != Physics.RoadSurface.Asphalt) continue;
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    double runStart = double.NaN, lastHit = double.NaN;
+                    for (double d = 0; d <= e.Length; d += Step)
+                    {
+                        bool hit = NeedsRail(terrain, e, side, d);
+                        if (hit)
+                        {
+                            if (double.IsNaN(runStart)) runStart = d;
+                            lastHit = d;
+                        }
+                        else if (!double.IsNaN(runStart) && d - lastHit > Step * 1.5)
+                        {
+                            Add(terrain, rails, e, side, runStart, lastHit);
+                            runStart = double.NaN;
+                        }
+                    }
+
+                    if (!double.IsNaN(runStart)) Add(terrain, rails, e, side, runStart, lastHit);
+                }
+            }
+
+            return rails;
+        }
+
+        private static void Add(Terrain terrain, List<GuardRail> rails, RoadEdge e, int side, double from, double to)
+        {
+            // Extend over the ends, but only as far as a rail may stand (not into a junction, bridge or lane).
+            double a = from, b = to;
+            for (double d = from - 1; d >= from - EndExtension && Allowed(terrain, e, side, d); d -= 1) a = d;
+            for (double d = to + 1; d <= to + EndExtension && Allowed(terrain, e, side, d); d += 1) b = d;
+
+            // Every metre must be allowed (the run was found in 5 m steps): split where it is not.
+            double start = double.NaN, last = a;
+            for (double d = a; d <= b + 1e-6; d += 1)
+            {
+                bool ok = Allowed(terrain, e, side, d);
+                if (ok && double.IsNaN(start)) start = d;
+                if (!ok && !double.IsNaN(start))
+                {
+                    if (last - start >= MinLength) rails.Add(new GuardRail(e.Id, side, start, last));
+                    start = double.NaN;
+                }
+
+                if (ok) last = d;
+            }
+
+            if (!double.IsNaN(start) && last - start >= MinLength) rails.Add(new GuardRail(e.Id, side, start, last));
+        }
+
+        private static bool NeedsRail(Terrain terrain, RoadEdge e, int side, double d)
+        {
+            if (!Allowed(terrain, e, side, d)) return false;
+            var (x, z, h, rx, rz) = At(e, d);
+            double half = e.Width / 2;
+            double far = terrain.Height(x + (rx * side * (half + DropReach)), z + (rz * side * (half + DropReach)));
+            double drop = h - far;
+            if (drop >= SteepDrop) return true;
+
+            // Tight bend: the outside is the side away from the turn.
+            double k = Curvature(e, d);
+            bool outside = (k > 0 && side < 0) || (k < 0 && side > 0); // k > 0: turning right
+            return outside && Math.Abs(k) > 1 / BendRadius && drop >= BendDrop;
+        }
+
+        /// <summary>A rail may stand here: away from junctions and bridges, not in a village, a lane, the water or on another road.</summary>
+        public static bool Allowed(Terrain terrain, RoadEdge e, int side, double d)
+        {
+            if (d < JunctionClear || d > e.Length - JunctionClear) return false;
+            var map = terrain.Map;
+            foreach (var b in map.Bridges)
+            {
+                double span = (map.River?.HalfWidth ?? 10) + 20;
+                if (b.Edge == e.Id && Math.Abs(b.DistanceM - d) < span) return false;
+            }
+
+            var (x, z, _, rx, rz) = At(e, d);
+            double o = (e.Width / 2) + RailOffset + 0.2;
+            double px = x + (rx * side * o), pz = z + (rz * side * o);
+            var landscape = terrain.Landscape;
+            if (landscape != null && (landscape.Blocked(px, pz) || landscape.BuiltOn(px, pz))) return false;
+            if (terrain.IsWater(px, pz, 1)) return false;
+            foreach (var c in terrain.Corners)
+            {
+                if (px < c.MinX - 3 || px > c.MaxX + 3 || pz < c.MinZ - 3 || pz > c.MaxZ + 3) continue;
+                if (c.Distance(px, pz) < 3) return false;
+            }
+
+            // Not on (or right beside) another road, e.g. the next leg of a hairpin below, nor over this road's own
+            // other leg inside a tight hairpin.
+            double dist = terrain.DistanceToRoad(px, pz, 12, out var road, out _, out _);
+            if (road != null && dist < (road.Width / 2) + (road.Id == e.Id ? 1.1 : 2)) return false;
+            // The rail's face itself (inside a bend it comes closer to the road than the point checked above).
+            double ox = x + (rx * side * ((e.Width / 2) + RailOffset)), oz = z + (rz * side * ((e.Width / 2) + RailOffset));
+            double faceDist = terrain.DistanceToRoad(ox, oz, 12, out var faceRoad, out _, out _);
+            if (faceRoad != null && faceDist < (faceRoad.Width / 2) + 1.05) return false;
+            return true;
+        }
+
+        /// <summary>Position, road height and the unit vector to the right at <paramref name="d"/> metres along the edge.</summary>
+        public static (double X, double Z, double H, double RightX, double RightZ) At(RoadEdge e, double d)
+        {
+            d = Math.Max(0, Math.Min(e.Length, d));
+            int i = Array.BinarySearch(e.D, d);
+            if (i < 0) i = ~i - 1;
+            i = Math.Max(0, Math.Min(e.D.Length - 2, i));
+            double seg = e.D[i + 1] - e.D[i];
+            double f = seg > 0 ? (d - e.D[i]) / seg : 0;
+            double x = e.X[i] + ((e.X[i + 1] - e.X[i]) * f), z = e.Z[i] + ((e.Z[i + 1] - e.Z[i]) * f);
+            double h = e.E[i] + ((e.E[i + 1] - e.E[i]) * f);
+            double fx = e.X[i + 1] - e.X[i], fz = e.Z[i + 1] - e.Z[i];
+            double len = Math.Sqrt((fx * fx) + (fz * fz));
+            if (len < 1e-6) return (x, z, h, 1, 0);
+            fx /= len;
+            fz /= len;
+            return (x, z, h, fz, -fx);
+        }
+
+        /// <summary>Heading change per metre round <paramref name="d"/> (positive = turning right).</summary>
+        private static double Curvature(RoadEdge e, double d)
+        {
+            const double w = 6;
+            var a = At(e, d - w);
+            var b = At(e, d + w);
+            // Heading clockwise from +z (seen from above), from the right vectors: forward = (-rz, rx).
+            double ha = Math.Atan2(-a.RightZ, a.RightX), hb = Math.Atan2(-b.RightZ, b.RightX);
+            double dh = hb - ha;
+            while (dh > Math.PI) dh -= 2 * Math.PI;
+            while (dh < -Math.PI) dh += 2 * Math.PI;
+            return dh / (2 * w);
+        }
+    }
+}

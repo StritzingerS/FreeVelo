@@ -75,10 +75,12 @@ namespace FreeVelo.World
             _root = new GameObject("World");
             Map = map;
             _terrain = terrain;
+            _rails = layout.GuardRails;
 
             BuildTerrain();
             Step("terrain");
             BuildRoads();
+            BuildGuardRails();
             BuildBridges();
             BuildWater();
             Step("roads+water");
@@ -343,7 +345,8 @@ namespace FreeVelo.World
                     {
                         for (int s = -1; s <= 1; s += 2)
                         {
-                            if (nearEnd && (InCorner(e, i, s, 6) || OnOtherRoad(e, c + (right * (s * (half + ShoulderWidth + 0.4f))), 1.5f))) continue;
+                            if (HasRail(e.Id, s, e.D[i])) continue; // the guard rail stands there instead
+                            if (nearEnd &&(InCorner(e, i, s, 6) || OnOtherRoad(e, c + (right * (s * (half + ShoulderWidth + 0.4f))), 1.5f))) continue;
                             var foot = c + (right * (s * (half + ShoulderWidth + 0.4f))) + new Vector3(0, -0.35f, 0);
                             posts.EllipticTube(foot, foot + (Vector3.up * 1.35f), new Vector2(0.04f, 0.055f), new Vector2(0.035f, 0.048f), right, 6);
                             postBands.EllipticTube(foot + (Vector3.up * 1.08f), foot + (Vector3.up * 1.24f), new Vector2(0.038f, 0.052f), new Vector2(0.037f, 0.05f), right, 6);
