@@ -277,7 +277,7 @@ village.
   stroke (hip on the pushing side down and forward), spine and chest take most of it back, neck and head the rest;
   the head turns into bends (gaze about 25 m ahead from the curvature 12 m ahead, at most 30°, eased over 0.5 s); the
   arms follow by IK so the hands stay on the hoods. It fades in with pedalling and out when coasting or stopping.
-- Out of the saddle (2026-11-24, waiting for the owner's verdict): `RiderAvatar.UpdateStance` stands on climbs from
+- Out of the saddle (2026-11-24, approved by the owner): `RiderAvatar.UpdateStance` stands on climbs from
   7 % at 30–75 rpm and at least 80 % of FTP (sits again below 5.5 %, above 82 rpm or below 60 % of FTP) and sprints
   from twice FTP at 60 rpm or more (until under 1.5 × FTP); each stance holds at least 1.5 s, blends over 0.4 s.
   Other riders use their W/kg against 3.5 W/kg (their FTP is not sent). Standing: hips 18 cm up and 21 cm forward
