@@ -253,7 +253,7 @@ village.
 5. **Camera feel:** speed-based field of view (+6–10° at most, smoothed), roll at 20–30 % of the bike's lean,
    spring-damped follow, no head bob, a "reduced motion" toggle.
 
-### Tripo rider (2026-11-24, pose approved, not yet in the game)
+### Tripo rider (2026-11-24, pose and in-game rider approved by the owner)
 
 - Source: Tripo text-to-image → multiview → model, rigged by Tripo (biped, Unity spec, task in the source notes),
   `tools/blender/sources/rider_tripo_rigged.glb`; jersey smoothed and recolourable with a texture mask
@@ -269,7 +269,8 @@ village.
   marks the jersey). `RiderSkin.cs` builds one SkinnedMeshRenderer per LOD, solves the legs onto the pedals every
   frame from `AvatarModel.Pose()` (ball of the foot on the cleat, ankling, knee forward), follows the "Rider" node
   when stopping with the hands kept on the hoods, and recolours the jersey per colour (one texture per colour,
-  about 5 MB each uncompressed). `RiderAvatar` keeps only the generated bike's nodes when the bake is present.
+  compressed at runtime to DXT1 or ETC: about 0.7 MB each instead of 5.3 MB; no visible difference in the Unity
+  renders). Not yet measured on the phone. `RiderAvatar` keeps only the generated bike's nodes when the bake is present.
 - Render shots can now be placed in the rider's frame (`"rider": true`) and hold a crank angle (`"crank": 90`).
 
 - No road-cycling mocap pack with seated, standing and sprint clips was found.

@@ -228,9 +228,11 @@ namespace FreeVelo.World
         {
             var key = (Color32)jersey;
             if (Textures.TryGetValue(key, out var cached) && cached != null) return cached;
-            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, true) { name = "RiderSkin_" + ColorUtility.ToHtmlStringRGB(jersey) };
-            tex.LoadImage(d.Png, false);
-            var px = tex.GetPixels32();
+            var source = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            source.LoadImage(d.Png, false);
+            var px = source.GetPixels32();
+            var tex = new Texture2D(source.width, source.height, TextureFormat.RGB24, true) { name = "RiderSkin_" + ColorUtility.ToHtmlStringRGB(jersey) };
+            Object.Destroy(source);
             for (int i = 0; i < px.Length; i++)
             {
                 var p = px[i];
@@ -249,7 +251,12 @@ namespace FreeVelo.World
             tex.SetPixels32(px);
             tex.wrapMode = TextureWrapMode.Clamp;
             tex.anisoLevel = 2;
-            tex.Apply(true, true);
+
+            // Compressed on the GPU format of the device (DXT1 on a PC, ETC/ETC2 on a phone): about 0.7 MB per
+            // jersey colour instead of 5.3 MB, which matters in a group ride with many colours.
+            tex.Apply(true, false);
+            tex.Compress(true);
+            tex.Apply(false, true);
             Textures[key] = tex;
             return tex;
         }
