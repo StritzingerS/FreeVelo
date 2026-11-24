@@ -341,12 +341,30 @@ namespace FreeVelo.App
 
             // Follow smoothly; after a jump (a climb started at its foot, joining a group elsewhere) cut straight to
             // the rider instead of gliding through the mountain. Never below the ground.
-            var cam = (_camera.transform.position - target).sqrMagnitude > 60f * 60f
-                ? target
-                : Vector3.Lerp(_camera.transform.position, target, 1f - Mathf.Exp(-4f * dt));
+            // The follow is a critically damped spring: no overshoot, no jolt when the rider speeds up or slows down.
+            Vector3 cam;
+            if ((_camera.transform.position - target).sqrMagnitude > 60f * 60f)
+            {
+                cam = target;
+                _cameraVelocity = Vector3.zero;
+            }
+            else
+            {
+                cam = Vector3.SmoothDamp(_camera.transform.position, target, ref _cameraVelocity, 0.3f, Mathf.Infinity, dt);
+            }
+
             if (_world.IsBuilt) cam.y = Mathf.Max(cam.y, _world.GroundHeight(cam.x, cam.z) + 0.6f);
             _camera.transform.position = cam;
             _camera.transform.LookAt(position + (Vector3.up * 1.05f));
+
+            // Camera feel while riding (off with "calm" camera motion): the view widens with speed, up to 8° more at
+            // 60 km/h (from 20 km/h, eased over about a second), and the camera rolls with a quarter of the bike's lean.
+            bool lively = riding && !AppSettings.ReducedMotion;
+            float kmh = speed * 3.6f;
+            float fov = BaseFov + (lively ? 8f * Mathf.Clamp01((kmh - 20f) / 40f) : 0f);
+            _fov = Mathf.Lerp(_fov <= 0 ? BaseFov : _fov, fov, 1f - Mathf.Exp(-dt / 1f));
+            _cameraRoll = Mathf.Lerp(_cameraRoll, lively ? -0.25f * _lean : 0f, 1f - Mathf.Exp(-dt / 0.3f));
+            _camera.transform.Rotate(0f, 0f, _cameraRoll, Space.Self);
 
             // Render shots (editor tooling): the camera stands where the shot wants it.
             if (CameraOverride.HasValue)
@@ -354,6 +372,14 @@ namespace FreeVelo.App
                 _camera.transform.position = CameraOverride.Value.Position;
                 _camera.transform.LookAt(CameraOverride.Value.Target);
             }
+            else
+            {
+                _camera.fieldOfView = _fov;
+            }
         }
+
+        private const float BaseFov = 60f;
+        private Vector3 _cameraVelocity;
+        private float _fov, _cameraRoll;
     }
 }

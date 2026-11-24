@@ -783,7 +783,7 @@ namespace FreeVelo.UI
                 + sectionH + 280 + gap + ButtonsCardH + gap + (sim ? 160 + gap : 0) // trainer
                 + sectionH + ServerCardH + gap                     // riding together
                 + sectionH + StravaCardH + gap + BackupCardH + gap // data
-                + sectionH + 290 + gap;                            // app: language, graphics quality
+                + sectionH + 400 + gap;                            // app: language, graphics quality, camera
             Ui.BeginScroll(3000, view, contentH);
             float x0 = 8, y = 8;
 
@@ -853,7 +853,7 @@ namespace FreeVelo.UI
 
             // ---- App: language
             y = SettingsSection(x0, y, L.Get("app"));
-            var app = new Rect(x0, y, colW, 290);
+            var app = new Rect(x0, y, colW, 400);
             Ui.Card(app);
             SectionTitle(app, L.Get("language"), Icon.Gear);
             int lang = Ui.Segmented(new Rect(app.x + 24, app.y + 80, app.width - 48, 50), new[] { "English", "Deutsch" }, AppSettings.Language == "de" ? 1 : 0);
@@ -874,6 +874,10 @@ namespace FreeVelo.UI
             }
 
             GUI.Label(new Rect(app.x + 24, app.y + 240, app.width - 48, 40), L.Get("graphics_quality_hint"), new GUIStyle(Theme.With(Theme.Caption, Theme.Faint, 13)) { wordWrap = true });
+            // Camera motion: wider view with speed and roll in bends, or a calm camera.
+            GUI.Label(new Rect(app.x + 24, app.y + 300, app.width - 48, 26), L.Get("camera_motion"), Theme.With(Theme.Body, Theme.Text));
+            int motion = Ui.Segmented(new Rect(app.x + 24, app.y + 332, app.width - 48, 50), new[] { L.Get("camera_calm"), L.Get("camera_normal") }, AppSettings.ReducedMotion ? 0 : 1);
+            if ((motion == 0) != AppSettings.ReducedMotion) AppSettings.ReducedMotion = motion == 0;
             Ui.EndScroll(3000, view, contentH);
         }
 

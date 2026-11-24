@@ -171,7 +171,7 @@ namespace FreeVelo.App
         /// Settings that go into a backup. Not included: the rider's server identity (riderId / riderSecret – the server
         /// registers the name again) and the Strava login (connect again on the new phone).
         /// </summary>
-        public static readonly string[] BackupIntKeys = { "ftp", "powerSource", "gearMode", "gearCount", "ergStep", "maxHr", "lthr", "hrBasis" };
+        public static readonly string[] BackupIntKeys = { "ftp", "powerSource", "gearMode", "gearCount", "ergStep", "maxHr", "lthr", "hrBasis", "reducedMotion" };
         public static readonly string[] BackupFloatKeys = { "weight", "difficulty" };
         public static readonly string[] BackupStringKeys = { "lang", "zones", "friends", "friendCode", "serverUrl", "zwiftMap" };
 
@@ -180,6 +180,7 @@ namespace FreeVelo.App
         {
             _language = null;
             _zones = null;
+            _reducedMotion = -1;
             Preload();
         }
 
@@ -212,6 +213,25 @@ namespace FreeVelo.App
             get => PlayerPrefs.GetInt("qualityByHand", 0) == 1;
             set => SetInt("qualityByHand", value ? 1 : 0);
         }
+
+        /// <summary>Calm camera: no wider view at speed and no roll in bends (for riders who feel unwell otherwise).</summary>
+        public static bool ReducedMotion
+        {
+            // Cached: read by the camera every frame.
+            get
+            {
+                if (_reducedMotion < 0) _reducedMotion = PlayerPrefs.GetInt("reducedMotion", 0);
+                return _reducedMotion == 1;
+            }
+
+            set
+            {
+                _reducedMotion = value ? 1 : 0;
+                SetInt("reducedMotion", _reducedMotion);
+            }
+        }
+
+        private static int _reducedMotion = -1;
 
         /// <summary>"de" or "en".</summary>
         public static string Language

@@ -253,6 +253,15 @@ village.
 5. **Camera feel:** speed-based field of view (+6–10° at most, smoothed), roll at 20–30 % of the bike's lean,
    spring-damped follow, no head bob, a "reduced motion" toggle.
 
+### Camera feel (2026-11-24, built, waiting for the owner's verdict from a real ride)
+
+- `FreeVeloApp.LateUpdate`: the follow is a critically damped spring (`SmoothDamp`, 0.3 s) instead of an
+  exponential lerp; the field of view widens from 60° by up to 8° between 20 and 60 km/h (eased over about 1 s);
+  the camera rolls with a quarter of the bike's lean in bends (eased over 0.3 s). No head bob.
+- Settings → App → "Camera motion": Calm (no field-of-view change, no roll) or Normal (default); stored as
+  `reducedMotion`, part of the backup.
+- Not visible in render shots (they place the camera themselves); judge it in a ride.
+
 ### Tripo rider (2026-11-24, pose and in-game rider approved by the owner)
 
 - Source: Tripo text-to-image → multiview → model, rigged by Tripo (biped, Unity spec, task in the source notes),
