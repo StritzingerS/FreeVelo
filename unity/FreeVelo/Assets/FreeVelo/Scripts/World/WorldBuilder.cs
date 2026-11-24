@@ -26,8 +26,8 @@ namespace FreeVelo.World
         /// <summary>Chunks closer than this (centre) are drawn item by item; must exceed DetailRadius + half a chunk diagonal.</summary>
         private const float NearChunkRadius = 380f;
 
-        private readonly Dictionary<(Color, Texture, Texture), Material> _materials = new Dictionary<(Color, Texture, Texture), Material>();
-        private Material _templateNormal;
+        private readonly Dictionary<(Color, Texture, Texture, bool), Material> _materials = new Dictionary<(Color, Texture, Texture, bool), Material>();
+        private Material _templateNormal, _templateWind, _templateWindNormal;
         private readonly Dictionary<(SceneryKind, int, int), (Mesh Mesh, Material[] Materials)> _models = new Dictionary<(SceneryKind, int, int), (Mesh, Material[])>();
         private readonly List<SceneryChunkData> _chunks = new List<SceneryChunkData>();
         private readonly Dictionary<(SceneryKind Kind, int Variant, int Lod, int Shadows), List<Matrix4x4>> _instances = new Dictionary<(SceneryKind, int, int, int), List<Matrix4x4>>();
@@ -108,18 +108,27 @@ namespace FreeVelo.World
         /// With <paramref name="normal"/>: a normal-mapped material (the mesh needs UVs and tangents). Its template in
         /// Resources carries the _NORMALMAP keyword so the shader variant is kept in builds.
         /// </summary>
-        public Material Mat(Color color, Texture texture, float smoothness, Texture normal, float bumpScale = 1f)
+        public Material Mat(Color color, Texture texture, float smoothness, Texture normal, float bumpScale = 1f) => Mat(color, texture, smoothness, normal, bumpScale, false);
+
+        /// <summary>
+        /// With <paramref name="wind"/>: the FreeVelo/LitWind shader (foliage of scenery models sways; the vertex height
+        /// above the model's foot sets how much, so only for models standing on their own origin).
+        /// </summary>
+        private Material Mat(Color color, Texture texture, float smoothness, Texture normal, float bumpScale, bool wind)
         {
-            var key = (color, texture, normal);
+            var key = (color, texture, normal, wind);
             if (_materials.TryGetValue(key, out var m)) return m;
             if (_template == null)
             {
                 _template = Resources.Load<Material>("FreeVeloLit");
                 if (_template == null) _template = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
                 _templateNormal = Resources.Load<Material>("FreeVeloLitNormal") ?? _template;
+                _templateWind = Resources.Load<Material>("FreeVeloLitWind") ?? _template;
+                _templateWindNormal = Resources.Load<Material>("FreeVeloLitWindNormal") ?? _templateNormal;
             }
 
-            m = new Material(normal != null ? _templateNormal : _template) { color = color, enableInstancing = true };
+            var template = wind ? (normal != null ? _templateWindNormal : _templateWind) : (normal != null ? _templateNormal : _template);
+            m = new Material(template) { color = color, enableInstancing = true };
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
             if (texture != null)
             {
@@ -152,15 +161,18 @@ namespace FreeVelo.World
         }
 
         /// <summary>A model surface: its colour, tinted detail texture and normal map (<see cref="SurfaceTextures"/>).</summary>
-        private Material Mat(WorldMaterial material)
+        private Material Mat(WorldMaterial material, bool wind = false)
         {
             var (c, smoothness) = WorldMaterials.All[material];
             var set = SurfaceTextures.Get(SurfaceTextures.Of(material));
             var color = new Color(c.X, c.Y, c.Z);
             return set == null
-                ? Mat(color, null, smoothness)
-                : Mat(set.Tint(color), set.Albedo, smoothness, set.Normal, set.BumpScale);
+                ? Mat(color, null, smoothness, null, 1f, wind)
+                : Mat(set.Tint(color), set.Albedo, smoothness, set.Normal, set.BumpScale, wind);
         }
+
+        /// <summary>Leaves and needles of scenery models: they sway in the wind.</summary>
+        private static bool IsFoliage(WorldMaterial m) => SurfaceTextures.IsFoliage(m);
 
         // ------------------------------------------------------------------ terrain
 
@@ -573,7 +585,20 @@ namespace FreeVelo.World
                 }
             }
 
-            CreateMesh("Water", water.ToMesh("Water"), Mat(WorldMaterial.Water), false);
+            // Ripples: a wave normal map in world-scaled UVs (35 m a repeat), drifted by WorldAnimation.
+            var animation = GetComponent<WorldAnimation>();
+            if (animation == null) animation = gameObject.AddComponent<WorldAnimation>();
+            var mesh = water.ToMesh("Water");
+            if (mesh == null) return;
+            var vertices = mesh.vertices;
+            var uvs = new Vector2[vertices.Length];
+            for (int i = 0; i < vertices.Length; i++) uvs[i] = new Vector2(vertices[i].x / 35f, vertices[i].z / 35f);
+            mesh.uv = uvs;
+            mesh.RecalculateTangents();
+            var (waterColor, smoothness) = WorldMaterials.All[WorldMaterial.Water];
+            var material = Mat(new Color(waterColor.X, waterColor.Y, waterColor.Z), null, smoothness, WorldAnimation.WaterNormalMap(), 0.12f);
+            CreateMesh("Water", mesh, material, false);
+            animation.Water = material;
         }
 
         // ------------------------------------------------------------------ fields
@@ -984,7 +1009,7 @@ namespace FreeVelo.World
                 var tris = new List<int>(part.Triangles.Length);
                 foreach (int t in part.Triangles) tris.Add(t + offset);
                 submeshes.Add(tris);
-                materials.Add(part.Texture != null ? OwnTextureMat(part.Texture) : Mat(part.Material));
+                materials.Add(part.Texture != null ? OwnTextureMat(part.Texture) : Mat(part.Material, IsFoliage(part.Material)));
             }
 
             var mesh = new Mesh { name = $"{kind} {variant} LOD{lod}", indexFormat = vertices.Count > 65000 ? IndexFormat.UInt32 : IndexFormat.UInt16 };

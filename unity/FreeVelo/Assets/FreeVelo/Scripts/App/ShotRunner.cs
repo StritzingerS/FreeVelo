@@ -39,6 +39,11 @@ namespace FreeVelo.App
 
             /// <summary>0 seated, 1 standing, 2 sprinting; -1 = as the ride decides.</summary>
             public int stance = -1;
+
+            /// <summary>More than 1: a sequence of this many frames at <see cref="fps"/> (name_000.png, …) for a video.</summary>
+            public int frames = 1;
+
+            public float fps = 24;
         }
 
         [Serializable]
@@ -78,6 +83,7 @@ namespace FreeVelo.App
         /// <summary>An interrupted run (play mode stopped mid-shot) must not leave the camera pinned.</summary>
         private void OnDestroy()
         {
+            Time.captureDeltaTime = 0f;
             FreeVeloApp.CameraOverride = null;
             Application.runInBackground = _runInBackground;
         }
@@ -177,27 +183,34 @@ namespace FreeVelo.App
 
                 if (shot.settle > 0) yield return new WaitForSecondsRealtime(shot.settle);
 
-                // This frame is rendered into the texture (the HUD is drawn to the screen, so it stays out).
+                // This frame is rendered into the texture (the HUD is drawn to the screen, so it stays out). A sequence
+                // runs the game clock at a fixed step, so the video plays at real speed however long a frame takes.
                 cam.targetTexture = rt;
-                yield return new WaitForEndOfFrame();
+                int frames = Mathf.Clamp(shot.frames, 1, 600);
+                if (frames > 1) Time.captureDeltaTime = 1f / Mathf.Clamp(shot.fps, 1f, 60f);
                 string error = null;
-                try
+                for (int frame = 0; frame < frames && error == null; frame++)
                 {
-                    var old = RenderTexture.active;
-                    RenderTexture.active = rt;
-                    tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
-                    tex.Apply();
-                    RenderTexture.active = old;
-                    string file = Path.Combine(outDir, Safe(shot.name) + ".png");
-                    File.WriteAllBytes(file, tex.EncodeToPNG());
-                    result.files.Add(Path.GetFileName(file));
-                    File.WriteAllText(Path.ChangeExtension(file, ".txt"), RenderBreakdown(cam));
-                }
-                catch (Exception e)
-                {
-                    error = shot.name + ": " + e.Message;
+                    yield return new WaitForEndOfFrame();
+                    try
+                    {
+                        var old = RenderTexture.active;
+                        RenderTexture.active = rt;
+                        tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                        tex.Apply();
+                        RenderTexture.active = old;
+                        string file = Path.Combine(outDir, Safe(shot.name) + (frames > 1 ? "_" + frame.ToString("000") : "") + ".png");
+                        File.WriteAllBytes(file, tex.EncodeToPNG());
+                        result.files.Add(Path.GetFileName(file));
+                        if (frame == 0) File.WriteAllText(Path.Combine(outDir, Safe(shot.name) + ".txt"), RenderBreakdown(cam));
+                    }
+                    catch (Exception e)
+                    {
+                        error = shot.name + ": " + e.Message;
+                    }
                 }
 
+                Time.captureDeltaTime = 0f;
                 cam.targetTexture = null;
                 cam.fieldOfView = oldFov;
                 if (error != null) result.errors.Add(error);

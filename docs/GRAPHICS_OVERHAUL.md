@@ -253,6 +253,23 @@ village.
 5. **Camera feel:** speed-based field of view (+6–10° at most, smoothed), roll at 20–30 % of the bike's lean,
    spring-damped follow, no head bob, a "reduced motion" toggle.
 
+### Living world (2026-11-24, built, waiting for the owner's verdict)
+
+- Wind: `Assets/FreeVelo/Shaders/FreeVeloLitWind.shader` is a copy of URP 17.6 Lit whose forward, shadow, depth and
+  depth-normals vertex functions first call `FreeVeloWind()` (`FreeVeloWind.hlsl`): the crown leans and sways
+  downwind, more the higher a vertex is above the model's foot (h²/(h+8)), with gusts rolling across the land and a
+  small leaf flutter; phases from the instance position. Only leaves, needles and bushes of scenery models
+  (`SurfaceTextures.IsFoliage`, in `WorldBuilder.Model`) use it, through the templates
+  `Resources/FreeVeloLitWind(.Normal).mat` (keep the shader and its normal-map variant in builds). After a URP
+  update, copy Lit.shader again and re-apply the four `Wind…Vertex` wrappers.
+- `WorldAnimation` (on the WorldBuilder object) sets the globals `_FvWindDir` (from west-south-west) and
+  `_FvWindStrength` (0.35–0.95, changing over a minute or two), drifts the water's ripple normal map (generated,
+  35 m a repeat, bump 0.12; water UVs are world-scaled now) and puts a generated cloud cookie on the sun (900 m a
+  repeat, up to 50 % darker, drifting at 6 m/s).
+- Render shots can record sequences (`"frames": 72, "fps": 24`, fixed game time step) for videos.
+- Not yet: grass, chimney smoke, birds; cost on the phone not measured (the wind adds vertex work for every
+  foliage vertex, including shadows).
+
 ### Camera feel (2026-11-24, built, waiting for the owner's verdict from a real ride)
 
 - `FreeVeloApp.LateUpdate`: the follow is a critically damped spring (`SmoothDamp`, 0.3 s) instead of an

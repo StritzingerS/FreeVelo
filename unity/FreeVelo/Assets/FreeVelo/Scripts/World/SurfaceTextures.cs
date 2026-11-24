@@ -163,6 +163,9 @@ namespace FreeVelo.World
             }
         }
 
+        /// <summary>Leaves and needles (and bushes).</summary>
+        public static bool IsFoliage(WorldMaterial m) => Of(m) == Surface.Foliage;
+
         /// <summary>The textures of a surface (generated on first use); null for <see cref="Surface.None"/>.</summary>
         public static Set Get(Surface s)
         {
