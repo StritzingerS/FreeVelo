@@ -368,7 +368,11 @@ when the camera moves 5 m or turns 6°, and take only chunks inside a frustum 25
 only items within the shadow distance are drawn, as shadow casters only; items beyond the shadow distance cast no
 shadow; the baked-model lookups are cached. `PerfMonitor` writes one line a minute into the app log (average fps,
 p95/p99/max frame time, CPU/GPU time via `FrameTimingManager` with Frame Timing Stats on, scenery instances and draw
-calls, Android thermal status, battery). Still open: BatchRendererGroup or GPU Resident Drawer, atlasing, HLODs.
+calls, Android thermal status, battery). Still open: BatchRendererGroup or GPU Resident Drawer, atlasing.
+**HLOD for the far scenery (24 Nov 2026):** the home grid's 100 m far chunks are merged into 400 m blocks
+(`WorldBuilder.SceneryBlock`, one palette mesh each); a block replaces its up to 16 chunks while its centre is
+beyond 1 km. Editor counts in the high view over the start valley: 196 scenery draws → 69 (55 chunks + 14 blocks).
+The far mountain tiles (about 450 draws beyond 4 km) are the next candidate.
 
 **Measured on a OnePlus Nord 2 (21 November 2026, development build, standing in Lärchwald):** 28–33 fps, CPU 31–36 ms
 and GPU 30–33 ms per frame, 2.5–3.1 M triangles, 2,500–7,300 draw calls, thermal none, about 1 % battery a minute;
@@ -495,7 +499,7 @@ Thermals are the real limit: use about 60 % of the frame time so the phone holds
 
 Each step leaves the road data untouched, so the app stays shippable throughout.
 
-## 9. Render shots from the real Unity (built, untested)
+## 9. Render shots from the real Unity (in daily use since 18 November 2026)
 
 So that the look can be checked without screenshots going back and forth:
 
@@ -511,8 +515,11 @@ So that the look can be checked without screenshots going back and forth:
   Lärchwald street, forest road, Kirchbach junction, climb start, house, inn, church, farm).
 - `RenderShots/` is git-ignored.
 
-**Status:** the runtime part compiles against Unity reference assemblies; the editor script has never been
-compiled or run in Unity.
+**Status:** works hands-free with the owner's open editor (it waits while the owner is in play mode; an empty
+`RenderShots/refresh` file only refreshes and recompiles). Shots can be placed in the rider's frame, hold a crank
+angle, stance or head turn, and record frame sequences for videos; each picture gets a `<name>.txt` breakdown.
+Rebuilding the core DLLs in Release while the owner is in play mode recompiles Unity mid-play and floods the log
+with NullReferenceExceptions in the HUD (seen 24 Nov) – check for play mode first.
 
 **To set up:** on the PC with Unity, add the repository folder in the Claude desktop app (Settings → Claude Code →
 Remote Control), open the project so it compiles the scripts, keep both running. The feature is not available to

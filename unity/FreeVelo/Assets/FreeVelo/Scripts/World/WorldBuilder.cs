@@ -680,6 +680,9 @@ namespace FreeVelo.World
         {
             public Vector3 Center;
             public MeshRenderer FarRenderer;
+
+            /// <summary>The 400 m block this chunk's far mesh is merged into (home grid only); null for streamed chunks.</summary>
+            public SceneryBlock Block;
             public readonly List<SceneryItem> Items = new List<SceneryItem>();
 
             // Filled on first use: every item's matrix (computed once, not at every update) and the chunk's extent.
@@ -725,6 +728,85 @@ namespace FreeVelo.World
             {
                 chunk.FarRenderer = BuildSceneryChunkMesh(_root.transform, chunk.Items);
                 if (chunk.FarRenderer != null) _chunks.Add(chunk);
+            }
+
+            BuildSceneryBlocks();
+        }
+
+        /// <summary>
+        /// A far-away block of the home grid's scenery (villages, farms, trees): the far meshes of up to 4 × 4 chunks
+        /// (400 m) merged into one, drawn instead of them once the whole block is beyond <see cref="BlockRadius"/> –
+        /// one draw call instead of up to 16 (hierarchical LOD; the render breakdown showed about 170 chunk draws).
+        /// </summary>
+        private sealed class SceneryBlock
+        {
+            public Vector3 Center;
+            public MeshRenderer Renderer;
+            public bool Active;
+        }
+
+        private const float SceneryBlockSize = 400f;
+
+        /// <summary>A block is drawn merged when its centre is this far away (its nearest chunk then beyond about 700 m).</summary>
+        private const float BlockRadius = 1000f;
+
+        private readonly List<SceneryBlock> _blocks = new List<SceneryBlock>();
+
+        private void BuildSceneryBlocks()
+        {
+            _blocks.Clear();
+            var groups = new Dictionary<(int, int), List<SceneryChunkData>>();
+            foreach (var chunk in _chunks)
+            {
+                if (chunk.FarRenderer == null) continue;
+                var key = (Mathf.FloorToInt(chunk.Center.x / SceneryBlockSize), Mathf.FloorToInt(chunk.Center.z / SceneryBlockSize));
+                if (!groups.TryGetValue(key, out var list)) groups[key] = list = new List<SceneryChunkData>();
+                list.Add(chunk);
+            }
+
+            foreach (var pair in groups)
+            {
+                if (pair.Value.Count < 2) continue; // nothing to merge
+                var combine = new CombineInstance[pair.Value.Count];
+                for (int i = 0; i < combine.Length; i++)
+                {
+                    combine[i] = new CombineInstance { mesh = pair.Value[i].FarRenderer.GetComponent<MeshFilter>().sharedMesh, transform = pair.Value[i].FarRenderer.transform.localToWorldMatrix };
+                }
+
+                var mesh = new Mesh { name = "SceneryBlock", indexFormat = IndexFormat.UInt32 };
+                mesh.CombineMeshes(combine, mergeSubMeshes: true, useMatrices: true);
+                var go = new GameObject("SceneryBlock") { layer = FarSceneryLayer };
+                go.transform.SetParent(_root.transform, false);
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var renderer = go.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = SceneryPaletteMaterial();
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+                renderer.enabled = false;
+                var block = new SceneryBlock { Center = new Vector3((pair.Key.Item1 + 0.5f) * SceneryBlockSize, 0f, (pair.Key.Item2 + 0.5f) * SceneryBlockSize), Renderer = renderer };
+                _blocks.Add(block);
+                foreach (var chunk in pair.Value) chunk.Block = block;
+            }
+        }
+
+        /// <summary>Far blocks on or off for this camera position (with the instance rebuild, every 5 m or 6°).</summary>
+        private void UpdateSceneryBlocks(Vector3 eye)
+        {
+            foreach (var block in _blocks)
+            {
+                float dx = block.Center.x - eye.x, dz = block.Center.z - eye.z;
+                block.Active = (dx * dx) + (dz * dz) > BlockRadius * BlockRadius;
+                block.Renderer.enabled = block.Active;
+            }
+        }
+
+        /// <summary>Scenery blocks drawn merged right now (for the render-shot breakdown).</summary>
+        public int ActiveSceneryBlocks
+        {
+            get
+            {
+                int n = 0;
+                foreach (var b in _blocks) if (b.Active) n++;
+                return n;
             }
         }
 
@@ -892,11 +974,13 @@ namespace FreeVelo.World
             GeometryUtility.CalculateFrustumPlanes(projection * cam.worldToCameraMatrix, _frustum);
             float shadowRange = ShadowDistance() + 15f, shadow2 = shadowRange * shadowRange;
             const float halfDiagonal = SceneryChunk * 0.75f;
+            UpdateSceneryBlocks(eye);
             foreach (var chunk in _chunks)
             {
                 var flat = new Vector2(chunk.Center.x - eye.x, chunk.Center.z - eye.z);
                 bool near = flat.magnitude < NearChunkRadius;
-                if (chunk.FarRenderer != null) chunk.FarRenderer.enabled = !near;
+                // far: its own mesh, unless its block is drawn merged
+                if (chunk.FarRenderer != null) chunk.FarRenderer.enabled = !near && (chunk.Block == null || !chunk.Block.Active);
                 if (!near) continue;
                 chunk.Prepare();
                 bool inView = GeometryUtility.TestPlanesAABB(_frustum, chunk.Bounds);
