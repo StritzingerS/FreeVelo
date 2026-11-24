@@ -76,7 +76,7 @@ namespace FreeVelo.App
             string render = _drawCalls.Valid && _drawCalls.LastValue > 0 ? $" · draw calls {_drawCalls.LastValue} · triangles {_triangles.LastValue / 1000}k" : "";
             string battery100 = battery >= 0 ? $" · battery {battery * 100:0}% ({(_batteryStart - battery) * 100:+0;-0;0} since start)" : "";
             _log($"Perf 1 min: {1000f * n / sum:0} fps avg · frame p95 {P(0.95):0.0} p99 {P(0.99):0.0} max {_frames[n - 1]:0} ms{cpuGpu}"
-                 + $" · scenery {_instances / n} instances in {_draws / n} calls{render} · thermal {Thermal()}{battery100}");
+                 + $" · scenery {_instances / n} instances in {_draws / n} calls{render} · grass {FreeVelo.World.GrassField.Drawn} · quality {(AppSettings.Quality == GraphicsQuality.Low ? "low" : "high")} · thermal {Thermal()}{battery100}");
             _frames.Clear();
             _cpu = _gpu = 0;
             _timed = 0;

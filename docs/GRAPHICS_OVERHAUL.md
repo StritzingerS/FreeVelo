@@ -281,7 +281,20 @@ village.
   Each stands on `Terrain.SurfaceHeight` 5 cm sunk in. Wind: the same shader with `_FV_GRASS` (template
   `Resources/FreeVeloLitGrass.mat`), bending from the root. In the start village view: about 1,200 tufts drawn,
   roughly 100k triangles – to be measured on the phone.
-- Not yet: chimney smoke, birds; cost on the phone not measured (the wind adds vertex work for every
+- Phone (OnePlus Nord 2, 24 Nov 2026, 3D tufts, no smoke yet): 25 fps, CPU 39.4 ms, GPU 31.0 ms, 1,536 draw calls,
+  1.98 M triangles: the CPU is the limit. Owner's decision: only 2D cards (`GrassField.CardsOnly`), 120 m (low
+  60 m), 128 px card picture; placement matrices prepared once per 16 m piece, pieces well inside the radius are
+  handed over whole (before: every tuft every frame); pieces are queued every 4 m of travel, computed within 1 ms a
+  frame. Start village: about 3,900 cards, 23k triangles (3D: 4,800 tufts, 188k). The perf line in the app log now
+  names the grass count and the quality tier.
+- Chimney smoke (`ChimneySmoke`): chimneys are found in the house models themselves (a spot at least 0.5 m above
+  everything 1.2–2.4 m round it, upper part of the building); of the current models only AlpineHouse 0 has one,
+  the plain houses have none and do not smoke. About two in five such houses smoke (same ones every day): one
+  particle system, puffs emitted by hand within 350 m, rising and drifting with the foliage's wind, URP
+  Particles/Unlit via `Resources/FreeVeloSmoke.mat`.
+- Birds (`Birds`): two buzzards circling 38 m above the ground, mostly gliding, and four small birds flapping
+  across 22 m up; placed anew 60–120 m off when left behind or when the camera jumps.
+- Not yet measured on the phone: smoke and birds; the 2D-only grass (the wind adds vertex work for every
   foliage vertex, including shadows).
 
 ### Camera feel (2026-11-24, built, waiting for the owner's verdict from a real ride)

@@ -28,8 +28,26 @@ namespace FreeVelo.World
             public int Colour; // 0 lush, 1 mid, 2 dry tips
         }
 
+        /// <summary>
+        /// One 16 m piece: its tufts, and their placement matrices at full size grouped by kind and colour, made once,
+        /// so a piece well inside the radius is handed over whole (the per-tuft work every frame cost the phone's CPU).
+        /// </summary>
+        private sealed class PieceData
+        {
+            public Tuft[] Tufts;
+            public Matrix4x4[][] Groups;
+            public Vector3 Centre;
+        }
+
+        /// <summary>
+        /// Only 2D cards at every distance (owner, 24 Nov 2026, after the 3D tufts stuttered on the phone: 25 fps, CPU
+        /// 39 ms). The 3D tufts stay in the code for a later comparison.
+        /// </summary>
+        private const bool CardsOnly = true;
+
         private Terrain _terrain;
-        private readonly Dictionary<long, Tuft[]> _pieces = new Dictionary<long, Tuft[]>();
+        private readonly Dictionary<long, PieceData> _pieces = new Dictionary<long, PieceData>();
+        private Vector3 _lastQueue = new Vector3(float.MaxValue, 0, 0);
         private readonly Queue<long> _todo = new Queue<long>();
         private readonly HashSet<long> _queued = new HashSet<long>();
         private Mesh[] _meshes;
@@ -53,12 +71,13 @@ namespace FreeVelo.World
             _pieces.Clear();
             _todo.Clear();
             _queued.Clear();
+            _lastQueue = new Vector3(float.MaxValue, 0, 0);
         }
 
         private static bool LowQuality => FreeVelo.App.AppSettings.Quality == FreeVelo.App.GraphicsQuality.Low;
 
         /// <summary>How far the tufts reach: less on low graphics quality.</summary>
-        private static float Radius => LowQuality ? 45f : 160f;
+        private static float Radius => CardsOnly ? (LowQuality ? 60f : 120f) : LowQuality ? 45f : 160f;
 
         /// <summary>Beyond this the tufts use the simple version (a third of the blades, a little wider).</summary>
         private static float DetailRadius => LowQuality ? 18f : 30f;
@@ -74,7 +93,36 @@ namespace FreeVelo.World
             var eye = cam.transform.position;
             float radius = Radius;
 
-            // Queue the pieces in reach, nearest first; compute some within 1.5 ms.
+            // Queue the pieces in reach (every 4 m of camera travel), nearest first; compute some within 1 ms.
+            if ((eye - _lastQueue).sqrMagnitude > 16f) Queue(eye, radius);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (_todo.Count > 0 && clock.Elapsed.TotalMilliseconds < 1.0)
+            {
+                long key = _todo.Dequeue();
+                _queued.Remove(key);
+                int px = (int)(key >> 32), pz = (int)(key & 0xFFFFFFFF);
+                _pieces[key] = Prepare(Compute(px, pz), px, pz);
+            }
+
+            // Forget pieces far behind (memory), then draw what is in view.
+            if (_pieces.Count > 1000)
+            {
+                var drop = new List<long>();
+                foreach (var key in _pieces.Keys)
+                {
+                    float dx = (((int)(key >> 32) + 0.5f) * Piece) - eye.x, dz = (((int)(key & 0xFFFFFFFF) + 0.5f) * Piece) - eye.z;
+                    if ((dx * dx) + (dz * dz) > 4f * radius * radius) drop.Add(key);
+                }
+
+                foreach (var key in drop) _pieces.Remove(key);
+            }
+
+            Draw(cam, eye, radius);
+        }
+
+        private void Queue(Vector3 eye, float radius)
+        {
+            _lastQueue = eye;
             int c0 = Mathf.FloorToInt((eye.x - radius) / Piece), c1 = Mathf.FloorToInt((eye.x + radius) / Piece);
             int r0 = Mathf.FloorToInt((eye.z - radius) / Piece), r1 = Mathf.FloorToInt((eye.z + radius) / Piece);
             var wanted = new List<(float D, long Key, int X, int Z)>();
@@ -96,30 +144,28 @@ namespace FreeVelo.World
                 _todo.Enqueue(w.Key);
                 _queued.Add(w.Key);
             }
-
-            var clock = System.Diagnostics.Stopwatch.StartNew();
-            while (_todo.Count > 0 && clock.Elapsed.TotalMilliseconds < 1.5)
-            {
-                long key = _todo.Dequeue();
-                _queued.Remove(key);
-                _pieces[key] = Compute((int)(key >> 32), (int)(key & 0xFFFFFFFF));
-            }
-
-            // Forget pieces far behind (memory), then draw what is in view.
-            if (_pieces.Count > 1400)
-            {
-                var drop = new List<long>();
-                foreach (var key in _pieces.Keys)
-                {
-                    float dx = (((int)(key >> 32) + 0.5f) * Piece) - eye.x, dz = (((int)(key & 0xFFFFFFFF) + 0.5f) * Piece) - eye.z;
-                    if ((dx * dx) + (dz * dz) > 4f * radius * radius) drop.Add(key);
-                }
-
-                foreach (var key in drop) _pieces.Remove(key);
-            }
-
-            Draw(cam, eye, radius);
         }
+
+        /// <summary>Full-size placement matrices of a piece's tufts, grouped by kind × colour (cards only).</summary>
+        private static PieceData Prepare(Tuft[] tufts, int px, int pz)
+        {
+            var piece = new PieceData { Tufts = tufts, Centre = new Vector3((px + 0.5f) * Piece, tufts.Length > 0 ? tufts[0].Position.y : 0f, (pz + 0.5f) * Piece) };
+            if (!CardsOnly || tufts.Length == 0) return piece;
+            var groups = new List<Matrix4x4>[9];
+            for (int g = 0; g < 9; g++) groups[g] = new List<Matrix4x4>();
+            foreach (var t in tufts)
+            {
+                float s = t.Scale * CardScale;
+                groups[(t.Kind * 3) + t.Colour].Add(Matrix4x4.TRS(t.Position, Quaternion.Euler(0f, t.Yaw, 0f), new Vector3(s, s, s)));
+            }
+
+            piece.Groups = new Matrix4x4[9][];
+            for (int g = 0; g < 9; g++) piece.Groups[g] = groups[g].ToArray();
+            return piece;
+        }
+
+        /// <summary>Cards are drawn a little bigger than the 3D tufts, for the same bulk.</summary>
+        private const float CardScale = 1.15f;
 
         private void Draw(Camera cam, Vector3 eye, float radius)
         {
@@ -129,12 +175,21 @@ namespace FreeVelo.World
             float detail = DetailRadius, card = CardRadius;
             foreach (var pair in _pieces)
             {
-                var tufts = pair.Value;
+                var piece = pair.Value;
+                var tufts = piece.Tufts;
                 if (tufts.Length == 0) continue;
-                int px = (int)(pair.Key >> 32), pz = (int)(pair.Key & 0xFFFFFFFF);
-                var centre = new Vector3((px + 0.5f) * Piece, tufts[0].Position.y, (pz + 0.5f) * Piece);
-                if (((centre.x - eye.x) * (centre.x - eye.x)) + ((centre.z - eye.z) * (centre.z - eye.z)) > (radius + 12f) * (radius + 12f)) continue;
+                var centre = piece.Centre;
+                float pd2 = ((centre.x - eye.x) * (centre.x - eye.x)) + ((centre.z - eye.z) * (centre.z - eye.z));
+                if (pd2 > (radius + 12f) * (radius + 12f)) continue;
                 if (!GeometryUtility.TestPlanesAABB(_planes, new Bounds(centre, new Vector3(Piece + 2f, 60f, Piece + 2f)))) continue;
+
+                // Cards, piece wholly inside the fade: hand its prepared matrices over as they are.
+                if (CardsOnly && Mathf.Sqrt(pd2) + 12f < fadeStart)
+                {
+                    for (int g = 0; g < 9; g++) _lists[18 + g].AddRange(piece.Groups[g]);
+                    continue;
+                }
+
                 foreach (var t in tufts)
                 {
                     float dx = t.Position.x - eye.x, dz = t.Position.z - eye.z;
@@ -144,8 +199,9 @@ namespace FreeVelo.World
                     if (d > limit) continue;
                     float fade = 1f - Mathf.SmoothStep(0f, 1f, (d - (limit - 6f)) / 6f);
                     float s = t.Scale * Mathf.Max(0.05f, fade);
-                    int level = d > card ? 2 : d > detail ? 1 : 0;
-                    if (level == 2)
+                    int level = CardsOnly || d > card ? 2 : d > detail ? 1 : 0;
+                    if (CardsOnly) s *= CardScale;
+                    else if (level == 2)
                     {
                         // Cards: every other tuft, a little bigger (the same cover with half the instances).
                         if (t.Rank > 0.55f) continue;
@@ -159,7 +215,7 @@ namespace FreeVelo.World
             Drawn = 0;
             DrawnTriangles = 0;
             Computed = 0;
-            foreach (var p in _pieces.Values) Computed += p.Length;
+            foreach (var p in _pieces.Values) Computed += p.Tufts.Length;
             for (int i = 0; i < _lists.Length; i++)
             {
                 var list = _lists[i];
@@ -354,21 +410,21 @@ namespace FreeVelo.World
         }
 
         /// <summary>
-        /// A tuft seen from the side, 64 × 64: tapering blades fanning out from the bottom centre, coloured base to tip;
+        /// A tuft seen from the side, 128 × 128: tapering blades fanning out from the bottom centre, coloured base to tip;
         /// transparent around them. The alpha of the smaller mipmaps is raised so the tuft does not thin away at a
         /// distance (alpha-tested pictures lose cover as they shrink).
         /// </summary>
         private static Texture2D CardPicture(Color bottom, Color tip, int seed)
         {
-            const int size = 64;
+            const int size = 128; // seen up close too since the cards replaced the 3D tufts
             var alpha = new float[size * size];
             var random = new System.Random(100 + seed);
-            for (int b = 0; b < 16; b++)
+            for (int b = 0; b < 22; b++)
             {
                 float rootX = 0.5f + (((float)random.NextDouble() - 0.5f) * 0.25f);
                 float tipX = 0.5f + (((float)random.NextDouble() - 0.5f) * 0.95f);
                 float tipY = 0.55f + (0.45f * (float)random.NextDouble());
-                float width = 0.025f + (0.02f * (float)random.NextDouble());
+                float width = 0.018f + (0.016f * (float)random.NextDouble());
                 for (int y = 0; y < size; y++)
                 {
                     float v = (y + 0.5f) / size;

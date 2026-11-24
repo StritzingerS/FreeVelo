@@ -87,6 +87,12 @@ namespace FreeVelo.World
             _grass = GetComponent<GrassField>();
             if (_grass == null) _grass = gameObject.AddComponent<GrassField>();
             _grass.Init(terrain);
+            var smoke = GetComponent<ChimneySmoke>();
+            if (smoke == null) smoke = gameObject.AddComponent<ChimneySmoke>();
+            smoke.Init(this, layout.Items);
+            var birds = GetComponent<Birds>();
+            if (birds == null) birds = gameObject.AddComponent<Birds>();
+            birds.Init(this);
             Step("scenery");
             BuildMountains();
             BuildMountain(far);
@@ -925,6 +931,12 @@ namespace FreeVelo.World
         /// <summary>The render pipeline's shadow distance (scenery farther away casts no shadow).</summary>
         private static float ShadowDistance() =>
             GraphicsSettings.currentRenderPipeline is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset urp ? urp.shadowDistance : QualitySettings.shadowDistance;
+
+        /// <summary>The close-up mesh of a scenery model, in its local space (for <see cref="ChimneySmoke"/>).</summary>
+        internal Mesh SceneryMesh(SceneryKind kind, int variant) => Model(kind, variant, 0).Mesh;
+
+        /// <summary>Where an item stands (local to world).</summary>
+        internal static Matrix4x4 PlacementMatrix(SceneryItem item) => ItemMatrix(item);
 
         private static Matrix4x4 ItemMatrix(SceneryItem item)
         {
