@@ -429,11 +429,11 @@ Not done (owner): shadows to 80 m, high at 30 fps for slower phones, HDR off, a 
    DXT5/ETC2, a quarter).
 4. Per-frame garbage removed: grass (stopwatch, piece clean-up every 2 s with a reused list, reused queue list),
    the power averages (LINQ on every sample), the group riders' set and list.
-5. Simple Lit compared with Lit (comparison renders `RenderShots/out/compare_*.png`; editor switch: an empty
-   `RenderShots/simplelit` file turns every matte material – not foliage, water or the galvanised steel – to Simple
-   Lit): mean pixel difference 3–7 of 255, at most 18 % of the pixels by more than 12 (the street view; asphalt a
-   little lighter). Waiting for the owner's verdict; switching for good needs template materials in Resources so the
-   shader is in the build.
+5. Simple Lit for every matte material (smoothness below 0.5, not foliage): compared with Lit in renders
+   (`RenderShots/out/compare_*.png`) the mean pixel difference was 3–7 of 255, at most 18 % of the pixels by more
+   than 12 (the street view; asphalt a little lighter). The owner chose it (25 Nov 2026). Templates
+   `Resources/FreeVeloSimpleLit(.Normal).mat` keep the shader and its `_NORMALMAP` variant in the build; water,
+   galvanised steel and the wind/grass materials stay on Lit.
 Other practices noted, not done: thermal-aware quality, an HUD without IMGUI (decide after the next log's `hud`
 time), GPU Resident Drawer (needs Vulkan and Forward+). Note: the editor uses the "PC" quality level (lodBias 2),
 the phones "Mobile" (lodBias 1), so editor triangle counts are higher than on the phone.

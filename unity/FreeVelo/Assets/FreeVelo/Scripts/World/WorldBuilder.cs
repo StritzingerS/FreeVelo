@@ -27,7 +27,7 @@ namespace FreeVelo.World
         private const float NearChunkRadius = 380f;
 
         private readonly Dictionary<(Color, Texture, Texture, bool), Material> _materials = new Dictionary<(Color, Texture, Texture, bool), Material>();
-        private Material _templateNormal, _templateWind, _templateWindNormal;
+        private Material _templateNormal, _templateWind, _templateWindNormal, _templateSimple, _templateSimpleNormal;
         private readonly Dictionary<(SceneryKind, int, int), (Mesh Mesh, Material[] Materials)> _models = new Dictionary<(SceneryKind, int, int), (Mesh, Material[])>();
         private readonly List<SceneryChunkData> _chunks = new List<SceneryChunkData>();
         private readonly Dictionary<(SceneryKind Kind, int Variant, int Lod, int Shadows), List<Matrix4x4>> _instances = new Dictionary<(SceneryKind, int, int, int), List<Matrix4x4>>();
@@ -144,19 +144,17 @@ namespace FreeVelo.World
                 _templateNormal = Resources.Load<Material>("FreeVeloLitNormal") ?? _template;
                 _templateWind = Resources.Load<Material>("FreeVeloLitWind") ?? _template;
                 _templateWindNormal = Resources.Load<Material>("FreeVeloLitWindNormal") ?? _templateNormal;
+                _templateSimple = Resources.Load<Material>("FreeVeloSimpleLit") ?? _template;
+                _templateSimpleNormal = Resources.Load<Material>("FreeVeloSimpleLitNormal") ?? _templateNormal;
             }
 
-            var template = wind ? (normal != null ? _templateWindNormal : _templateWind) : (normal != null ? _templateNormal : _template);
+            // Matte materials (everything but foliage, water and steel) use URP's cheaper Simple Lit shader: the
+            // comparison renders of 25 Nov 2026 differed by 3–7/255 on average, the owner chose it.
+            bool simple = !wind && smoothness < 0.5f;
+            var template = wind ? (normal != null ? _templateWindNormal : _templateWind)
+                : simple ? (normal != null ? _templateSimpleNormal : _templateSimple)
+                : (normal != null ? _templateNormal : _template);
             m = new Material(template) { color = color, enableInstancing = true };
-#if UNITY_EDITOR
-            // Comparison renders (Lit against Simple Lit, 25 Nov 2026): an empty RenderShots/simplelit file switches every
-            // matte material (not foliage, not water) to URP's cheaper Simple Lit shader. Editor only.
-            if (!wind && smoothness < 0.5f && System.IO.File.Exists(System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName, "RenderShots", "simplelit")))
-            {
-                var simple = Shader.Find("Universal Render Pipeline/Simple Lit");
-                if (simple != null) m.shader = simple;
-            }
-#endif
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
             if (texture != null)
             {
