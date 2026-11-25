@@ -10,5 +10,6 @@ class UnityFilesTest {
         assertEquals("application/vnd.ant.fit", UnityFiles.mimeTypeFor("/data/x/rides/2026-11-04 4x4.FIT"))
         assertEquals("text/csv", UnityFiles.mimeTypeFor("ble.csv"))
         assertEquals("application/octet-stream", UnityFiles.mimeTypeFor("noextension"))
+        assertEquals("text/plain", UnityFiles.mimeTypeFor("freevelo-app.txt"))
     }
 }

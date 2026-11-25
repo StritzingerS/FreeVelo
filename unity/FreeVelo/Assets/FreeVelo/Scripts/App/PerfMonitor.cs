@@ -59,13 +59,26 @@ namespace FreeVelo.App
             }
 
             _since += Time.unscaledDeltaTime;
-            if (_since < Period || _frames.Count < 10) return;
-            Report();
+            if (_since < Period || _frames.Count < 10 || Benchmark.Running) return;
+            Report("Perf 1 min");
         }
 
-        private void Report()
+        /// <summary>Drops what was measured so far (the benchmark starts each section fresh).</summary>
+        public void Restart()
+        {
+            _frames.Clear();
+            _cpu = _gpu = 0;
+            _timed = 0;
+            _since = 0;
+            _instances = _draws = 0;
+            PerfTimes.TakeReport(1);
+        }
+
+        /// <summary>Writes one line for the frames since the last report or restart, starting with <paramref name="label"/>.</summary>
+        public void Report(string label)
         {
             int n = _frames.Count;
+            if (n == 0) return;
             float sum = 0;
             foreach (float f in _frames) sum += f;
             _frames.Sort();
@@ -77,7 +90,7 @@ namespace FreeVelo.App
             string battery100 = battery >= 0 ? $" · battery {battery * 100:0}% ({(_batteryStart - battery) * 100:+0;-0;0} since start)" : "";
             string parts = PerfTimes.TakeReport(n);
             if (parts.Length > 0) parts = $" · CPU ms/frame [{parts}]";
-            _log($"Perf 1 min:{1000f * n / sum:0} fps avg · frame p95 {P(0.95):0.0} p99 {P(0.99):0.0} max {_frames[n - 1]:0} ms{cpuGpu}"
+            _log($"{label}:{1000f * n / sum:0} fps avg · frame p95 {P(0.95):0.0} p99 {P(0.99):0.0} max {_frames[n - 1]:0} ms{cpuGpu}"
                  + $" · scenery {_instances / n} instances in {_draws / n} calls{render} · grass {FreeVelo.World.GrassField.Drawn} · quality {(AppSettings.Quality == GraphicsQuality.Low ? "low" : "high")} at {GraphicsQuality.RenderScale * 100:0} %{parts} · thermal {Thermal()}{battery100}");
             _frames.Clear();
             _cpu = _gpu = 0;

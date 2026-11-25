@@ -98,6 +98,14 @@ namespace FreeVelo.UI
                 return;
             }
 
+            if (Benchmark.Running && _ride.State != RideState.Riding)
+            {
+                DrawBenchmark();
+                Ui.DrawToast(_w, _h);
+                UiCheck.End();
+                return;
+            }
+
             switch (_ride.State)
             {
                 case RideState.Riding:
@@ -690,7 +698,14 @@ namespace FreeVelo.UI
                 if (!string.IsNullOrEmpty(path))
                 {
                     // Android/data cannot be opened by other apps (Android 11+): share or copy the log from here.
-                    GUI.Label(new Rect(log.x + 16, log.yMax - 28, log.width - 560, 20), System.IO.Path.GetFileName(path), Clip(Theme.With(Theme.Caption, Theme.Faint, 13)));
+                    GUI.Label(new Rect(log.x + 16, log.yMax - 28, log.width - 738, 20), System.IO.Path.GetFileName(path), Clip(Theme.With(Theme.Caption, Theme.Faint, 13)));
+                    // A ride without a trainer through four stretches of the world, one perf line each (Benchmark).
+                    if (Ui.Button(new Rect(log.xMax - 712, log.yMax - 50, 170, 40), L.Get("benchmark"), ButtonKind.Secondary, Icon.Bolt) && Benchmark.Instance != null)
+                    {
+                        _showLog = false;
+                        Benchmark.Instance.Run();
+                    }
+
                     // Copies the app messages (start-up times, performance lines, errors) as text: works on every phone,
                     // also where sharing or saving the file fails (it did on a OnePlus Nord 2).
                     if (Ui.Button(new Rect(log.xMax - 534, log.yMax - 50, 170, 40), L.Get("copy_log"), ButtonKind.Secondary, Icon.Share))
@@ -707,12 +722,26 @@ namespace FreeVelo.UI
 
                     if (Ui.Button(new Rect(log.xMax - 178, log.yMax - 50, 166, 40), L.Get("save_log"), ButtonKind.Secondary, Icon.Download))
                     {
-                        string result = FileActions.SaveToDownloads(_ble.LogFileForSharing());
-                        if (result.StartsWith("✗")) ShareLogAsText(result);
-                        else Ui.Toast(result);
+                        // The system's "save as" dialog: writing to Downloads directly did nothing on the owner's
+                        // phones (25 Nov 2026), the dialog works everywhere and shows where the file goes.
+                        string error = FileActions.SaveAs(_ble.LogFileForSharing());
+                        if (error != null) ShareLogAsText(error);
                     }
                 }
             }
+        }
+
+        /// <summary>The benchmark run: only a small card (stretch, progress, cancel), so the HUD costs next to nothing.</summary>
+        private void DrawBenchmark()
+        {
+            var r = new Rect(24, 24, 360, 104);
+            Ui.Card(r);
+            GUI.Label(new Rect(r.x + 18, r.y + 14, r.width - 36, 18), L.Get("benchmark").ToUpperInvariant(), Theme.Overline);
+            GUI.Label(new Rect(r.x + 18, r.y + 34, r.width - 150, 28), Benchmark.Status, Theme.With(Theme.H3, size: 18));
+            var bar = new Rect(r.x + 18, r.yMax - 26, r.width - 150, 8);
+            Ui.Rect(bar, Theme.Surface2, 4);
+            Ui.Rect(new Rect(bar.x, bar.y, bar.width * Mathf.Clamp01(Benchmark.Progress), bar.height), Theme.Success, 4);
+            if (Ui.Button(new Rect(r.xMax - 122, r.y + 32, 106, 40), L.Get("cancel"), ButtonKind.Ghost)) Benchmark.Instance?.Cancel();
         }
 
         /// <summary>

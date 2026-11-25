@@ -20,6 +20,7 @@ object UnityFiles {
         "csv" -> "text/csv"
         "json" -> "application/json"
         "zwo", "xml" -> "application/xml"
+        "txt", "log" -> "text/plain"
         else -> "application/octet-stream"
     }
 
@@ -46,9 +47,16 @@ object UnityFiles {
         activity.runOnUiThread { activity.startActivity(intent) }
     }
 
+    /** Opens the system "save as" dialog for a file of the app; the chosen place gets a copy (see [SaveFileActivity]). */
+    @JvmStatic
+    fun saveAs(activity: Activity, path: String) {
+        val intent = Intent(activity, SaveFileActivity::class.java).putExtra(SaveFileActivity.EXTRA_SOURCE, path)
+        activity.runOnUiThread { activity.startActivity(intent) }
+    }
+
     /**
      * Copies a file to Downloads/FreeVelo (no storage permission needed on Android 10+).
-     * Returns the visible path ("Download/FreeVelo/…") or "" on failure.
+     * Returns the visible path ("Download/FreeVelo/…") or "!" and the reason on failure.
      */
     @JvmStatic
     fun saveToDownloads(context: Context, path: String, displayName: String): String = try {
@@ -64,6 +72,6 @@ object UnityFiles {
         out.use { o -> File(path).inputStream().use { it.copyTo(o) } }
         "${Environment.DIRECTORY_DOWNLOADS}/FreeVelo/$displayName"
     } catch (e: Exception) {
-        ""
+        "!" + (e.message ?: e.javaClass.simpleName)
     }
 }

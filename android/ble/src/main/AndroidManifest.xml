@@ -34,6 +34,12 @@
             android:exported="false"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Invisible helper that opens the system "save as" dialog (log and ride downloads). -->
+        <activity
+            android:name="io.github.stritzingers.freevelo.files.SaveFileActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <service
             android:name="io.github.stritzingers.freevelo.ride.RideService"
             android:exported="false"

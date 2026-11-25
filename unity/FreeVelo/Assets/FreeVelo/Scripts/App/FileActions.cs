@@ -79,11 +79,45 @@ namespace FreeVelo.App
                 using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
                 {
                     string saved = files.CallStatic<string>("saveToDownloads", player.GetStatic<AndroidJavaObject>("currentActivity"), path, Path.GetFileName(path));
-                    return string.IsNullOrEmpty(saved) ? "✗ " + L.Get("save_failed") : "✓ " + saved;
+                    if (!string.IsNullOrEmpty(saved) && !saved.StartsWith("!")) return "✓ " + saved;
+                    // Writing to Downloads directly failed: the system's "save as" dialog instead.
+                    Debug.LogWarning("Save to Downloads failed: " + (saved ?? "").TrimStart('!'));
+                    return SaveAs(path) ?? L.Get("save_dialog");
                 }
 #elif UNITY_EDITOR
                 UnityEditor.EditorUtility.RevealInFinder(path);
                 return path;
+#else
+                return path;
+#endif
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                return Explain(e);
+            }
+        }
+
+        /// <summary>
+        /// Opens the system "save as" dialog (the user picks the folder, Downloads by default; the app shows "✓ name"
+        /// when copied). Null when the dialog opened, else a message.
+        /// </summary>
+        public static string SaveAs(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return "✗ " + L.Get("file_missing");
+            try
+            {
+#if UNITY_ANDROID && !UNITY_EDITOR
+                using (var files = new AndroidJavaClass(FilesClass))
+                using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                {
+                    files.CallStatic("saveAs", player.GetStatic<AndroidJavaObject>("currentActivity"), path);
+                }
+
+                return null;
+#elif UNITY_EDITOR
+                UnityEditor.EditorUtility.RevealInFinder(path);
+                return null;
 #else
                 return path;
 #endif

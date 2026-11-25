@@ -688,6 +688,25 @@ namespace FreeVelo.World
 
         // ------------------------------------------------------------------ scenery
 
+        /// <summary>Scenery items (houses, trees, fences, …) within <paramref name="radius"/> of a point (for the benchmark).</summary>
+        internal int ItemsNear(float x, float z, float radius)
+        {
+            int count = 0;
+            float r2 = radius * radius, reach = radius + (SceneryChunk * 0.75f);
+            foreach (var chunk in _chunks)
+            {
+                float cx = chunk.Center.x - x, cz = chunk.Center.z - z;
+                if ((cx * cx) + (cz * cz) > reach * reach) continue;
+                foreach (var item in chunk.Items)
+                {
+                    float dx = item.X - x, dz = item.Z - z;
+                    if ((dx * dx) + (dz * dz) < r2) count++;
+                }
+            }
+
+            return count;
+        }
+
         private sealed class SceneryChunkData
         {
             public Vector3 Center;
