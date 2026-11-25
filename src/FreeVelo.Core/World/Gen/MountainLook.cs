@@ -131,7 +131,10 @@ namespace FreeVelo.Core.World.Gen
 
                     double h = terrain.Height(x, z);
                     double slope = terrain.Slope(x, z);
-                    var item = new SceneryItem { X = (float)x, Y = (float)h - 0.3f, Z = (float)z, RotationDeg = (float)(r3 * 360), Variant = (int)(r2 * 97), Scale = (float)(0.8 + (0.4 * r1)) };
+                    // Variant 0–2 like everywhere else: the models only ever used variant % 3, but the app batches its
+                    // instances by the raw number, so 0–96 split every forest into up to 97 draw groups (OnePlus
+                    // benchmark, 25 Nov 2026: 1,353 trees in 1,364 draw calls on the forest climb).
+                    var item = new SceneryItem { X = (float)x, Y = (float)h - 0.3f, Z = (float)z, RotationDeg = (float)(r3 * 360), Variant = (int)(r2 * 97) % SceneryModels.Variants, Scale = (float)(0.8 + (0.4 * r1)) };
 
                     // Along the river and the lake shores: alders (the weeping willow was taken out at the owner's
                     // request: it did not fit the landscape).

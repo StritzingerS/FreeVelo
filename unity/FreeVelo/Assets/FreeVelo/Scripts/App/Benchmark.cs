@@ -167,10 +167,11 @@ namespace FreeVelo.App
                 _stretches.Add((name, key, at));
             }
 
+            // Items -1: not known there (mountain chunks are streamed in later), never "dense" or "open".
             Take("dense", "bench_dense", s => s.Items);
             Take("climb", "bench_climb", s => s.Climb);
             Take("high view", "bench_view", s => s.Y);
-            Take("open", "bench_open", s => -s.Items);
+            Take("open", "bench_open", s => s.Items < 0 ? double.MinValue / 2 : -s.Items);
         }
     }
 }
