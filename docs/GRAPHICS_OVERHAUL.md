@@ -410,6 +410,17 @@ stays high.
   `AppSettings.Quality` is cached (it was a PlayerPrefs call several times a frame). The perf line in the app log
   now adds `CPU ms/frame [grass, scenery (incl. streaming), streaming, riders, smoke, birds, hud]` (`PerfTimes`).
 
+**High optimised (owner's choice of 1–3, 25 Nov 2026):**
+1. Dynamic resolution on high (`DynamicResolution`): the render scale goes down in 5 % steps to 80 % while the
+   GPU needs more than 15 ms a frame (1 s average) and back up below 11.5 ms; phones that keep up stay at 100 %.
+   The perf line shows the scale. Player only (the editor keeps the asset).
+2. Edge smoothing on high 4× → 2× MSAA.
+3. Far mountain blocks: the 128 m level of 4 × 4 far tiles merged (`FarBlock`), drawn instead of the tiles while the
+   block's nearest edge is beyond 7.5 km (where every tile shows that level anyway). High view over the start
+   valley: mountain draws beyond 4 km 489 → 197 (171 tiles + 26 blocks), renderers in all 859 → 554, triangles
+   about the same.
+Not done (owner): shadows to 80 m, high at 30 fps for slower phones, HDR off, a shorter tree detail range.
+
 ### Budget for 60 fps on a mid-range phone *(estimate)*
 
 | Item | Budget |

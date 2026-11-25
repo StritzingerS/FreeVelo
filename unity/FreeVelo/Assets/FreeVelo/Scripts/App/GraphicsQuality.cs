@@ -52,8 +52,10 @@ namespace FreeVelo.App
             }
             else
             {
-                // full resolution, 4× edge smoothing, HDR, soft shadows to 110 m (the project's own settings)
-                Set(1f, 4, true, 110f, 2, 2048);
+                // full resolution (lowered to 80 % at most by DynamicResolution when the GPU cannot keep up), 2× edge
+                // smoothing (4× until 25 Nov 2026: hardly visible on a phone's dense display, costly on Mali GPUs),
+                // HDR, soft shadows to 110 m
+                Set(1f, 2, true, 110f, 2, 2048);
             }
 
             // Low holds a steady 30 frames a second: the Nord 2 averaged 52–54 fps there but jumped between 60 and 30
@@ -62,6 +64,15 @@ namespace FreeVelo.App
 
             var sun = Object.FindObjectsByType<Light>(FindObjectsSortMode.None).FirstOrDefault(l => l.type == LightType.Directional);
             if (sun != null) sun.shadows = tier == High ? LightShadows.Soft : LightShadows.Hard;
+        }
+
+        /// <summary>The render scale in use (1 in the editor, where the pipeline asset is left alone).</summary>
+        public static float RenderScale => _copy != null ? _copy.renderScale : 1f;
+
+        /// <summary>For <see cref="DynamicResolution"/>: the render scale on high (0.8–1).</summary>
+        public static void SetRenderScale(float scale)
+        {
+            if (_copy != null) _copy.renderScale = Mathf.Clamp(scale, 0.8f, 1f);
         }
 
         private static void Set(float scale, int msaa, bool hdr, float shadowDistance, int cascades, int shadowResolution)
@@ -121,6 +132,60 @@ namespace FreeVelo.App
             GraphicsQuality.Apply(GraphicsQuality.Low);
             _log?.Invoke($"Graphics: high ran at {fps:0} fps over {Window:0} s, switched to low");
             FreeVelo.UI.Ui.Toast(L.Get("quality_auto_low"));
+        }
+    }
+
+    /// <summary>
+    /// On high, lowers the render resolution step by step (to 80 % at most) while the GPU needs more than 15 ms a frame
+    /// on average over a second, and raises it again below 11.5 ms (owner, 25 Nov 2026: little visible on a phone's
+    /// dense display, much GPU time saved). Phones that keep up stay at 100 %. Needs the GPU frame time
+    /// (FrameTimingManager, captured by <see cref="PerfMonitor"/>); without it nothing changes. Player only.
+    /// </summary>
+    public sealed class DynamicResolution : MonoBehaviour
+    {
+        private const float TooSlowMs = 15f, FastMs = 11.5f, Step = 0.05f, Interval = 1f;
+
+        private readonly FrameTiming[] _timing = new FrameTiming[1];
+        private double _gpu;
+        private int _samples;
+        private float _since;
+        private bool _wasHigh;
+
+        private void Update()
+        {
+            bool high = AppSettings.Quality == GraphicsQuality.High;
+            if (!high)
+            {
+                _wasHigh = false;
+                return;
+            }
+
+            if (!_wasHigh)
+            {
+                // just switched to high (or started): from full resolution
+                _wasHigh = true;
+                GraphicsQuality.SetRenderScale(1f);
+                _gpu = 0;
+                _samples = 0;
+                _since = 0;
+            }
+
+            if (FrameTimingManager.GetLatestTimings(1, _timing) > 0 && _timing[0].gpuFrameTime > 0)
+            {
+                _gpu += _timing[0].gpuFrameTime;
+                _samples++;
+            }
+
+            _since += Time.unscaledDeltaTime;
+            if (_since < Interval) return;
+            _since = 0;
+            if (_samples < 10) return;
+            double gpu = _gpu / _samples;
+            _gpu = 0;
+            _samples = 0;
+            float scale = GraphicsQuality.RenderScale;
+            if (gpu > TooSlowMs && scale > 0.8f + 0.001f) GraphicsQuality.SetRenderScale(scale - Step);
+            else if (gpu < FastMs && scale < 1f - 0.001f) GraphicsQuality.SetRenderScale(scale + Step);
         }
     }
 }

@@ -78,7 +78,7 @@ namespace FreeVelo.App
             string parts = PerfTimes.TakeReport(n);
             if (parts.Length > 0) parts = $" · CPU ms/frame [{parts}]";
             _log($"Perf 1 min:{1000f * n / sum:0} fps avg · frame p95 {P(0.95):0.0} p99 {P(0.99):0.0} max {_frames[n - 1]:0} ms{cpuGpu}"
-                 + $" · scenery {_instances / n} instances in {_draws / n} calls{render} · grass {FreeVelo.World.GrassField.Drawn} · quality {(AppSettings.Quality == GraphicsQuality.Low ? "low" : "high")}{parts} · thermal {Thermal()}{battery100}");
+                 + $" · scenery {_instances / n} instances in {_draws / n} calls{render} · grass {FreeVelo.World.GrassField.Drawn} · quality {(AppSettings.Quality == GraphicsQuality.Low ? "low" : "high")} at {GraphicsQuality.RenderScale * 100:0} %{parts} · thermal {Thermal()}{battery100}");
             _frames.Clear();
             _cpu = _gpu = 0;
             _timed = 0;
