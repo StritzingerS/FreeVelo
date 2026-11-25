@@ -374,12 +374,13 @@ namespace FreeVelo.App
             _camera.transform.LookAt(position + (Vector3.up * 1.05f));
 
             // Camera feel while riding (off with "calm" camera motion): the view widens with speed, up to 8° more at
-            // 60 km/h (from 20 km/h, eased over about a second), and the camera rolls with a quarter of the bike's lean.
+            // 60 km/h (from 20 km/h, eased over about a second), and the camera rolls a little with the bike's lean.
             bool lively = riding && !AppSettings.ReducedMotion;
             float kmh = speed * 3.6f;
             float fov = BaseFov + (lively ? 8f * Mathf.Clamp01((kmh - 20f) / 40f) : 0f);
             _fov = Mathf.Lerp(_fov <= 0 ? BaseFov : _fov, fov, 1f - Mathf.Exp(-dt / 1f));
-            _cameraRoll = Mathf.Lerp(_cameraRoll, lively ? -0.25f * _lean : 0f, 1f - Mathf.Exp(-dt / 0.3f));
+            // Toned down (owner, 25 Nov 2026: too much in the benchmark's hairpins): 15 % of the lean, at most 4°.
+            _cameraRoll = Mathf.Lerp(_cameraRoll, lively ? Mathf.Clamp(-0.15f * _lean, -4f, 4f) : 0f, 1f - Mathf.Exp(-dt / 0.3f));
             _camera.transform.Rotate(0f, 0f, _cameraRoll, Space.Self);
 
             // Render shots (editor tooling): the camera stands where the shot wants it.
