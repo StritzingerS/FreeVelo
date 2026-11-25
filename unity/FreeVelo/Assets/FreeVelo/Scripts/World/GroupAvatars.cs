@@ -61,7 +61,8 @@ namespace FreeVelo.World
             }
 
             var riders = _group.State.Riders(GroupRideService.NowS);
-            var present = new HashSet<ushort>();
+            var present = _present; // reused: a new set and list every frame were garbage on the phone
+            present.Clear();
             float dt = Time.deltaTime;
             foreach (var r in riders)
             {
@@ -89,13 +90,22 @@ namespace FreeVelo.World
             }
 
             // Riders who left.
-            foreach (ushort slot in new List<ushort>(_remotes.Keys))
+            if (_remotes.Count == present.Count) return;
+            _gone.Clear();
+            foreach (ushort slot in _remotes.Keys)
             {
-                if (present.Contains(slot)) continue;
+                if (!present.Contains(slot)) _gone.Add(slot);
+            }
+
+            foreach (ushort slot in _gone)
+            {
                 Destroy(_remotes[slot].Avatar.gameObject);
                 _remotes.Remove(slot);
             }
         }
+
+        private readonly HashSet<ushort> _present = new HashSet<ushort>();
+        private readonly List<ushort> _gone = new List<ushort>();
 
         private void Clear()
         {

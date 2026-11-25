@@ -421,6 +421,23 @@ stays high.
    about the same.
 Not done (owner): shadows to 80 m, high at 30 fps for slower phones, HDR off, a shorter tree detail range.
 
+**Mobile best practices (owner's choice of 1–4, 25 Nov 2026):**
+1. Android "Optimized Frame Pacing" (Swappy) on, kept on by the editor script `FreeVeloPlayerSettings`.
+2. 30 fps outside a ride (menus, summary, loading); riding 60 on high, 30 on low.
+3. Generated textures compressed on the GPU after making them (`TextureFactory.CompressForGpu`: ground, roads,
+   field rows and surface details RGB → DXT1/ETC, an eighth of the memory; normal maps and grass cards RGBA →
+   DXT5/ETC2, a quarter).
+4. Per-frame garbage removed: grass (stopwatch, piece clean-up every 2 s with a reused list, reused queue list),
+   the power averages (LINQ on every sample), the group riders' set and list.
+5. Simple Lit compared with Lit (comparison renders `RenderShots/out/compare_*.png`; editor switch: an empty
+   `RenderShots/simplelit` file turns every matte material – not foliage, water or the galvanised steel – to Simple
+   Lit): mean pixel difference 3–7 of 255, at most 18 % of the pixels by more than 12 (the street view; asphalt a
+   little lighter). Waiting for the owner's verdict; switching for good needs template materials in Resources so the
+   shader is in the build.
+Other practices noted, not done: thermal-aware quality, an HUD without IMGUI (decide after the next log's `hud`
+time), GPU Resident Drawer (needs Vulkan and Forward+). Note: the editor uses the "PC" quality level (lodBias 2),
+the phones "Mobile" (lodBias 1), so editor triangle counts are higher than on the phone.
+
 ### Budget for 60 fps on a mid-range phone *(estimate)*
 
 | Item | Budget |

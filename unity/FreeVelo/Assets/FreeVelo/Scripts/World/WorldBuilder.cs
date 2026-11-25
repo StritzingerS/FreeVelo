@@ -148,6 +148,15 @@ namespace FreeVelo.World
 
             var template = wind ? (normal != null ? _templateWindNormal : _templateWind) : (normal != null ? _templateNormal : _template);
             m = new Material(template) { color = color, enableInstancing = true };
+#if UNITY_EDITOR
+            // Comparison renders (Lit against Simple Lit, 25 Nov 2026): an empty RenderShots/simplelit file switches every
+            // matte material (not foliage, not water) to URP's cheaper Simple Lit shader. Editor only.
+            if (!wind && smoothness < 0.5f && System.IO.File.Exists(System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath).FullName, "RenderShots", "simplelit")))
+            {
+                var simple = Shader.Find("Universal Render Pipeline/Simple Lit");
+                if (simple != null) m.shader = simple;
+            }
+#endif
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
             if (texture != null)
             {

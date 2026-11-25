@@ -90,7 +90,7 @@ namespace FreeVelo.World
 
         private static Texture2D Create(int size, string name, Func<int, int, float, float, Color> pixel)
         {
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, true)
+            var texture = new Texture2D(size, size, TextureFormat.RGB24, true)
             {
                 name = name,
                 wrapMode = TextureWrapMode.Repeat,
@@ -107,7 +107,7 @@ namespace FreeVelo.World
             }
 
             texture.SetPixels32(pixels);
-            texture.Apply(true, true);
+            CompressForGpu(texture);
             long r = 0, g = 0, b = 0;
             foreach (var p in pixels)
             {
@@ -122,6 +122,18 @@ namespace FreeVelo.World
             for (int i = 0; i < heights.Length; i++) heights[i] = ((pixels[i].r * 0.3f) + (pixels[i].g * 0.59f) + (pixels[i].b * 0.11f)) / 255f;
             Heights[texture] = (heights, size);
             return texture;
+        }
+
+        /// <summary>
+        /// Mipmaps, then the GPU's compressed format (DXT on a PC, ETC/ETC2 on a phone; fast mode, a few ms each), then
+        /// the CPU copy freed. RGB 24-bit textures take an eighth of the memory and bandwidth afterwards, RGBA a quarter
+        /// (25 Nov 2026: the generated ground, road and normal textures were all uncompressed).
+        /// </summary>
+        public static void CompressForGpu(Texture2D texture)
+        {
+            texture.Apply(true, false);
+            texture.Compress(false);
+            texture.Apply(false, true);
         }
 
         /// <summary>No domain reload between play sessions: drop the old textures' data (Unity has destroyed them).</summary>

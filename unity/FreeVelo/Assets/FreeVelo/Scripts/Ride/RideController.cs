@@ -763,11 +763,24 @@ namespace FreeVelo.Ride
             float now = ClockS;
             _powerWindow.Enqueue((now, power));
             while (_powerWindow.Count > 0 && now - _powerWindow.Peek().T > 3f) _powerWindow.Dequeue();
-            Power3s = _powerWindow.Average(x => x.P);
+            // Plain loops (LINQ allocated on every sample, i.e. every frame).
+            double sum3 = 0, sum1 = 0;
+            int n1 = 0;
+            foreach (var (t, p) in _powerWindow)
+            {
+                sum3 += p;
+                if (now - t <= 1f)
+                {
+                    sum1 += p;
+                    n1++;
+                }
+            }
+
+            Power3s = sum3 / _powerWindow.Count;
             // Free ride: the display uses the 3 s average (owner, 24 Nov 2026): with 1 s every small surge showed (on the
             // flat at 33 km/h the trainer's simulated inertia swings the power by ±50 W at the same cadence). Workouts and
             // group rides keep 1 s, to hold a target or react to the group.
-            PowerShown = _steadyPowerDisplay ? Power3s : _powerWindow.Where(x => now - x.T <= 1f).Select(x => x.P).DefaultIfEmpty(power).Average();
+            PowerShown = _steadyPowerDisplay ? Power3s : n1 > 0 ? sum1 / n1 : power;
         }
 
         private void ShowCue(string text)

@@ -357,9 +357,9 @@ namespace FreeVelo.World
                 }
             }
 
-            var a = new Texture2D(Size, Size, TextureFormat.RGBA32, true) { name = name, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 4 };
+            var a = new Texture2D(Size, Size, TextureFormat.RGB24, true) { name = name, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 4 };
             a.SetPixels32(albedo);
-            a.Apply(true, true);
+            TextureFactory.CompressForGpu(a);
 
             // Its average brightness, so that the material colour is compensated as for the scans: the surface comes
             // out in the palette's colour on average (foliage was about 15 % too dark otherwise).
@@ -399,7 +399,7 @@ namespace FreeVelo.World
 
             var t = new Texture2D(size, size, TextureFormat.RGBA32, true, true) { name = name, wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Trilinear, anisoLevel = 4 };
             t.SetPixels32(pixels);
-            t.Apply(true, true);
+            TextureFactory.CompressForGpu(t); // DXT5 / ETC2 RGBA: x in alpha keeps its precision
             return t;
         }
 

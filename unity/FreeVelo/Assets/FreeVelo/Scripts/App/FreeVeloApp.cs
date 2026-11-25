@@ -320,6 +320,11 @@ namespace FreeVelo.App
             _avatar.transform.SetPositionAndRotation(position, rotation);
 
             bool riding = _ride.State == RideState.Riding;
+
+            // Menus, ride summary and loading need no 60 frames a second: 30 there saves battery and heat before the
+            // ride has even started. Riding: 60 on high, 30 on low (GraphicsQuality).
+            int frameRate = riding && AppSettings.Quality == GraphicsQuality.High ? 60 : 30;
+            if (Application.targetFrameRate != frameRate) Application.targetFrameRate = frameRate;
             // Braking for a bend: the rider stops pedalling and freewheels.
             float cadence = riding && !_ride.IsBraking ? (float)(_ble.Hub.Live.CadenceRpm ?? 0) : 0;
             float speed = riding ? (float)_ride.SpeedMps : 0f; // wheels stand still outside a ride (menus, summary)

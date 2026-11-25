@@ -48,6 +48,10 @@ namespace FreeVelo.World
         private Terrain _terrain;
         private readonly Dictionary<long, PieceData> _pieces = new Dictionary<long, PieceData>();
         private Vector3 _lastQueue = new Vector3(float.MaxValue, 0, 0);
+        private readonly List<long> _drop = new List<long>();
+        private readonly List<(float D, long Key, int X, int Z)> _wanted = new List<(float, long, int, int)>();
+        private float _lastCleanup;
+        private static readonly System.Comparison<(float D, long Key, int X, int Z)> ByDistance = (a, b) => a.D.CompareTo(b.D);
         private readonly Queue<long> _todo = new Queue<long>();
         private readonly HashSet<long> _queued = new HashSet<long>();
         private Mesh[] _meshes;
@@ -107,8 +111,8 @@ namespace FreeVelo.World
 
             // Queue the pieces in reach (every 4 m of camera travel), nearest first; compute some within 1 ms.
             if ((eye - _lastQueue).sqrMagnitude > 16f) Queue(eye, radius);
-            var clock = System.Diagnostics.Stopwatch.StartNew();
-            while (_todo.Count > 0 && clock.Elapsed.TotalMilliseconds < 1.0)
+            long start = System.Diagnostics.Stopwatch.GetTimestamp(), budget = System.Diagnostics.Stopwatch.Frequency / 1000; // 1 ms
+            while (_todo.Count > 0 && System.Diagnostics.Stopwatch.GetTimestamp() - start < budget)
             {
                 long key = _todo.Dequeue();
                 _queued.Remove(key);
@@ -116,17 +120,18 @@ namespace FreeVelo.World
                 _pieces[key] = Prepare(Compute(px, pz), px, pz);
             }
 
-            // Forget pieces far behind (memory), then draw what is in view.
-            if (_pieces.Count > 1000)
+            // Forget pieces far behind (memory; every 2 s at most), then draw what is in view.
+            if (_pieces.Count > 1000 && Time.realtimeSinceStartup - _lastCleanup > 2f)
             {
-                var drop = new List<long>();
+                _lastCleanup = Time.realtimeSinceStartup;
+                _drop.Clear();
                 foreach (var key in _pieces.Keys)
                 {
                     float dx = (((int)(key >> 32) + 0.5f) * Piece) - eye.x, dz = (((int)(key & 0xFFFFFFFF) + 0.5f) * Piece) - eye.z;
-                    if ((dx * dx) + (dz * dz) > 4f * radius * radius) drop.Add(key);
+                    if ((dx * dx) + (dz * dz) > 4f * radius * radius) _drop.Add(key);
                 }
 
-                foreach (var key in drop) _pieces.Remove(key);
+                foreach (var key in _drop) _pieces.Remove(key);
             }
 
             Draw(cam, eye, radius);
@@ -137,7 +142,8 @@ namespace FreeVelo.World
             _lastQueue = eye;
             int c0 = Mathf.FloorToInt((eye.x - radius) / Piece), c1 = Mathf.FloorToInt((eye.x + radius) / Piece);
             int r0 = Mathf.FloorToInt((eye.z - radius) / Piece), r1 = Mathf.FloorToInt((eye.z + radius) / Piece);
-            var wanted = new List<(float D, long Key, int X, int Z)>();
+            var wanted = _wanted;
+            wanted.Clear();
             for (int pz = r0; pz <= r1; pz++)
             {
                 for (int px = c0; px <= c1; px++)
@@ -150,7 +156,7 @@ namespace FreeVelo.World
                 }
             }
 
-            wanted.Sort((a, b) => a.D.CompareTo(b.D));
+            wanted.Sort(ByDistance);
             foreach (var w in wanted)
             {
                 _todo.Enqueue(w.Key);
@@ -476,6 +482,8 @@ namespace FreeVelo.World
                 picture.SetPixels32(mip, level);
             }
 
+            picture.Apply(false, false);
+            picture.Compress(false); // ETC2 RGBA / DXT5: a quarter of the memory
             picture.Apply(false, true);
             return picture;
         }
