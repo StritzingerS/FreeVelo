@@ -45,6 +45,13 @@ namespace FreeVelo.World
 
         private void LateUpdate()
         {
+            // Low quality: no smoke (the puffs alive fade out by themselves).
+            if (FreeVelo.App.AppSettings.Lite) return;
+            using (FreeVelo.App.PerfTimes.Measure("smoke")) Tick();
+        }
+
+        private void Tick()
+        {
             var cam = Camera.main;
             if (_world == null || cam == null || _houses.Count == 0) return;
             if (_particles == null) CreateParticles();

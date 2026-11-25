@@ -38,6 +38,9 @@ namespace FreeVelo.World
             var dir = -WindFrom.normalized; // where the wind blows to
             // A breeze that comes and goes over a minute or two.
             float strength = 0.65f + (0.2f * Mathf.Sin(t * 0.05f)) + (0.1f * Mathf.Sin(t * 0.13f + 1.3f));
+            // Low quality: no wind (the shader then skips its work) and no cloud shadows.
+            bool lite = FreeVelo.App.AppSettings.Lite;
+            if (lite) strength = 0f;
             Shader.SetGlobalVector(WindDirId, new Vector4(dir.x, 0f, dir.y, 0f));
             Shader.SetGlobalFloat(WindStrengthId, strength);
 
@@ -47,25 +50,29 @@ namespace FreeVelo.World
                 _waterOffset += dir * (0.009f * Time.deltaTime);
                 _waterOffset.x = Mathf.Repeat(_waterOffset.x, 1f);
                 _waterOffset.y = Mathf.Repeat(_waterOffset.y, 1f);
-                Water.SetTextureOffset("_BaseMap", _waterOffset);
+                Water.SetTextureOffset(BaseMapId, _waterOffset);
             }
 
-            UpdateClouds(dir);
+            UpdateClouds(dir, lite);
         }
 
+        private static readonly int BaseMapId = Shader.PropertyToID("_BaseMap");
+
         /// <summary>Cloud shadows: a tiling cloud cookie on the sun (about 900 m a repeat), moving with the wind at about 6 m/s.</summary>
-        private void UpdateClouds(Vector2 dir)
+        private void UpdateClouds(Vector2 dir, bool lite)
         {
             if (_sun == null)
             {
                 _sun = RenderSettings.sun != null ? RenderSettings.sun : FindObjectsByType<Light>(FindObjectsSortMode.None).FirstOrDefault(l => l.type == LightType.Directional);
                 if (_sun == null) return;
                 _sunData = _sun.GetUniversalAdditionalLightData();
-                _sun.cookie = CloudCookie();
                 if (_sunData != null) _sunData.lightCookieSize = new Vector2(CloudTileM, CloudTileM);
             }
 
-            if (_sunData == null) return;
+            // on and off with the graphics quality (it can change during a ride)
+            var cookie = lite ? null : CloudCookie();
+            if (_sun.cookie != cookie) _sun.cookie = cookie;
+            if (_sunData == null || lite) return;
             _cloudOffset += dir * (6f * Time.deltaTime);
             _cloudOffset.x = Mathf.Repeat(_cloudOffset.x, CloudTileM);
             _cloudOffset.y = Mathf.Repeat(_cloudOffset.y, CloudTileM);

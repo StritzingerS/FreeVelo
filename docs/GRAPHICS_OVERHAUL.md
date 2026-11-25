@@ -400,6 +400,16 @@ high). `AutoQuality` watches high after the first 20 s of a running world: below
 switches to low, says so (toast and log line) and remembers it; if the rider then chooses high again by hand, it
 stays high.
 
+**Measured 25 Nov 2026 (build with the new rider, grass as cards, wind, clouds, smoke, rails, kerbs):**
+- Xiaomi 2602DPT53G (Android 16), high: 59 fps, CPU 17 ms, GPU 13 ms; start-up 19.6 s, but at 3 % battery
+  (every step about three times the OnePlus's – most likely battery saving).
+- OnePlus Nord 2, low (dropped there by AutoQuality): a fixed 30 fps just held, CPU 33.7 ms, **GPU 30 ms** (21 Nov:
+  17.5 ms on low); start-up 7.0 s (was 7.6 s).
+- Response: low is now a lite mode – no grass, no wind (strength 0, the shader skips its work), no cloud cookie, no
+  chimney smoke (`AppSettings.Lite`; switches during a ride with the quality). High is unchanged.
+  `AppSettings.Quality` is cached (it was a PlayerPrefs call several times a frame). The perf line in the app log
+  now adds `CPU ms/frame [grass, scenery (incl. streaming), streaming, riders, smoke, birds, hud]` (`PerfTimes`).
+
 ### Budget for 60 fps on a mid-range phone *(estimate)*
 
 | Item | Budget |

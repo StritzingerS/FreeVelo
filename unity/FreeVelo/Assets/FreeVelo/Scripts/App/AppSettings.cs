@@ -181,6 +181,7 @@ namespace FreeVelo.App
             _language = null;
             _zones = null;
             _reducedMotion = -1;
+            _quality = -1;
             Preload();
         }
 
@@ -196,9 +197,24 @@ namespace FreeVelo.App
         /// </summary>
         public static int Quality
         {
-            get => PlayerPrefs.GetInt("quality", GraphicsQuality.High) == GraphicsQuality.Low ? GraphicsQuality.Low : GraphicsQuality.High;
-            set => SetInt("quality", value == GraphicsQuality.Low ? GraphicsQuality.Low : GraphicsQuality.High);
+            // Cached: read several times a frame (grass, wind, smoke); PlayerPrefs is a slow call on Android.
+            get
+            {
+                if (_quality < 0) _quality = PlayerPrefs.GetInt("quality", GraphicsQuality.High) == GraphicsQuality.Low ? GraphicsQuality.Low : GraphicsQuality.High;
+                return _quality;
+            }
+
+            set
+            {
+                _quality = value == GraphicsQuality.Low ? GraphicsQuality.Low : GraphicsQuality.High;
+                SetInt("quality", _quality);
+            }
         }
+
+        private static int _quality = -1;
+
+        /// <summary>Low graphics quality: the extras (grass, wind, cloud shadows, chimney smoke) are off.</summary>
+        public static bool Lite => Quality == GraphicsQuality.Low;
 
         /// <summary>The app has dropped from high to low by itself once (because high stuttered).</summary>
         public static bool QualityAutoLowered

@@ -77,7 +77,7 @@ namespace FreeVelo.World
         private static bool LowQuality => FreeVelo.App.AppSettings.Quality == FreeVelo.App.GraphicsQuality.Low;
 
         /// <summary>How far the tufts reach: less on low graphics quality.</summary>
-        private static float Radius => CardsOnly ? (LowQuality ? 60f : 120f) : LowQuality ? 45f : 160f;
+        private static float Radius => CardsOnly ? 120f : LowQuality ? 45f : 160f;
 
         /// <summary>Beyond this the tufts use the simple version (a third of the blades, a little wider).</summary>
         private static float DetailRadius => LowQuality ? 18f : 30f;
@@ -86,6 +86,18 @@ namespace FreeVelo.World
         private static float CardRadius => LowQuality ? float.MaxValue : 100f;
 
         private void LateUpdate()
+        {
+            // Low quality: no grass (with it the OnePlus Nord 2's GPU needed 30 ms a frame on low, 17.5 ms without).
+            if (FreeVelo.App.AppSettings.Lite)
+            {
+                Drawn = 0;
+                return;
+            }
+
+            using (FreeVelo.App.PerfTimes.Measure("grass")) Tick();
+        }
+
+        private void Tick()
         {
             var cam = Camera.main;
             if (_terrain == null || cam == null) return;

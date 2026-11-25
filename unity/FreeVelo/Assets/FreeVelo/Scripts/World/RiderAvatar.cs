@@ -91,6 +91,11 @@ namespace FreeVelo.World
         /// <param name="intensity">Power relative to FTP (1 = threshold): at about twice FTP the rider sprints.</param>
         public void Animate(float speedMps, float cadenceRpm, float dt, float curvature = 0f, float gradePercent = 0f, float intensity = 0f)
         {
+            using (FreeVelo.App.PerfTimes.Measure("riders")) AnimateNow(speedMps, cadenceRpm, dt, curvature, gradePercent, intensity);
+        }
+
+        private void AnimateNow(float speedMps, float cadenceRpm, float dt, float curvature, float gradePercent, float intensity)
+        {
             float wheelDegrees = speedMps / (2f * Mathf.PI * AvatarModel.WheelRadius) * 360f * dt;
             _wheelAngle = Mathf.Repeat(_wheelAngle + wheelDegrees, 360f);
             _crankAngle = Mathf.Repeat(_crankAngle + (cadenceRpm / 60f * 360f * dt), 360f);

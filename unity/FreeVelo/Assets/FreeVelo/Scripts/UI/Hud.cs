@@ -64,6 +64,11 @@ namespace FreeVelo.UI
 
         private void OnGUI()
         {
+            using (PerfTimes.Measure("hud")) Gui();
+        }
+
+        private void Gui()
+        {
             if (_ble == null || _ride == null) return;
             Theme.Ensure();
 

@@ -908,11 +908,16 @@ namespace FreeVelo.World
         /// </summary>
         private void LateUpdate()
         {
+            using (FreeVelo.App.PerfTimes.Measure("scenery")) Tick();
+        }
+
+        private void Tick()
+        {
             if (_root == null) return;
             var cam = Camera.main;
             if (cam == null) return;
             var eye = cam.transform.position;
-            StreamMountain(eye);
+            using (FreeVelo.App.PerfTimes.Measure("streaming")) StreamMountain(eye);
 
             // The instance lists are rebuilt when the camera has moved 5 m or turned 6°: only chunks in view (a frustum
             // a little wider than the camera's, so turning does not show gaps before the next rebuild) are drawn, plus,

@@ -42,6 +42,11 @@ namespace FreeVelo.World
 
         private void LateUpdate()
         {
+            using (FreeVelo.App.PerfTimes.Measure("birds")) Tick();
+        }
+
+        private void Tick()
+        {
             var cam = Camera.main;
             if (_world == null || !_world.IsBuilt || cam == null) return;
             if (_root == null) CreateFlocks(cam.transform.position);
