@@ -1031,7 +1031,8 @@ namespace FreeVelo.World
                     // switch is at TreeDetailRadius; small props are shown all the way to DetailRadius; big ones like
                     // houses switch to the coded model at BakedRadius. Beyond DetailRadius, low detail.
                     var (baked, bakedRange) = BakedInfo(item.Kind, item.Variant);
-                    float bakedReach = bakedRange * reach;
+                    // Trees keep their full-detail range on low too (owner, 25 Nov 2026: the switch at 78 m looked bad).
+                    float bakedReach = bakedRange >= TreeDetailRadius ? bakedRange : bakedRange * reach;
                     int lod = d2 >= detail2 ? 1
                         : baked && d2 < bakedReach * bakedReach ? 0
                         : 2;
@@ -1076,8 +1077,8 @@ namespace FreeVelo.World
         }
 
         /// <summary>
-        /// Low quality shortens every detail distance to this share (trees 78 m instead of 130, houses 42 m instead of
-        /// 70, low detail from 180 m instead of 300; the LODGroups of mountain, ground and rails get the same through
+        /// Low quality shortens the detail distances to this share (houses 42 m instead of 70, low detail from 180 m
+        /// instead of 300; trees keep their 130 m, the owner found 78 m too visible; the LODGroups of mountain, ground and rails get the same through
         /// QualitySettings.lodBias). The OnePlus Nord 2 drew 1.9 million triangles on low, almost as many as high.
         /// </summary>
         internal const float LiteDistance = 0.6f;
