@@ -187,12 +187,20 @@ namespace FreeVelo.World
             return DoubleSided("BirdWing", v, tris);
         }
 
-        /// <summary>The triangles from both sides (wings are seen from above and below).</summary>
+        /// <summary>
+        /// The triangles from both sides (wings are seen from above and below). The back side gets its own vertices:
+        /// shared ones averaged both sides' normals to zero, which Simple Lit turned into NaN – a bright flickering
+        /// blob around every bird once bloom spread it (25 Nov 2026).
+        /// </summary>
         private static Mesh DoubleSided(string name, Vector3[] vertices, List<int> tris)
         {
+            int n = vertices.Length;
+            var both = new Vector3[n * 2];
+            vertices.CopyTo(both, 0);
+            vertices.CopyTo(both, n);
             var all = new List<int>(tris);
-            for (int i = 0; i < tris.Count; i += 3) all.AddRange(new[] { tris[i], tris[i + 2], tris[i + 1] });
-            var mesh = new Mesh { name = name, vertices = vertices };
+            for (int i = 0; i < tris.Count; i += 3) all.AddRange(new[] { tris[i] + n, tris[i + 2] + n, tris[i + 1] + n });
+            var mesh = new Mesh { name = name, vertices = both };
             mesh.SetTriangles(all, 0);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
