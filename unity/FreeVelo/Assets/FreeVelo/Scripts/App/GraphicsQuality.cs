@@ -62,9 +62,16 @@ namespace FreeVelo.App
             // all the time (95th percentile at 33.7 ms); a fixed 30 is even, cooler and uses less battery.
             Application.targetFrameRate = tier == Low ? 30 : 60;
 
+            // Low: LODGroups switch to their simpler level sooner (the instanced scenery does the same, see
+            // WorldBuilder.LiteDistance).
+            if (_baseLodBias < 0) _baseLodBias = QualitySettings.lodBias; // the quality level's own (PC 2, phone 1)
+            QualitySettings.lodBias = tier == Low ? _baseLodBias * FreeVelo.World.WorldBuilder.LiteDistance : _baseLodBias;
+
             var sun = Object.FindObjectsByType<Light>(FindObjectsSortMode.None).FirstOrDefault(l => l.type == LightType.Directional);
             if (sun != null) sun.shadows = tier == High ? LightShadows.Soft : LightShadows.Hard;
         }
+
+        private static float _baseLodBias = -1f;
 
         /// <summary>The render scale in use (1 in the editor, where the pipeline asset is left alone).</summary>
         public static float RenderScale => _copy != null ? _copy.renderScale : 1f;

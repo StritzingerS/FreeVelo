@@ -991,6 +991,9 @@ namespace FreeVelo.World
             GeometryUtility.CalculateFrustumPlanes(projection * cam.worldToCameraMatrix, _frustum);
             float shadowRange = ShadowDistance() + 15f, shadow2 = shadowRange * shadowRange;
             const float halfDiagonal = SceneryChunk * 0.75f;
+            // Low quality: every switch to a simpler model comes sooner (see LiteDistance).
+            float reach = FreeVelo.App.AppSettings.Lite ? LiteDistance : 1f;
+            float detail2 = DetailRadius * reach * DetailRadius * reach;
             UpdateSceneryBlocks(eye);
             foreach (var chunk in _chunks)
             {
@@ -1012,8 +1015,9 @@ namespace FreeVelo.World
                     // switch is at TreeDetailRadius; small props are shown all the way to DetailRadius; big ones like
                     // houses switch to the coded model at BakedRadius. Beyond DetailRadius, low detail.
                     var (baked, bakedRange) = BakedInfo(item.Kind, item.Variant);
-                    int lod = d2 >= DetailRadius * DetailRadius ? 1
-                        : baked && d2 < bakedRange * bakedRange ? 0
+                    float bakedReach = bakedRange * reach;
+                    int lod = d2 >= detail2 ? 1
+                        : baked && d2 < bakedReach * bakedReach ? 0
                         : 2;
                     var mode = !inView ? ShadowCastingMode.ShadowsOnly : shadow && lod != 1 ? ShadowCastingMode.On : ShadowCastingMode.Off;
                     var key = (item.Kind, item.Variant, lod, (int)mode);
@@ -1054,6 +1058,13 @@ namespace FreeVelo.World
             shear.m10 = item.Slope;
             return m * shear;
         }
+
+        /// <summary>
+        /// Low quality shortens every detail distance to this share (trees 78 m instead of 130, houses 42 m instead of
+        /// 70, low detail from 180 m instead of 300; the LODGroups of mountain, ground and rails get the same through
+        /// QualitySettings.lodBias). The OnePlus Nord 2 drew 1.9 million triangles on low, almost as many as high.
+        /// </summary>
+        internal const float LiteDistance = 0.6f;
 
         /// <summary>Close range of the Blender-built models (<see cref="BakedModels"/>); the coded model takes over beyond.</summary>
         private const float BakedRadius = 70f;
