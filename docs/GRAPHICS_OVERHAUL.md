@@ -292,9 +292,9 @@ village.
   the plain houses have none and do not smoke. About two in five such houses smoke (same ones every day): one
   particle system, puffs emitted by hand within 350 m, rising and drifting with the foliage's wind, URP
   Particles/Unlit via `Resources/FreeVeloSmoke.mat`.
-- Birds (`Birds`): two buzzards circling 38 m above the ground, mostly gliding, and four small birds flapping
-  across 22 m up; placed anew 60–120 m off when left behind or when the camera jumps.
-- Not yet measured on the phone: smoke and birds; the 2D-only grass (the wind adds vertex work for every
+- Birds: removed again on 25 Nov 2026 (owner: not needed; under Simple Lit their double-sided meshes flickered
+  as bright blobs).
+- Not yet measured on the phone: smoke; the 2D-only grass (the wind adds vertex work for every
   foliage vertex, including shadows).
 
 ### Camera feel (2026-11-24, built, waiting for the owner's verdict from a real ride)
@@ -408,7 +408,7 @@ stays high.
 - Response: low is now a lite mode – no grass, no wind (strength 0, the shader skips its work), no cloud cookie, no
   chimney smoke (`AppSettings.Lite`; switches during a ride with the quality). High is unchanged.
   `AppSettings.Quality` is cached (it was a PlayerPrefs call several times a frame). The perf line in the app log
-  now adds `CPU ms/frame [grass, scenery (incl. streaming), streaming, riders, smoke, birds, hud]` (`PerfTimes`).
+  now adds `CPU ms/frame [grass, scenery (incl. streaming), streaming, riders, smoke, hud]` (birds until they were removed) (`PerfTimes`).
 
 **High optimised (owner's choice of 1–3, 25 Nov 2026):**
 1. Dynamic resolution on high (`DynamicResolution`): the render scale goes down in 5 % steps to 80 % while the

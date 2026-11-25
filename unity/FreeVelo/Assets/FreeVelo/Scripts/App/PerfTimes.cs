@@ -5,7 +5,7 @@ using System.Text;
 namespace FreeVelo.App
 {
     /// <summary>
-    /// Main-thread time of the world's per-frame work (grass, scenery, riders, smoke, birds, wind), summed up and
+    /// Main-thread time of the world's per-frame work (grass, scenery, riders, smoke, wind), summed up and
     /// written as milliseconds per frame into the perf line of the app log (<see cref="PerfMonitor"/>), so a phone log
     /// shows which part costs how much. Measure with <c>using (PerfTimes.Measure("grass")) { … }</c>.
     /// </summary>

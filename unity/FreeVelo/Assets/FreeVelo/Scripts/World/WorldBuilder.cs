@@ -96,9 +96,6 @@ namespace FreeVelo.World
             var smoke = GetComponent<ChimneySmoke>();
             if (smoke == null) smoke = gameObject.AddComponent<ChimneySmoke>();
             smoke.Init(this, layout.Items);
-            var birds = GetComponent<Birds>();
-            if (birds == null) birds = gameObject.AddComponent<Birds>();
-            birds.Init(this);
             Step("scenery");
             BuildMountains();
             Step("backdrop");
