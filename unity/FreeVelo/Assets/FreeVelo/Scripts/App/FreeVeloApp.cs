@@ -306,15 +306,16 @@ namespace FreeVelo.App
         {
             float dt = Time.deltaTime;
             // The benchmark rolls the rider along the route by itself (no trainer, no ride).
-            bool bench = Benchmark.Running && _ride.State != RideState.Riding;
+            bool bench = Benchmark.Running && _ride.State != RideState.Riding && Benchmark.CurrentRoute != null;
+            var route = bench ? Benchmark.CurrentRoute : _ride.Route;
             double distance = bench ? Benchmark.DistanceM.Value : _ride.DistanceM;
             double speedMps = bench ? Benchmark.Speed : _ride.SpeedMps;
-            var sample = bench ? _ride.Route.Sample(distance) : _ride.Position;
+            var sample = bench ? route.Sample(distance) : _ride.Position;
             float heading = (float)sample.HeadingRad * Mathf.Rad2Deg;
             float pitch = -Mathf.Atan((float)sample.GradePercent / 100f) * Mathf.Rad2Deg;
             // Lean into bends like a real rider: tan(lean) = v²·κ / g, eased in and out over ~0.4 s.
             float targetLean = _ride.State == RideState.Riding || bench
-                ? (float)Route.LeanAngleDeg(speedMps, _ride.Route.CurvatureAt(distance))
+                ? (float)Route.LeanAngleDeg(speedMps, route.CurvatureAt(distance))
                 : 0f;
             _lean = Mathf.Lerp(_lean, targetLean, 1f - Mathf.Exp(-dt / 0.4f));
             // Negative roll tilts to the right; the stop lean tips the bike towards the foot on the ground.
@@ -335,7 +336,7 @@ namespace FreeVelo.App
             // Braking for a bend: the rider stops pedalling and freewheels.
             float cadence = bench ? Benchmark.CadenceRpm : riding && !_ride.IsBraking ? (float)(_ble.Hub.Live.CadenceRpm ?? 0) : 0;
             float speed = riding ? (float)speedMps : 0f; // wheels stand still outside a ride (menus, summary)
-            float ahead = riding ? (float)_ride.Route.CurvatureAt(distance + 12) : 0f; // the head looks into bends
+            float ahead = riding ? (float)route.CurvatureAt(distance + 12) : 0f; // the head looks into bends
             // Out of the saddle on steep climbs and in sprints: power relative to the rider's FTP.
             float intensity = bench ? Benchmark.Intensity : riding && AppSettings.FtpW > 0 ? (_ble.Hub.Live.PowerW ?? 0) / (float)AppSettings.FtpW : 0f;
             _avatar.Animate(speed, cadence, dt, ahead, riding ? (float)sample.GradePercent : 0f, intensity);

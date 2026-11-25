@@ -24,6 +24,13 @@ namespace FreeVelo.App
 
         public static bool Running => DistanceM.HasValue;
 
+        /// <summary>
+        /// The route of the run: the Alm round (valley villages, the hairpin climb, the plateau, open valley road). The
+        /// menu's own route is only the short way to the next junctions (the first run, 25 Nov 2026, squeezed all four
+        /// stretches into its first 2 km).
+        /// </summary>
+        public static Route CurrentRoute { get; private set; }
+
         /// <summary>For the overlay: "2/4 · Dorf", progress 0–1.</summary>
         public static string Status { get; private set; } = "";
         public static float Progress { get; private set; }
@@ -58,11 +65,12 @@ namespace FreeVelo.App
         /// <summary>Starts the run (only from the menus, with the world built).</summary>
         public void Run()
         {
-            var route = _route?.Invoke();
+            var route = BuiltInRoutes.Get(BuiltInRoutes.AlmId) ?? _route?.Invoke();
             if (route == null || _world == null || !_world.IsBuilt || Running) return;
+            CurrentRoute = route;
             PickStretches(route);
             if (_stretches.Count == 0) return;
-            _log($"Benchmark: {_stretches.Count} stretches of {StretchM:0} m at {SpeedMps * 3.6:0} km/h · quality {(AppSettings.Quality == GraphicsQuality.Low ? "low" : "high")} · {SystemInfo.deviceModel}");
+            _log($"Benchmark: {_stretches.Count} stretches of {StretchM:0} m at {SpeedMps * 3.6:0} km/h on the Alm round ({route.LengthM / 1000:0.0} km) · quality {(AppSettings.Quality == GraphicsQuality.Low ? "low" : "high")} · {SystemInfo.deviceModel}");
             _index = 0;
             BeginStretch();
         }
