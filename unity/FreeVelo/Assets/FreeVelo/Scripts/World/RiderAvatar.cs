@@ -198,6 +198,10 @@ namespace FreeVelo.World
             ShotCrank = null;
             ShotLook = null;
             ShotStance = null;
+            _paletteMaterial = null;
+            _paletteAlbedo = _paletteMetal = null;
+            _paletteTried = false;
+            PaletteSlots.Clear();
         }
 
         /// <summary>Nodes of the bike (kept when the skinned rider replaces the generated one).</summary>
@@ -205,7 +209,116 @@ namespace FreeVelo.World
             node == AvatarNode.Bike || node == AvatarNode.FrontWheel || node == AvatarNode.RearWheel ||
             node == AvatarNode.Crankset || node == AvatarNode.PedalRight || node == AvatarNode.PedalLeft;
 
+        /// <summary>
+        /// One mesh per moving part (frame, each wheel, cranks, each pedal) instead of one per part and material: every
+        /// material's colour, metallic and smoothness go into one texel of a shared palette (the bike drew 32
+        /// renderers, each also in the shadow pass; now 6). Same look: the parts have no textures, only those values,
+        /// and the palette is sampled at texel centres without filtering. Falls back to one renderer per part and
+        /// material if the palette template is missing or full.
+        /// </summary>
         private List<Renderer> BuildMeshes(WorldBuilder world, AvatarModel model, Dictionary<string, Material> materials, string lodName, bool bikeOnly)
+        {
+            var merged = BuildMergedMeshes(model, lodName, bikeOnly);
+            return merged ?? BuildPartMeshes(world, model, materials, lodName, bikeOnly);
+        }
+
+        private List<Renderer> BuildMergedMeshes(AvatarModel model, string lodName, bool bikeOnly)
+        {
+            var material = PaletteMaterial();
+            if (material == null) return null;
+            var byNode = new Dictionary<AvatarNode, (List<Vector3> V, List<Vector3> N, List<Vector2> Uv, List<int> T)>();
+            foreach (var part in model.Parts)
+            {
+                if (bikeOnly && !IsBikeNode(part.Node)) continue;
+                int slot = PaletteSlot(part.Material);
+                if (slot < 0) return null;
+                if (!byNode.TryGetValue(part.Node, out var b)) byNode[part.Node] = b = (new List<Vector3>(), new List<Vector3>(), new List<Vector2>(), new List<int>());
+                var normals = part.Mesh.ComputeNormals();
+                int offset = b.V.Count;
+                var uv = new Vector2((slot + 0.5f) / PaletteSize, 0.5f);
+                for (int i = 0; i < part.Mesh.Vertices.Count; i++)
+                {
+                    var v = part.Mesh.Vertices[i];
+                    var n = normals[i];
+                    b.V.Add(new Vector3(v.X, v.Y, v.Z));
+                    b.N.Add(new Vector3(n.X, n.Y, n.Z));
+                    b.Uv.Add(uv);
+                }
+
+                foreach (int t in part.Mesh.Triangles) b.T.Add(t + offset);
+            }
+
+            var renderers = new List<Renderer>();
+            foreach (var pair in byNode)
+            {
+                if (!_nodes.TryGetValue(pair.Key, out var node))
+                {
+                    node = new GameObject(pair.Key.ToString()).transform;
+                    node.SetParent(transform, false);
+                    _nodes[pair.Key] = node;
+                }
+
+                var b = pair.Value;
+                var mesh = new Mesh { name = pair.Key + "_" + lodName };
+                if (b.V.Count > 65000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+                mesh.SetVertices(b.V);
+                mesh.SetNormals(b.N);
+                mesh.SetUVs(0, b.Uv);
+                mesh.SetTriangles(b.T, 0);
+                mesh.RecalculateBounds();
+                var go = new GameObject(lodName);
+                go.transform.SetParent(node, false);
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var renderer = go.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = material;
+                renderers.Add(renderer);
+            }
+
+            return renderers;
+        }
+
+        private const int PaletteSize = 128;
+        private static Texture2D _paletteAlbedo, _paletteMetal;
+        private static Material _paletteMaterial;
+        private static bool _paletteTried;
+        private static readonly Dictionary<(float, float, float, float, float), int> PaletteSlots = new Dictionary<(float, float, float, float, float), int>();
+
+        /// <summary>
+        /// Lit with the palette as albedo (sRGB, like a material colour) and as metallic (R) / smoothness (A) map;
+        /// template Resources/FreeVeloLitPalette.mat keeps the _METALLICSPECGLOSSMAP variant in builds.
+        /// </summary>
+        private static Material PaletteMaterial()
+        {
+            if (_paletteMaterial != null || _paletteTried) return _paletteMaterial;
+            _paletteTried = true;
+            var template = Resources.Load<Material>("FreeVeloLitPalette");
+            if (template == null) return null;
+            _paletteAlbedo = new Texture2D(PaletteSize, 1, TextureFormat.RGBA32, false, false) { name = "BikePalette", filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+            _paletteMetal = new Texture2D(PaletteSize, 1, TextureFormat.RGBA32, false, true) { name = "BikePaletteMetal", filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+            _paletteMaterial = new Material(template) { name = "BikePalette", enableInstancing = true };
+            _paletteMaterial.SetTexture("_BaseMap", _paletteAlbedo);
+            _paletteMaterial.SetColor("_BaseColor", Color.white);
+            _paletteMaterial.SetTexture("_MetallicGlossMap", _paletteMetal);
+            _paletteMaterial.SetFloat("_Smoothness", 1f); // scales the map's alpha
+            _paletteMaterial.EnableKeyword("_METALLICSPECGLOSSMAP");
+            return _paletteMaterial;
+        }
+
+        private static int PaletteSlot(AvatarMaterial m)
+        {
+            var key = (m.Color.X, m.Color.Y, m.Color.Z, m.Smoothness, m.Metallic);
+            if (PaletteSlots.TryGetValue(key, out int slot)) return slot;
+            if (PaletteSlots.Count >= PaletteSize) return -1;
+            slot = PaletteSlots.Count;
+            PaletteSlots[key] = slot;
+            _paletteAlbedo.SetPixel(slot, 0, new Color(m.Color.X, m.Color.Y, m.Color.Z, 1f));
+            _paletteMetal.SetPixel(slot, 0, new Color(m.Metallic, 0f, 0f, m.Smoothness));
+            _paletteAlbedo.Apply(false);
+            _paletteMetal.Apply(false);
+            return slot;
+        }
+
+        private List<Renderer> BuildPartMeshes(WorldBuilder world, AvatarModel model, Dictionary<string, Material> materials, string lodName, bool bikeOnly)
         {
             var renderers = new List<Renderer>();
             foreach (var part in model.Parts)

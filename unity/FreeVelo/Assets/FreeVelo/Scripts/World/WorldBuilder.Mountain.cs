@@ -45,6 +45,9 @@ namespace FreeVelo.World
             public bool HasFine;
             public Task<MeshArrays> FineBuilding;
             public Renderer R1, R2;
+
+            /// <summary>The merged blocks this tile belongs to (null if none); while one is on, the tile itself is off.</summary>
+            public FarBlock Block, Mid;
         }
 
         /// <summary>Heights and items of one detailed tile, computed off the main thread.</summary>
@@ -150,14 +153,33 @@ namespace FreeVelo.World
 
         private readonly List<FarBlock> _farBlocks = new List<FarBlock>();
 
+        /// <summary>
+        /// Middle blocks: the 64 m level of 2 × 2 far tiles merged, drawn instead of the tiles while all of them are past
+        /// the distance where a tile leaves its textured 32 m level (relative height 0.25 of a 512 m tile: about 1.8 km
+        /// at a 60° view, times QualitySettings.lodBias, plus a margin). Between there and the far blocks each tile
+        /// would show that level or the coarser 128 m one, so nothing is lost; one draw instead of four (the render
+        /// breakdown at the start showed 169 single tile draws beyond 4 km, OnePlus benchmark 25 Nov 2026).
+        /// </summary>
+        private readonly List<FarBlock> _midBlocks = new List<FarBlock>();
+
+        private const int TilesPerMidBlock = 2;
+        private const float MidBlockRadiusAtBias1 = 1950f;
+
         private void BuildFarBlocks(Transform parent)
         {
             _farBlocks.Clear();
+            _midBlocks.Clear();
+            BuildBlocks(parent, TilesPerBlock, t => t.R2, "Mountain block", _farBlocks, (t, b) => t.Block = b);
+            BuildBlocks(parent, TilesPerMidBlock, t => t.R1, "Mountain mid block", _midBlocks, (t, b) => t.Mid = b);
+        }
+
+        private void BuildBlocks(Transform parent, int tilesPerBlock, System.Func<MountainTile, Renderer> level, string name, List<FarBlock> into, System.Action<MountainTile, FarBlock> link)
+        {
             var groups = new Dictionary<(int, int), List<MountainTile>>();
             foreach (var tile in _tiles.Values)
             {
-                if (tile.R2 == null) continue;
-                var key = (Mathf.FloorToInt(tile.Tx / (float)TilesPerBlock), Mathf.FloorToInt(tile.Tz / (float)TilesPerBlock));
+                if (level(tile) == null) continue;
+                var key = (Mathf.FloorToInt(tile.Tx / (float)tilesPerBlock), Mathf.FloorToInt(tile.Tz / (float)tilesPerBlock));
                 if (!groups.TryGetValue(key, out var list)) groups[key] = list = new List<MountainTile>();
                 list.Add(tile);
             }
@@ -169,13 +191,14 @@ namespace FreeVelo.World
                 var area = list[0].Area;
                 for (int i = 0; i < list.Count; i++)
                 {
-                    combine[i] = new CombineInstance { mesh = list[i].R2.GetComponent<MeshFilter>().sharedMesh, transform = list[i].R2.transform.localToWorldMatrix };
+                    var r = level(list[i]);
+                    combine[i] = new CombineInstance { mesh = r.GetComponent<MeshFilter>().sharedMesh, transform = r.transform.localToWorldMatrix };
                     area = Rect.MinMaxRect(Mathf.Min(area.xMin, list[i].Area.xMin), Mathf.Min(area.yMin, list[i].Area.yMin), Mathf.Max(area.xMax, list[i].Area.xMax), Mathf.Max(area.yMax, list[i].Area.yMax));
                 }
 
                 var mesh = new Mesh { name = "MountainBlock", indexFormat = IndexFormat.UInt32 };
                 mesh.CombineMeshes(combine, mergeSubMeshes: true, useMatrices: true);
-                var go = new GameObject("Mountain block");
+                var go = new GameObject(name);
                 go.transform.SetParent(parent, false);
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
                 var renderer = go.AddComponent<MeshRenderer>();
@@ -184,24 +207,42 @@ namespace FreeVelo.World
                 renderer.enabled = false;
                 var block = new FarBlock { Area = area, Renderer = renderer };
                 block.Tiles.AddRange(list);
-                _farBlocks.Add(block);
+                foreach (var tile in list) link(tile, block);
+                into.Add(block);
             }
         }
 
-        /// <summary>Far blocks on where the camera is far enough, their tiles off (and back).</summary>
+        /// <summary>Far and middle blocks on where the camera is far enough, their tiles off (and back).</summary>
         private void UpdateFarBlocks(Vector2 p)
         {
+            foreach (var block in _farBlocks) block.Active = Distance(block.Area, p) > FarBlockRadius;
+            float midRadius = MidBlockRadiusAtBias1 * Mathf.Max(1f, QualitySettings.lodBias);
+            foreach (var mid in _midBlocks)
+            {
+                bool farOn = false;
+                foreach (var tile in mid.Tiles) farOn |= tile.Block != null && tile.Block.Active;
+                mid.Active = !farOn && Distance(mid.Area, p) > midRadius;
+            }
+
             foreach (var block in _farBlocks)
             {
-                bool active = Distance(block.Area, p) > FarBlockRadius;
-                if (active == block.Active) continue;
-                block.Active = active;
-                block.Renderer.enabled = active;
-                foreach (var tile in block.Tiles)
-                {
-                    if (tile.Far != null) tile.Far.gameObject.SetActive(!active && tile.Near == null);
-                }
+                if (block.Renderer.enabled != block.Active) block.Renderer.enabled = block.Active;
             }
+
+            foreach (var mid in _midBlocks)
+            {
+                if (mid.Renderer.enabled != mid.Active) mid.Renderer.enabled = mid.Active;
+            }
+
+            foreach (var tile in _tiles.Values) ShowFarTile(tile);
+        }
+
+        /// <summary>A far tile is drawn unless its detailed tile or one of its merged blocks stands in for it.</summary>
+        private static void ShowFarTile(MountainTile tile)
+        {
+            if (tile.Far == null) return;
+            bool show = tile.Near == null && !(tile.Block != null && tile.Block.Active) && !(tile.Mid != null && tile.Mid.Active);
+            if (tile.Far.gameObject.activeSelf != show) tile.Far.gameObject.SetActive(show);
         }
 
         /// <summary>The far tile's textured 32 m level (one piece per cover), shown up to about 2 km.</summary>
@@ -920,7 +961,7 @@ namespace FreeVelo.World
             }
 
             tile.Near = root;
-            if (tile.Far != null) tile.Far.gameObject.SetActive(false);
+            ShowFarTile(tile);
             _lastInstanceUpdate = new Vector3(float.MaxValue, 0, 0); // let the instancing pick up the new trees
         }
 
@@ -936,7 +977,7 @@ namespace FreeVelo.World
             foreach (var filter in tile.Near.GetComponentsInChildren<MeshFilter>()) Destroy(filter.sharedMesh);
             Destroy(tile.Near);
             tile.Near = null;
-            if (tile.Far != null) tile.Far.gameObject.SetActive(true);
+            ShowFarTile(tile);
             _lastInstanceUpdate = new Vector3(float.MaxValue, 0, 0);
         }
 

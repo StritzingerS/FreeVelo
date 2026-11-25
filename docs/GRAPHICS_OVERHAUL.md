@@ -434,6 +434,12 @@ Not done (owner): shadows to 80 m, high at 30 fps for slower phones, HDR off, a 
    than 12 (the street view; asphalt a little lighter). The owner chose it (25 Nov 2026). Templates
    `Resources/FreeVeloSimpleLit(.Normal).mat` keep the shader and its `_NORMALMAP` variant in the build; water,
    galvanised steel and the wind/grass materials stay on Lit.
+6. Fewer draws without losing detail (26 Nov 2026, after the OnePlus benchmark): the mountain forest's trees had
+   random variants 0–96 and split into up to 97 instance groups (forest climb: 1,353 trees in 1,364 calls → 107);
+   far tiles between the textured level and the far blocks are merged 2 × 2 at their 64 m level (middle blocks,
+   `MidBlockRadiusAtBias1` 1,950 m × lodBias); the bike is one mesh per moving part with a shared colour /
+   metallic / smoothness palette (`Resources/FreeVeloLitPalette.mat`, 32 renderers → 6; renders before/after differ
+   by 0.3 of 255 on average). Start view: 554 → 364 renderers.
 Other practices noted, not done: thermal-aware quality, an HUD without IMGUI (decide after the next log's `hud`
 time), GPU Resident Drawer (needs Vulkan and Forward+). Note: the editor uses the "PC" quality level (lodBias 2),
 the phones "Mobile" (lodBias 1), so editor triangle counts are higher than on the phone.
